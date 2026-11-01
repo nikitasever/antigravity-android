@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Map</title>
+    <meta
+      name="viewport"
+      content="initial-scale=1,maximum-scale=1,user-scalable=no"
+    />
+    <meta http-equiv="Permissions-Policy" content="geolocation=(self)" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <!-- Production Android map assets adapted through Valdi's existing WebView bridge. -->
+    <script src="mapbox-valdi-bridge.js"></script>
+    <!-- Optional, gitignored host configuration generated from existing first-party Android assets. -->
+    <script src="mapbox-runtime-config.local.js"></script>
+    <link
+      href="https://api.mapbox.com/mapbox-gl-js/v3.18.0/mapbox-gl.css"
+      rel="stylesheet"
+    />
+    <script
+      src="https://api.mapbox.com/mapbox-gl-js/v3.18.0/mapbox-gl.js"
+      onerror="window.ValdiMapBridge.reportError('Mapbox could not be loaded.')"
+    ></script>
+    <style>
+      :root {
+        color-scheme: light;
+        --map-background: #e6e9ef;
+
+        /* Primary pill */
+        --marker-primary-bg: #ffffff;
+        --marker-primary-fg: #000000;
+        --marker-primary-border: rgba(0, 0, 0, 0.15);
+
+        /* Inverse pill (selected) */
+        --marker-inverse-bg: #000000;
+        --marker-inverse-fg: #ffffff;
+        --marker-inverse-border: rgba(255, 255, 255, 1);
+
+        /* Pointer gradients (use bg + border/fg split) */
+        --pointer-primary-a: var(--marker-primary-bg);
+        --pointer-primary-b: var(--marker-primary-border);
+
+        --pointer-inverse-a: var(--marker-inverse-bg);
+        --pointer-inverse-b: var(--marker-inverse-border);
+
+        --marker-selection-transition-duration: 180ms;
+
+        /* User location accent defaults (overridden from JS). */
+        --user-accent-color: #1a73e8;
+        --user-accent-shadow: rgba(26, 115, 232, 0.24);
+        --user-accent-heading: rgba(26, 115, 232, 0.65);
+      }
+
+      body {
+        margin: 0;
+        padding: 0;
+        background-color: var(--map-background);
+        font-family: "Roboto", sans-serif;
+      }
+      #map {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 100%;
+        background-color: var(--map-background);
+      }
+
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        --map-background: #0f1216;
+
+        /* Primary becomes dark */
+        --marker-primary-bg: #000000;
+        --marker-primary-fg: #ffffff;
+        --marker-primary-border: rgba(255, 255, 255, 0.25);
+
+        /* Inverse becomes light */
+        --marker-inverse-bg: #ffffff;
+        --marker-inverse-fg: #000000;
+        --marker-inverse-border: rgba(0, 0, 0, 1);
+      }
+
+      .custom-marker {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        pointer-events: none;
+        z-index: 1;
+      }
+
+      .custom-marker.selected {
+        z-index: 3;
+      }
+
+      .custom-marker.unselected:not(.minimized) {
+        z-index: 2;
+      }
+
+      .custom-marker.marker-fade-in {
+        animation: markerFadeIn 180ms ease-out;
+      }
+
+      .custom-marker.marker-expand-from-minimized .marker-pill {
+        animation: markerExpandFromMinimized
+          var(--marker-selection-transition-duration) ease-in-out;
+        animation-delay: var(--marker-selection-transition-delay, 0ms);
+        animation-fill-mode: both;
+        transform-origin: center;
+      }
+
+      .custom-marker.marker-expand-from-minimized .marker-details,
+      .custom-marker.marker-expand-from-minimized .marker-label {
+        animation: markerDetailsAppear
+          var(--marker-selection-transition-duration) ease-in-out;
+        animation-delay: var(--marker-selection-transition-delay, 0ms);
+        animation-fill-mode: both;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .custom-marker.marker-fade-in,
+        .custom-marker.marker-expand-from-minimized .marker-pill,
+        .custom-marker.marker-expand-from-minimized .marker-details,
+        .custom-marker.marker-expand-from-minimized .marker-label {
+          animation: none;
+        }
+      }
+
+      @keyframes markerFadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @keyframes markerExpandFromMinimized {
+        from {
+          transform: scale(0.14, 0.31);
+        }
+        to {
+          transform: scale(1);
+        }
+      }
+
+      @keyframes markerDetailsAppear {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      .custom-marker .marker-pill {
+        position: relative;
+        font-size: 12px;
+        font-weight: 500;
+        border-radius: 20px;
+        padding: 4px 8px;
+        min-width: 6px;
+        min-height: 14px;
+
+        border: none;
+        box-shadow:
+          0 0 0 0.5px var(--marker-primary-border),
+          0 2px 6px rgba(0, 0, 0, 0.15);
+        background: var(--marker-primary-bg);
+        color: var(--marker-primary-fg);
+      }
+
+      .custom-marker.minimized.unselected .marker-pill {
+        box-sizing: border-box;
+        width: 8px;
+        height: 8px;
+        min-width: 8px;
+        min-height: 8px;
+        padding: 0;
+        border: 1.5px solid #ffffff;
+        background: #000000;
+      }
+
+      .custom-marker.selected .marker-pill {
+        background: var(--marker-inverse-bg);
+        color: var(--marker-inverse-fg);
+        border: 2px solid var(--marker-inverse-border);
+      }
+
+      /* Pointer (inverse for selected) */
+      .custom-marker.selected .marker-pill::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        bottom: -4.25px;
+        width: 8px;
+        height: 8px;
+        border-radius: 2px;
+
+        background: linear-gradient(
+          135deg,
+          var(--pointer-inverse-a) 0%,
+          var(--pointer-inverse-a) 50%,
+          var(--pointer-inverse-b) 50%,
+          var(--pointer-inverse-b) 100%
+        );
+
+        transform: translateX(-50%) rotate(45deg);
+      }
+
+      .custom-marker .marker-label {
+        max-width: 120px;
+        padding: 2px 6px;
+        border-radius: 10px;
+        font-size: 13px;
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        z-index: 1;
+
+        color: #0f172a;
+        text-shadow:
+          -1px -1px 0 rgba(255, 255, 255, 0.7),
+          1px -1px 0 rgba(255, 255, 255, 0.7),
+          -1px 1px 0 rgba(255, 255, 255, 0.7),
+          1px 1px 0 rgba(255, 255, 255, 0.7),
+          0 2px 3px rgba(0, 0, 0, 0.28);
+      }
+
+      .custom-marker.minimized.selected .marker-label {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 50%;
+        width: max-content;
+        transform: translateX(-50%);
+      }
+
+      :root[data-theme="dark"] .custom-marker .marker-label {
+        color: #f8fafc;
+        text-shadow:
+          -1px -1px 0 rgba(0, 0, 0, 0.9),
+          1px -1px 0 rgba(0, 0, 0, 0.9),
+          -1px 1px 0 rgba(0, 0, 0, 0.9),
+          1px 1px 0 rgba(0, 0, 0, 0.9),
+          0 2px 3px rgba(0, 0, 0, 0.55);
+      }
+
+      /* Star icon: make SVG respect CSS color */
+      .custom-marker .marker-pill .star-icon {
+        width: 12px;
+        height: 12px;
+        vertical-align: middle;
+        fill: currentColor;
+        stroke: currentColor;
+        position: relative;
+        top: -1px;
+      }
+
+      /* Optional: star colors (tweak as you like) */
+      .custom-marker.selected .marker-pill .star-icon {
+        color: currentColor;
+      }
+
+      /* Defensive fallback: fully suppress Mapbox's built-in user-location UI. */
+      .mapboxgl-user-location-dot,
+      .mapboxgl-user-location-dot::before,
+      .mapboxgl-user-location-dot::after,
+      .mapboxgl-user-location-show-heading,
+      .mapboxgl-user-location-show-heading .mapboxgl-user-location-heading,
+      .mapboxgl-user-location-show-heading
+        .mapboxgl-user-location-heading::before,
+      .mapboxgl-user-location-show-heading
+        .mapboxgl-user-location-heading::after,
+      .mapboxgl-user-location-accuracy-circle {
+        opacity: 0 !important;
+        animation: none !important;
+        box-shadow: none !important;
+        border: 0 !important;
+      }
+
+      .user-location-overlay {
+        position: relative;
+        width: 36px;
+        height: 36px;
+        pointer-events: none;
+        --user-accent-color: #1a73e8;
+        --user-accent-shadow: rgba(26, 115, 232, 0.24);
+        --user-accent-heading: rgba(26, 115, 232, 0.65);
+      }
+
+      .user-location-heading {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 0;
+        height: 0;
+        border-left: 8px solid transparent;
+        border-right: 8px solid transparent;
+        border-bottom: 22px solid var(--user-accent-heading);
+        transform: translate(-50%, -100%) rotate(var(--user-heading, 0deg));
+        transform-origin: 50% 100%;
+        opacity: 0;
+        transition: opacity 120ms ease-out;
+        filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.25));
+      }
+
+      .user-location-overlay.has-heading .user-location-heading {
+        opacity: 1;
+      }
+
+      .user-location-avatar,
+      .user-location-accent-dot {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        border-radius: 50%;
+        border: 3px solid var(--marker-primary-fg);
+        box-shadow:
+          0 3px 6px rgba(0, 0, 0, 0.25),
+          0 0 0 5px var(--user-accent-shadow);
+        background: var(--user-accent-color);
+      }
+
+      .user-location-avatar {
+        width: 26px;
+        height: 26px;
+        object-fit: cover;
+        background: #ffffff;
+      }
+
+      .user-location-accent-dot {
+        width: 18px;
+        height: 18px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <script src="mapbox.js"></script>
+    <script>
+      window.ValdiMapBridge.attach(map);
+    </script>
+  </body>
+</html>

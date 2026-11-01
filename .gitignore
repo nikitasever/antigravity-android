@@ -19,13 +19,19 @@ pc-bridge/tunnel.url
 pc-bridge/tunnels.json
 pc-bridge/openrouter-models-cache.json
 
-# Keep only Antigravity system prompt in assets; ignore unused external APK extraction dumps
-app/src/main/assets/*
-!app/src/main/assets/agent_system_prompt.md
-app/src/main/jniLibs/
-app/src/main/res/raw/pi2_*
-app/src/main/res/raw/claude_*
-app/src/main/res/raw/subscription_*
+# Private local configuration and generated session state
+pc-bridge/openrouter-config.json
+pc-bridge/sync-state.json
+pc-bridge/gdrive_oauth*.json
+pc-bridge/permissions-config.json
+pc-bridge/swarm-state.json
+pc-bridge/generated_media/
+hs_err_pid*.log
+replay_pid*.log
+*.keystore
+*.jks
+.private/
+app/src/main/assets/pc_sessions_snapshot.json
 
 # Built APK binaries (published via GitHub Actions & Releases)
 *.apk

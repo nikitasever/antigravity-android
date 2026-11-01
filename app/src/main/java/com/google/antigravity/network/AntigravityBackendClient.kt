@@ -1,11 +1,16 @@
 package com.google.antigravity.network
 
 import com.google.antigravity.device.PhoneResourceController
+import android.annotation.SuppressLint
 import com.google.antigravity.model.AVAILABLE_AGY_MODELS
 import com.google.antigravity.model.AgentExecutionTarget
 import com.google.antigravity.model.AiPermissionsConfig
 import com.google.antigravity.model.AntigravityModelOption
+import com.google.antigravity.model.ArtifactDocument
+import com.google.antigravity.model.ArtifactLibrary
 import com.google.antigravity.model.AttachedFileItem
+import com.google.antigravity.model.ChatLibrary
+import com.google.antigravity.model.ChatLibraryPreferences
 import com.google.antigravity.model.ChatMessage
 import com.google.antigravity.model.ContextWindowStatus
 import com.google.antigravity.model.FileDiffItem
@@ -18,6 +23,8 @@ import com.google.antigravity.model.OpenRouterCategory
 import com.google.antigravity.model.OpenRouterModelItem
 import com.google.antigravity.model.PcMcpServerItem
 import com.google.antigravity.model.PcSkillItem
+import com.google.antigravity.model.ProjectWorkspace
+import com.google.antigravity.model.ProjectWorkspaces
 import com.google.antigravity.model.RemoteSessionItem
 import com.google.antigravity.model.SwarmAgentNode
 import com.google.antigravity.model.ToolCallEvent
@@ -52,6 +59,7 @@ class AntigravityBackendClient(
         val textDelta: String,
         val fullText: String,
         val createdDiffs: List<FileDiffItem> = emptyList(),
+        val generatedMedia: List<GeneratedMediaAttachment> = emptyList(),
         val isDone: Boolean = false,
         val tokensPerSecond: Float = 0f,
         val outputTokensCount: Int = 0,
@@ -69,7 +77,8 @@ class AntigravityBackendClient(
         val generatedMedia: List<GeneratedMediaAttachment> = emptyList(),
         val tokensPerSecond: Float = 0f,
         val outputTokensCount: Int = 0,
-        val firstTokenLatencyMs: Long = 0L
+        val firstTokenLatencyMs: Long = 0L,
+        val isError: Boolean = false
     )
 
     data class PcBridgeChatResponse(
@@ -79,6 +88,7 @@ class AntigravityBackendClient(
         val thinkingDurationSec: Int = 0,
         val toolCalls: List<ToolCallEvent> = emptyList(),
         val createdDiffs: List<FileDiffItem> = emptyList(),
+        val generatedMedia: List<GeneratedMediaAttachment> = emptyList(),
         val resolvedBaseUrl: String = "",
         val tokensPerSecond: Float = 0f,
         val outputTokensCount: Int = 0,
@@ -101,14 +111,16 @@ class AntigravityBackendClient(
         val instanceName: String,
         val hostname: String,
         val workspace: String,
-        val resolvedBaseUrl: String = ""
+        val resolvedBaseUrl: String = "",
+        /** true после реальной проверки связи; false — стартовое состояние до проверки. */
+        val checked: Boolean = true
     )
 
     companion object {
         val DEFAULT_PUBLIC_BRIDGE_URLS = listOf(
-            "https://424e6a18005d8541-79-137-206-221.serveousercontent.com",
-            "https://ebooa-79-137-206-221.free.pinggy.net",
-            "https://5ade50fa99c92c.lhr.life"
+            "https://cdd0a117b3ea350f-79-137-206-221.serveousercontent.com",
+            "https://qbxhx-79-137-206-221.free.pinggy.net",
+            "https://f5542b3aaca3ea.lhr.life"
         )
     }
 
@@ -116,6 +128,12 @@ class AntigravityBackendClient(
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(240, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
+        .build()
+
+    private val uploadHttpClient = OkHttpClient.Builder()
+        .connectTimeout(5, TimeUnit.SECONDS)
+        .readTimeout(12, TimeUnit.SECONDS)
+        .writeTimeout(12, TimeUnit.SECONDS)
         .build()
 
     private val fastLocalHttpClient = OkHttpClient.Builder()
@@ -134,7 +152,23 @@ class AntigravityBackendClient(
     private var lastWorkingBridgeUrl: String = ""
 
     @Volatile
+    private var lastWorkingBridgeVerifiedAtMs: Long = 0L
+
+    @Volatile
     var forcePublicTunnelOnly: Boolean = false
+
+    private val activeRemoteTurn = java.util.concurrent.atomic.AtomicReference<Pair<String, String>?>(null)
+
+    fun cancelActiveRemoteTurn() {
+        val turn = activeRemoteTurn.getAndSet(null) ?: return
+        val body = JSONObject().put("turnId", turn.second).toString()
+        val request = Request.Builder().url("${turn.first}/api/chat/cancel")
+            .post(body.toRequestBody("application/json; charset=utf-8".toMediaType())).build()
+        fastProbeClient.newCall(request).enqueue(object : okhttp3.Callback {
+            override fun onFailure(call: okhttp3.Call, e: java.io.IOException) = Unit
+            override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) { response.close() }
+        })
+    }
 
     private val knownDynamicTunnels = java.util.concurrent.CopyOnWriteArraySet<String>()
 
@@ -203,6 +237,7 @@ class AntigravityBackendClient(
                 add("http://10.0.2.2:8787")
                 add("http://127.0.0.1:8787")
             }
+            if (clean.isNotBlank() && (allowLocal || !isLocalOrLoopbackUrl(clean))) add(clean)
             if (cached.isNotBlank() && (allowLocal || !isLocalOrLoopbackUrl(cached))) {
                 add(cached)
             }
@@ -259,7 +294,7 @@ class AntigravityBackendClient(
                     .url("https://ntfy.sh/$topic/raw?poll=1&since=12h")
                     .get()
                     .build()
-                fastProbeClient.newCall(req).execute().use { resp ->
+                fastProbeClient.newCall(req).useCancellable { resp ->
                     if (resp.isSuccessful) {
                         val rawText = resp.body?.string().orEmpty()
                         val tokens = Regex("https://[a-zA-Z0-9.\\-]+")
@@ -326,6 +361,7 @@ class AntigravityBackendClient(
                     base
                 }
                 lastWorkingBridgeUrl = resolved
+                lastWorkingBridgeVerifiedAtMs = System.currentTimeMillis()
                 PcBridgeStatus(
                     connected = true,
                     instanceName = json.optString("instanceName", "Рабочий компьютер"),
@@ -334,7 +370,8 @@ class AntigravityBackendClient(
                     resolvedBaseUrl = resolved
                 )
             }
-        } catch (_: Throwable) {
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
             null
         }
     }
@@ -362,7 +399,7 @@ class AntigravityBackendClient(
         for (base in buildCandidateBridgeUrls(pcBridgeUrl)) {
             try {
                 val req = Request.Builder().url("$base/api/models").get().build()
-                fastProbeClient.newCall(req).execute().use { resp ->
+                fastProbeClient.newCall(req).useCancellable { resp ->
                     if (resp.isSuccessful) {
                         val json = JSONObject(resp.body?.string() ?: "{}")
                         val arr = json.optJSONArray("models")
@@ -384,7 +421,8 @@ class AntigravityBackendClient(
                         }
                     }
                 }
-            } catch (_: Throwable) {
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure;
             }
         }
         AVAILABLE_AGY_MODELS
@@ -405,7 +443,7 @@ class AntigravityBackendClient(
             for (base in urlsToTry) {
                 try {
                     val req = Request.Builder().url("$base/api/sessions").get().build()
-                    val bodyStr = fastProbeClient.newCall(req).execute().use { resp ->
+                    val bodyStr = fastProbeClient.newCall(req).useCancellable { resp ->
                         if (resp.isSuccessful) resp.body?.string() else null
                     } ?: continue
                     val json = JSONObject(bodyStr)
@@ -432,7 +470,8 @@ class AntigravityBackendClient(
                         lastWorkingBridgeUrl = base
                         return@withContext list
                     }
-                } catch (_: Throwable) {
+                } catch (failure: Throwable) {
+                    if (failure is kotlinx.coroutines.CancellationException) throw failure;
                 }
             }
         }
@@ -451,7 +490,7 @@ class AntigravityBackendClient(
             for (base in urlsToTry) {
                 try {
                     val req = Request.Builder().url("$base/api/session?id=$sessionId").get().build()
-                    val bodyStr = fastProbeClient.newCall(req).execute().use { resp ->
+                    val bodyStr = fastProbeClient.newCall(req).useCancellable { resp ->
                         if (resp.isSuccessful) resp.body?.string() else null
                     } ?: continue
                     val json = JSONObject(bodyStr)
@@ -520,7 +559,8 @@ class AntigravityBackendClient(
                     }
                     lastWorkingBridgeUrl = base
                     return@withContext list
-                } catch (_: Throwable) {
+                } catch (failure: Throwable) {
+                    if (failure is kotlinx.coroutines.CancellationException) throw failure;
                 }
             }
         }
@@ -536,9 +576,16 @@ class AntigravityBackendClient(
         if (clean.contains("offline", ignoreCase = true) || clean.contains("invalid", ignoreCase = true)) {
             return null
         }
+        val cached = lastWorkingBridgeUrl.trim().trimEnd('/')
+        val now = System.currentTimeMillis()
+        if (cached.isNotBlank() && !(forcePublicTunnelOnly && isLocalOrLoopbackUrl(cached))) {
+            if (now - lastWorkingBridgeVerifiedAtMs < 20_000L || probeSingleBridgeUrl(cached) != null) {
+                return lastWorkingBridgeUrl.ifBlank { cached }
+            }
+        }
         val candidates = buildCandidateBridgeUrls(pcBridgeUrl)
         for (base in candidates) {
-            if (base == lastWorkingBridgeUrl || probeSingleBridgeUrl(base) != null) {
+            if (probeSingleBridgeUrl(base) != null) {
                 return lastWorkingBridgeUrl.ifBlank { base }
             }
         }
@@ -554,12 +601,13 @@ class AntigravityBackendClient(
         val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext emptyList<InstalledPluginItem>() to "Мост ПК недоступен"
         try {
             val req = Request.Builder().url("$base/api/plugins").get().build()
-            clientForUrl(base).newCall(req).execute().use { resp ->
+            clientForUrl(base).newCall(req).useCancellable { resp ->
                 if (!resp.isSuccessful) return@withContext emptyList<InstalledPluginItem>() to "Ошибка HTTP ${resp.code}"
                 val json = JSONObject(resp.body?.string() ?: "{}")
                 return@withContext parsePluginsJson(json) to null
             }
         } catch (e: Throwable) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             emptyList<InstalledPluginItem>() to e.localizedMessage
         }
     }
@@ -581,12 +629,13 @@ class AntigravityBackendClient(
                 put("enabled", enabled)
             }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
             val req = Request.Builder().url("$base/api/plugins").post(payload).build()
-            clientForUrl(base).newCall(req).execute().use { resp ->
+            clientForUrl(base).newCall(req).useCancellable { resp ->
                 val json = JSONObject(resp.body?.string() ?: "{}")
                 val err = if (!json.optBoolean("ok", true)) json.optString("error", "Ошибка операции с плагином") else null
                 return@withContext parsePluginsJson(json) to err
             }
         } catch (e: Throwable) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             emptyList<InstalledPluginItem>() to e.localizedMessage
         }
     }
@@ -616,12 +665,13 @@ class AntigravityBackendClient(
         val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext emptyList<PcSkillItem>() to "Мост ПК недоступен"
         try {
             val req = Request.Builder().url("$base/api/skills").get().build()
-            clientForUrl(base).newCall(req).execute().use { resp ->
+            clientForUrl(base).newCall(req).useCancellable { resp ->
                 if (!resp.isSuccessful) return@withContext emptyList<PcSkillItem>() to "Ошибка HTTP ${resp.code}"
                 val json = JSONObject(resp.body?.string() ?: "{}")
                 return@withContext parseSkillsJson(json) to null
             }
         } catch (e: Throwable) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             emptyList<PcSkillItem>() to e.localizedMessage
         }
     }
@@ -645,12 +695,13 @@ class AntigravityBackendClient(
                 put("enabled", enabled)
             }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
             val req = Request.Builder().url("$base/api/skills").post(payload).build()
-            clientForUrl(base).newCall(req).execute().use { resp ->
+            clientForUrl(base).newCall(req).useCancellable { resp ->
                 val json = JSONObject(resp.body?.string() ?: "{}")
                 val err = if (!json.optBoolean("ok", true)) json.optString("error", "Ошибка операции со скиллом") else null
                 return@withContext parseSkillsJson(json) to err
             }
         } catch (e: Throwable) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             emptyList<PcSkillItem>() to e.localizedMessage
         }
     }
@@ -678,12 +729,13 @@ class AntigravityBackendClient(
         val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext emptyList<PcMcpServerItem>() to "Мост ПК недоступен"
         try {
             val req = Request.Builder().url("$base/api/mcp").get().build()
-            clientForUrl(base).newCall(req).execute().use { resp ->
+            clientForUrl(base).newCall(req).useCancellable { resp ->
                 if (!resp.isSuccessful) return@withContext emptyList<PcMcpServerItem>() to "Ошибка HTTP ${resp.code}"
                 val json = JSONObject(resp.body?.string() ?: "{}")
                 return@withContext parseMcpJson(json) to null
             }
         } catch (e: Throwable) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             emptyList<PcMcpServerItem>() to e.localizedMessage
         }
     }
@@ -709,12 +761,13 @@ class AntigravityBackendClient(
                 put("enabled", enabled)
             }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
             val req = Request.Builder().url("$base/api/mcp").post(payload).build()
-            clientForUrl(base).newCall(req).execute().use { resp ->
+            clientForUrl(base).newCall(req).useCancellable { resp ->
                 val json = JSONObject(resp.body?.string() ?: "{}")
                 val err = if (!json.optBoolean("ok", true)) json.optString("error", "Ошибка операции с MCP-сервером") else null
                 return@withContext parseMcpJson(json) to err
             }
         } catch (e: Throwable) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             emptyList<PcMcpServerItem>() to e.localizedMessage
         }
     }
@@ -833,7 +886,7 @@ class AntigravityBackendClient(
             try {
                 val url = "$base/api/openrouter/models?refresh=${if (forceRefresh) "1" else "0"}"
                 val req = Request.Builder().url(url).get().build()
-                clientForUrl(base).newCall(req).execute().use { resp ->
+                clientForUrl(base).newCall(req).useCancellable { resp ->
                     if (resp.isSuccessful) {
                         val json = JSONObject(resp.body?.string() ?: "{}")
                         val arr = json.optJSONArray("models")
@@ -878,7 +931,8 @@ class AntigravityBackendClient(
                         }
                     }
                 }
-            } catch (_: Throwable) {
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure;
             }
         }
 
@@ -889,7 +943,7 @@ class AntigravityBackendClient(
                 .header("Accept", "application/json")
                 .get()
                 .build()
-            httpClient.newCall(req).execute().use { resp ->
+            httpClient.newCall(req).useCancellable { resp ->
                 if (resp.isSuccessful) {
                     val json = JSONObject(resp.body?.string() ?: "{}")
                     val dataArr = json.optJSONArray("data")
@@ -932,7 +986,8 @@ class AntigravityBackendClient(
                     }
                 }
             }
-        } catch (_: Throwable) {
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
         }
 
         OpenRouterSyncResult(
@@ -955,10 +1010,11 @@ class AntigravityBackendClient(
                 if (selectedModel.isNotBlank()) put("selectedModel", selectedModel.trim())
             }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
             val req = Request.Builder().url("$base/api/openrouter/config").post(payload).build()
-            clientForUrl(base).newCall(req).execute().use { resp ->
+            clientForUrl(base).newCall(req).useCancellable { resp ->
                 resp.isSuccessful
             }
-        } catch (_: Throwable) {
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
             false
         }
     }
@@ -980,7 +1036,7 @@ class AntigravityBackendClient(
                 if (openRouterApiKey.isNotBlank()) put("apiKey", openRouterApiKey)
             }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
             val req = Request.Builder().url(endpoint).post(payload).build()
-            clientForUrl(base).newCall(req).execute().use { resp ->
+            clientForUrl(base).newCall(req).useCancellable { resp ->
                 if (!resp.isSuccessful) {
                     return@withContext null to "Ошибка HTTP ${resp.code}"
                 }
@@ -1014,6 +1070,7 @@ class AntigravityBackendClient(
                 return@withContext attachment to ""
             }
         } catch (e: Throwable) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             null to (e.localizedMessage ?: "Ошибка генерации медиа")
         }
     }
@@ -1039,7 +1096,7 @@ class AntigravityBackendClient(
                     mimeType = obj.optString("mimeType", "text/markdown"),
                     sizeBytes = obj.optLong("sizeBytes", 0L),
                     updatedAt = obj.optString("updatedAt", "Только что"),
-                    webViewLink = obj.optString("webViewLink", "https://drive.google.com/drive/u/0/folders/antigravity-cloud"),
+                    webViewLink = fullDl,
                     downloadUrl = fullDl,
                     localUri = obj.optString("localUri", ""),
                     previewSnippet = obj.optString("previewSnippet", ""),
@@ -1050,6 +1107,8 @@ class AntigravityBackendClient(
         return out
     }
 
+    private val localGoogleDriveFallbackFiles = mutableListOf<GoogleDriveFileItem>()
+
     suspend fun fetchGoogleDriveFiles(pcBridgeUrl: String, query: String = ""): Pair<GoogleDriveStatus, List<GoogleDriveFileItem>> =
         withContext(Dispatchers.IO) {
             val base = resolveWorkingBaseUrl(pcBridgeUrl)
@@ -1059,25 +1118,45 @@ class AntigravityBackendClient(
                         .url("$base/api/gdrive/files?q=${java.net.URLEncoder.encode(query, "UTF-8")}")
                         .get()
                         .build()
-                    clientForUrl(base).newCall(req).execute().use { resp ->
+                    clientForUrl(base).newCall(req).useCancellable { resp ->
                         if (resp.isSuccessful) {
                             val json = JSONObject(resp.body?.string() ?: "{}")
                             val files = parseGoogleDriveFilesJson(json, base)
-                            val usedBytes = files.sumOf { it.sizeBytes }
+                            if (query.isBlank()) {
+                                synchronized(localGoogleDriveFallbackFiles) {
+                                    localGoogleDriveFallbackFiles.clear()
+                                    localGoogleDriveFallbackFiles.addAll(files)
+                                }
+                            }
+                            val effectiveFiles = files
+                            val usedBytes = effectiveFiles.sumOf { it.sizeBytes }
                             val status = GoogleDriveStatus(
-                                connected = true,
-                                accountEmail = "antigravity.cloud.sync@gmail.com",
+                                connected = json.optBoolean("connected", false),
+                                accountEmail = json.optString("accountEmail", ""),
                                 folderPath = json.optString("folderPath", "/AntigravityCloud"),
-                                filesCount = files.size,
+                                filesCount = effectiveFiles.size,
                                 usedBytes = usedBytes
                             )
-                            return@withContext status to files
+                            return@withContext status to effectiveFiles
                         }
                     }
-                } catch (_: Throwable) {
+                } catch (failure: Throwable) {
+                    if (failure is kotlinx.coroutines.CancellationException) throw failure;
                 }
             }
-            GoogleDriveStatus() to emptyList()
+            val fallback = synchronized(localGoogleDriveFallbackFiles) {
+                if (query.isBlank()) localGoogleDriveFallbackFiles.toList()
+                else localGoogleDriveFallbackFiles.filter {
+                    it.name.contains(query, ignoreCase = true) || it.content.contains(query, ignoreCase = true)
+                }
+            }
+            GoogleDriveStatus(
+                connected = false,
+                accountEmail = "",
+                folderPath = "/AntigravityCloud",
+                filesCount = fallback.size,
+                usedBytes = fallback.sumOf { it.sizeBytes }
+            ) to fallback
         }
 
     suspend fun createOrUpdateGoogleDriveFile(
@@ -1088,67 +1167,87 @@ class AntigravityBackendClient(
         engine: String = "Gemini",
         modelId: String = "gemini-4-argon-high"
     ): Pair<GoogleDriveFileItem?, List<GoogleDriveFileItem>> = withContext(Dispatchers.IO) {
-        val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext null to emptyList()
-        try {
-            val payload = JSONObject().apply {
-                put("name", name)
-                put("content", content)
-                put("prompt", prompt)
-                put("engine", engine)
-                put("modelId", modelId)
-                put("folder", "/AntigravityCloud")
-            }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
-            val req = Request.Builder().url("$base/api/gdrive/create").post(payload).build()
-            clientForUrl(base).newCall(req).execute().use { resp ->
-                if (resp.isSuccessful) {
-                    val json = JSONObject(resp.body?.string() ?: "{}")
-                    val files = parseGoogleDriveFilesJson(json, base)
-                    val fileObj = json.optJSONObject("file")
-                    val createdItem = if (fileObj != null) {
-                        val rawDl = fileObj.optString("downloadUrl", "")
-                        val fullDl = if (rawDl.startsWith("http")) rawDl else "${base.trimEnd('/')}/${rawDl.trimStart('/')}"
-                        GoogleDriveFileItem(
-                            id = fileObj.optString("id", "gd_new"),
-                            name = fileObj.optString("name", name),
-                            folder = fileObj.optString("folder", "/AntigravityCloud"),
-                            engine = fileObj.optString("engine", engine),
-                            modelId = fileObj.optString("modelId", modelId),
-                            mimeType = fileObj.optString("mimeType", "text/markdown"),
-                            sizeBytes = fileObj.optLong("sizeBytes", content.length.toLong()),
-                            updatedAt = fileObj.optString("updatedAt", "Только что"),
-                            webViewLink = fileObj.optString("webViewLink", "https://drive.google.com/drive/u/0/folders/antigravity-cloud"),
-                            downloadUrl = fullDl,
-                            localUri = fileObj.optString("localUri", ""),
-                            previewSnippet = fileObj.optString("previewSnippet", content.take(260)),
-                            content = fileObj.optString("content", content)
-                        )
-                    } else {
-                        files.firstOrNull { it.name == name }
+        val base = resolveWorkingBaseUrl(pcBridgeUrl)
+        if (base != null) {
+            try {
+                val payload = JSONObject().apply {
+                    put("name", name)
+                    put("content", content)
+                    put("prompt", prompt)
+                    put("engine", engine)
+                    put("modelId", modelId)
+                    put("folder", "/AntigravityCloud")
+                }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+                val req = Request.Builder().url("$base/api/gdrive/create").post(payload).build()
+                clientForUrl(base).newCall(req).useCancellable { resp ->
+                    if (resp.isSuccessful) {
+                        val json = JSONObject(resp.body?.string() ?: "{}")
+                        val files = parseGoogleDriveFilesJson(json, base)
+                        val fileObj = json.optJSONObject("file")
+                        val createdItem = if (fileObj != null) {
+                            val rawDl = fileObj.optString("downloadUrl", "")
+                            val fullDl = if (rawDl.startsWith("http")) rawDl else "${base.trimEnd('/')}/${rawDl.trimStart('/')}"
+                            GoogleDriveFileItem(
+                                id = fileObj.optString("id", "gd_new"),
+                                name = fileObj.optString("name", name),
+                                folder = fileObj.optString("folder", "/AntigravityCloud"),
+                                engine = fileObj.optString("engine", engine),
+                                modelId = fileObj.optString("modelId", modelId),
+                                mimeType = fileObj.optString("mimeType", "text/markdown"),
+                                sizeBytes = fileObj.optLong("sizeBytes", content.length.toLong()),
+                                updatedAt = fileObj.optString("updatedAt", "Только что"),
+                                webViewLink = fullDl,
+                                downloadUrl = fullDl,
+                                localUri = fileObj.optString("localUri", ""),
+                                previewSnippet = fileObj.optString("previewSnippet", content.take(260)),
+                                content = fileObj.optString("content", content)
+                            )
+                        } else {
+                            files.firstOrNull { it.name == name }
+                        }
+                        if (files.isNotEmpty()) {
+                            synchronized(localGoogleDriveFallbackFiles) {
+                                localGoogleDriveFallbackFiles.clear()
+                                localGoogleDriveFallbackFiles.addAll(files)
+                            }
+                        }
+                        return@withContext createdItem to files
                     }
-                    return@withContext createdItem to files
                 }
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure;
             }
-        } catch (_: Throwable) {
         }
-        null to emptyList()
+        null to synchronized(localGoogleDriveFallbackFiles) { localGoogleDriveFallbackFiles.toList() }
     }
 
     suspend fun deleteGoogleDriveFile(pcBridgeUrl: String, name: String): List<GoogleDriveFileItem> = withContext(Dispatchers.IO) {
-        val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext emptyList()
-        try {
-            val payload = JSONObject().apply {
-                put("name", name)
-            }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
-            val req = Request.Builder().url("$base/api/gdrive/delete").post(payload).build()
-            clientForUrl(base).newCall(req).execute().use { resp ->
-                if (resp.isSuccessful) {
-                    val json = JSONObject(resp.body?.string() ?: "{}")
-                    return@withContext parseGoogleDriveFilesJson(json, base)
+        val base = resolveWorkingBaseUrl(pcBridgeUrl)
+        if (base != null) {
+            try {
+                val payload = JSONObject().apply {
+                    put("name", name)
+                }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+                val req = Request.Builder().url("$base/api/gdrive/delete").post(payload).build()
+                clientForUrl(base).newCall(req).useCancellable { resp ->
+                    if (resp.isSuccessful) {
+                        val json = JSONObject(resp.body?.string() ?: "{}")
+                        val files = parseGoogleDriveFilesJson(json, base)
+                        synchronized(localGoogleDriveFallbackFiles) {
+                            localGoogleDriveFallbackFiles.clear()
+                            localGoogleDriveFallbackFiles.addAll(files)
+                        }
+                        return@withContext files
+                    }
                 }
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure;
             }
-        } catch (_: Throwable) {
         }
-        emptyList()
+        synchronized(localGoogleDriveFallbackFiles) {
+            localGoogleDriveFallbackFiles.removeAll { it.name.equals(name, ignoreCase = true) }
+            localGoogleDriveFallbackFiles.toList()
+        }
     }
 
     // ---------------------------------------------------------------------------
@@ -1156,11 +1255,13 @@ class AntigravityBackendClient(
     // ---------------------------------------------------------------------------
 
     private fun parseSwarmAgentsJson(json: JSONObject): List<SwarmAgentNode> {
-        val arr = json.optJSONArray("agents") ?: return emptyList()
+        val root = json.optJSONObject("swarm") ?: json
+        if (root.optString("strategy") != "PARALLEL_ANALYSIS") return emptyList()
+        val arr = root.optJSONArray("agents") ?: return emptyList()
         val out = mutableListOf<SwarmAgentNode>()
         for (i in 0 until arr.length()) {
             val obj = arr.optJSONObject(i) ?: continue
-            val logsArr = obj.optJSONArray("stepLogs")
+            val logsArr = obj.optJSONArray("stepLogs") ?: obj.optJSONArray("logs")
             val logs = mutableListOf<String>()
             if (logsArr != null) {
                 for (lIdx in 0 until logsArr.length()) {
@@ -1170,30 +1271,44 @@ class AntigravityBackendClient(
             out.add(
                 SwarmAgentNode(
                     id = obj.optString("id", "agent_$i"),
-                    handle = obj.optString("handle", "@agent"),
+                    handle = obj.optString("handle", obj.optString("mention", "@agent")),
                     name = obj.optString("name", "Агент"),
-                    roleBadge = obj.optString("roleBadge", "Субагент"),
+                    roleBadge = obj.optString("roleBadge", obj.optString("role", "Субагент анализа")),
                     isLeader = obj.optBoolean("isLeader", false),
                     model = obj.optString("model", "gemini-4-argon-high"),
-                    status = obj.optString("status", "ready"),
-                    currentTask = obj.optString("currentTask", ""),
-                    stepLogs = logs
+                    status = obj.optString("status", "ready").lowercase(),
+                    currentTask = obj.optString("currentTask", obj.optString("currentStep", "")),
+                    stepLogs = logs,
+                    isSettling = obj.optBoolean("settling", false),
+                    changeReview = obj.optJSONObject("review")?.let { review -> buildString {
+                        append("Копия: ").append(review.optString("workspaceId")).append("\n")
+                        append("Базовая версия: ").append(review.optString("base")).append("\n")
+                        if (review.optBoolean("sourceChanged")) append("Исходный проект изменился. Требуется повторная проверка.\n")
+                        append("\n").append(review.optString("diff").ifBlank { "Нет изменений отслеживаемых файлов." })
+                        val files = review.optJSONArray("newFiles")
+                        if (files != null) for (index in 0 until files.length()) {
+                            val file = files.optJSONObject(index) ?: continue
+                            append("\n\nНовый файл: ").append(file.optString("name")).append("\n")
+                            append(file.optString("content", file.optString("omitted")))
+                        }
+                    } }.orEmpty()
                 )
             )
         }
         return out
     }
 
-    suspend fun fetchMultiAgentSwarm(pcBridgeUrl: String): List<SwarmAgentNode> = withContext(Dispatchers.IO) {
+    suspend fun fetchMultiAgentSwarm(pcBridgeUrl: String, requestId: String = ""): List<SwarmAgentNode> = withContext(Dispatchers.IO) {
         val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext emptyList()
         try {
-            val req = Request.Builder().url("$base/api/agents/swarm").get().build()
-            clientForUrl(base).newCall(req).execute().use { resp ->
+            val req = Request.Builder().url("$base/api/agents/swarm?requestId=${java.net.URLEncoder.encode(requestId, "UTF-8")}").get().build()
+            clientForUrl(base).newCall(req).useCancellable { resp ->
                 if (!resp.isSuccessful) return@withContext emptyList()
                 val json = JSONObject(resp.body?.string() ?: "{}")
                 parseSwarmAgentsJson(json)
             }
-        } catch (_: Throwable) {
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
             emptyList()
         }
     }
@@ -1203,23 +1318,26 @@ class AntigravityBackendClient(
         action: String,
         agentId: String = "",
         task: String = "",
-        model: String = ""
+        model: String = "",
+        requestId: String = ""
     ): List<SwarmAgentNode> = withContext(Dispatchers.IO) {
         val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext emptyList()
         try {
             val payload = JSONObject().apply {
                 put("action", action)
+                put("requestId", requestId.ifBlank { if (action == "dispatch_task") java.util.UUID.randomUUID().toString() else "" })
                 put("agentId", agentId)
                 put("task", task)
                 put("model", model)
             }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
             val req = Request.Builder().url("$base/api/agents/swarm").post(payload).build()
-            clientForUrl(base).newCall(req).execute().use { resp ->
+            clientForUrl(base).newCall(req).useCancellable { resp ->
                 if (!resp.isSuccessful) return@withContext emptyList()
                 val json = JSONObject(resp.body?.string() ?: "{}")
                 parseSwarmAgentsJson(json)
             }
-        } catch (_: Throwable) {
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
             emptyList()
         }
     }
@@ -1255,14 +1373,15 @@ class AntigravityBackendClient(
         val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext phoneController.aiPermissions
         try {
             val req = Request.Builder().url("$base/api/permissions").get().build()
-            clientForUrl(base).newCall(req).execute().use { resp ->
+            clientForUrl(base).newCall(req).useCancellable { resp ->
                 if (!resp.isSuccessful) return@withContext phoneController.aiPermissions
                 val json = JSONObject(resp.body?.string() ?: "{}")
                 val parsed = parseAiPermissionsJson(json)
                 phoneController.aiPermissions = parsed
                 parsed
             }
-        } catch (_: Throwable) {
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
             phoneController.aiPermissions
         }
     }
@@ -1294,13 +1413,68 @@ class AntigravityBackendClient(
                 put("pcOpenRouterCloudGen", config.pcOpenRouterCloudGen)
             }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
             val req = Request.Builder().url("$base/api/permissions").post(payload).build()
-            clientForUrl(base).newCall(req).execute().use { resp ->
+            clientForUrl(base).newCall(req).useCancellable { resp ->
                 if (!resp.isSuccessful) return@withContext config
                 val json = JSONObject(resp.body?.string() ?: "{}")
                 parseAiPermissionsJson(json)
             }
-        } catch (_: Throwable) {
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
             config
+        }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Синхронизация представления чатов и библиотеки ответов (телефон ⇄ ПК)
+    // ---------------------------------------------------------------------------
+
+    /** Состояние синхронизации: настройки чатов, сохранённые ответы, рабочие области проектов и надгробия удалений. */
+    data class ChatSyncState(
+        val chatPrefs: Map<String, ChatLibraryPreferences>,
+        val savedArtifacts: List<ArtifactDocument>,
+        val projectWorkspaces: Map<String, ProjectWorkspace>,
+        val deletedIds: Map<String, Long>
+    )
+
+    /**
+     * Отправляет локальное состояние на ПК и возвращает объединённое слиянием
+     * «побеждает более новый updatedAtMs» (см. mergeSyncState в server.js).
+     * При недоступности моста возвращает null — локальные данные не теряются.
+     */
+    suspend fun syncChatState(
+        pcBridgeUrl: String,
+        chatPrefs: Map<String, ChatLibraryPreferences>,
+        savedArtifacts: List<ArtifactDocument>,
+        deletedIds: Map<String, Long>,
+        projectWorkspaces: Map<String, ProjectWorkspace> = emptyMap()
+    ): ChatSyncState? = withContext(Dispatchers.IO) {
+        val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext null
+        try {
+            val payload = JSONObject().apply {
+                put("chatPrefs", JSONObject(ChatLibrary.encode(chatPrefs)))
+                put("savedArtifacts", JSONArray(ArtifactLibrary.encode(savedArtifacts)))
+                put("projectWorkspaces", JSONArray(ProjectWorkspaces.encode(projectWorkspaces)))
+                put("deletedIds", JSONObject().apply { deletedIds.forEach { (id, at) -> put(id, at) } })
+            }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+            val req = Request.Builder().url("$base/api/sync/state").post(payload).build()
+            clientForUrl(base).newCall(req).useCancellable { resp ->
+                if (!resp.isSuccessful) return@withContext null
+                val json = JSONObject(resp.body?.string() ?: "{}")
+                if (!json.optBoolean("ok", false)) return@withContext null
+                val deleted = mutableMapOf<String, Long>()
+                json.optJSONObject("deletedIds")?.let { obj ->
+                    obj.keys().forEach { key -> deleted[key] = obj.optLong(key) }
+                }
+                ChatSyncState(
+                    chatPrefs = ChatLibrary.decode(json.optJSONObject("chatPrefs")?.toString() ?: "{}"),
+                    savedArtifacts = ArtifactLibrary.decode(json.optJSONArray("savedArtifacts")?.toString() ?: "[]"),
+                    projectWorkspaces = ProjectWorkspaces.decode(json.optJSONArray("projectWorkspaces")?.toString() ?: "[]"),
+                    deletedIds = deleted
+                )
+            }
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
+            null
         }
     }
 
@@ -1320,7 +1494,7 @@ class AntigravityBackendClient(
             try {
                 val url = "$base/api/context/status?conversationId=$conversationId&model=$modelId"
                 val req = Request.Builder().url(url).get().build()
-                clientForUrl(base).newCall(req).execute().use { resp ->
+                clientForUrl(base).newCall(req).useCancellable { resp ->
                     if (resp.isSuccessful) {
                         val json = JSONObject(resp.body?.string() ?: "{}")
                         return@withContext ContextWindowStatus(
@@ -1337,7 +1511,8 @@ class AntigravityBackendClient(
                         )
                     }
                 }
-            } catch (_: Throwable) {
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure;
             }
         }
         val sysTokens = 1250
@@ -1372,14 +1547,15 @@ class AntigravityBackendClient(
                     put("clearTranscript", clearTranscript)
                 }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
                 val req = Request.Builder().url("$base/api/context/reset").post(payload).build()
-                clientForUrl(base).newCall(req).execute().use { resp ->
+                clientForUrl(base).newCall(req).useCancellable { resp ->
                     if (resp.isSuccessful) {
                         val json = JSONObject(resp.body?.string() ?: "{}")
                         newConvId = json.optString("newConversationId", newConvId)
                         resetTime = json.optString("resetAt", resetTime)
                     }
                 }
-            } catch (_: Throwable) {
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure;
             }
         }
         ContextWindowStatus(
@@ -1396,56 +1572,69 @@ class AntigravityBackendClient(
         )
     }
 
-    suspend fun compactContextWindow(
+    /**
+     * Настоящее сжатие контекста: мост отправляет историю реальной модели
+     * и возвращает сводку. При ошибке — null и текст ошибки, история
+     * остаётся без изменений.
+     */
+    suspend fun compactChatContext(
         pcBridgeUrl: String,
-        conversationId: String,
+        messages: List<ChatMessage>,
         modelId: String
-    ): Pair<ContextWindowStatus, String> = withContext(Dispatchers.IO) {
+    ): Pair<String?, String?> = withContext(Dispatchers.IO) {
         val base = resolveWorkingBaseUrl(pcBridgeUrl)
-        var summaryText = "Контекст сжат (/compact): промежуточные выводы инструментов свёрнуты в компактную сводку."
-        if (base != null) {
-            try {
-                val payload = JSONObject().apply {
-                    put("conversationId", conversationId)
-                }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
-                val req = Request.Builder().url("$base/api/context/compact").post(payload).build()
-                clientForUrl(base).newCall(req).execute().use { resp ->
-                    if (resp.isSuccessful) {
-                        val json = JSONObject(resp.body?.string() ?: "{}")
-                        summaryText = json.optString("summary", summaryText)
+            ?: return@withContext null to "Мост ПК недоступен для сжатия контекста"
+        try {
+            val payload = JSONObject().apply {
+                put("model", modelId)
+                put("messages", JSONArray().apply {
+                    messages.forEach { message ->
+                        put(JSONObject().apply {
+                            put("role", if (message.role == MessageRole.USER) "USER" else "AGENT")
+                            put("content", message.content)
+                        })
                     }
+                })
+            }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+            val req = Request.Builder().url("$base/api/context/compact").post(payload).build()
+            clientForUrl(base).newCall(req).useCancellable { resp ->
+                val json = JSONObject(resp.body?.string() ?: "{}")
+                if (!resp.isSuccessful || !json.optBoolean("ok", false)) {
+                    return@withContext null to json.optString("error", "Сжатие контекста не выполнено (HTTP ${resp.code})")
                 }
-            } catch (_: Throwable) {
+                val summary = json.optString("summary", "").trim()
+                if (summary.isEmpty()) {
+                    return@withContext null to "Модель вернула пустую сводку — история сохранена без изменений"
+                }
+                summary to ""
             }
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
+            null to (failure.localizedMessage ?: "Ошибка сжатия контекста")
         }
-        val status = fetchContextWindowStatus(pcBridgeUrl, conversationId, modelId, 2, summaryText.length)
-        status.copy(toolOutputTokens = 0) to summaryText
     }
 
-    // ---------------------------------------------------------------------------
-    // File upload & Quick Assist
-    // ---------------------------------------------------------------------------
-
     suspend fun uploadFileToPc(pcBridgeUrl: String, file: AttachedFileItem): String = withContext(Dispatchers.IO) {
-        for (base in buildCandidateBridgeUrls(pcBridgeUrl)) {
-            try {
-                val body = JSONObject().apply {
-                    put("fileName", file.name)
-                    put("mimeType", file.mimeType)
-                    put("base64Data", file.base64Data)
-                    put("textContent", file.textPreview)
-                }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+        val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext ""
+        try {
+            val body = JSONObject().apply {
+                put("fileName", file.name)
+                put("mimeType", file.mimeType)
+                put("base64Data", file.base64Data)
+                put("textContent", file.textPreview)
+            }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
 
-                val req = Request.Builder().url("$base/api/upload").post(body).build()
-                clientForUrl(base).newCall(req).execute().use { resp ->
-                    if (resp.isSuccessful) {
-                        val json = JSONObject(resp.body?.string() ?: "{}")
-                        val pcPath = json.optString("pcPath", "")
-                        if (pcPath.isNotBlank()) return@withContext pcPath
-                    }
+            val req = Request.Builder().url("$base/api/upload").post(body).build()
+            val client = if (isLocalOrLoopbackUrl(base)) fastLocalHttpClient else uploadHttpClient
+            client.newCall(req).useCancellable { resp ->
+                if (resp.isSuccessful) {
+                    val json = JSONObject(resp.body?.string() ?: "{}")
+                    val pcPath = json.optString("pcPath", "")
+                    if (pcPath.isNotBlank()) return@withContext pcPath
                 }
-            } catch (_: Throwable) {
             }
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
         }
         ""
     }
@@ -1476,6 +1665,57 @@ class AntigravityBackendClient(
     // Real-Time Streaming Agent Loop (PC Session Mode + Multi-Step Smartphone Mode)
     // ---------------------------------------------------------------------------
 
+    private suspend fun parseGeneratedMediaArray(
+        arr: JSONArray?,
+        baseUrl: String,
+        fallbackPrompt: String,
+        fallbackModel: String
+    ): List<GeneratedMediaAttachment> {
+        if (arr == null || arr.length() == 0) return emptyList()
+        val out = mutableListOf<GeneratedMediaAttachment>()
+        for (i in 0 until arr.length()) {
+            val mediaObj = arr.optJSONObject(i) ?: continue
+            val rawMediaUrl = mediaObj.optString("mediaUrl", "")
+            if (rawMediaUrl.isBlank()) continue
+            val fullMediaUrl = if (rawMediaUrl.startsWith("http")) {
+                rawMediaUrl
+            } else {
+                "${baseUrl.trimEnd('/')}/${rawMediaUrl.trimStart('/')}"
+            }
+            val mime = mediaObj.optString("mimeType", "image/png")
+            val isVid = mediaObj.optString("type", "").equals("video", ignoreCase = true) ||
+                mime.startsWith("video/") || rawMediaUrl.endsWith(".mp4", ignoreCase = true)
+            val w = mediaObj.optInt("width", if (isVid) 160 else 640)
+            val h = mediaObj.optInt("height", if (isVid) 96 else 360)
+            val fName = mediaObj.optString("fileName", if (isVid) "antigravity_video.mp4" else "antigravity_img.png")
+            val (dlOk, dlPath) = try {
+                phoneController.downloadMediaToPhone(fullMediaUrl, fName)
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure;
+                false to ""
+            }
+            out.add(
+                GeneratedMediaAttachment(
+                    id = mediaObj.optString("id", "media_${System.currentTimeMillis()}_$i"),
+                    type = if (isVid) "video" else "image",
+                    fileName = fName,
+                    mimeType = mime,
+                    mediaUrl = fullMediaUrl,
+                    localPath = if (dlOk) dlPath else "",
+                    localPhonePath = if (dlOk) dlPath else "",
+                    prompt = mediaObj.optString("prompt", fallbackPrompt),
+                    modelId = mediaObj.optString("model", fallbackModel),
+                    sizeBytes = mediaObj.optLong("sizeBytes", 0L),
+                    durationSec = mediaObj.optInt("durationSec", if (isVid) 3 else 0),
+                    width = w,
+                    height = h,
+                    resolution = mediaObj.optString("resolution", "${w}x${h}")
+                )
+            )
+        }
+        return out
+    }
+
     suspend fun executeAgentTurn(
         userPrompt: String,
         viaVoice: Boolean,
@@ -1487,29 +1727,23 @@ class AntigravityBackendClient(
         sessionHistory: List<ChatMessage>,
         pcBridgeUrl: String,
         geminiApiKey: String,
+        openRouterApiKey: String = "",
         extraPhoneContext: String = "",
+        transientChat: Boolean = false,
         onStreamingUpdate: suspend (StreamingTurnUpdate) -> Unit = {}
     ): AgentTurnResult = withContext(Dispatchers.IO) {
         val turnStartMs = System.currentTimeMillis()
-        val rawCleanPrompt = sanitizeCleanUserText(userPrompt).ifBlank { userPrompt.trim() }
-
-        val lowerRaw = rawCleanPrompt.lowercase()
-        val cleanPrompt = if (
-            (lowerRaw == "повтор" || lowerRaw == "повтори" || lowerRaw == "ещё раз" || lowerRaw == "еще раз") &&
-            sessionHistory.isNotEmpty()
-        ) {
-            val prevUser = sessionHistory.lastOrNull {
-                it.role == MessageRole.USER &&
-                    it.content.trim().lowercase() != lowerRaw &&
-                    it.content.isNotBlank()
-            }?.content
-            prevUser ?: rawCleanPrompt
-        } else {
-            rawCleanPrompt
+        if (executionTarget == AgentExecutionTarget.PHONE_LOCAL_RESOURCES) {
+            return@withContext executePhoneTurn(userPrompt, selectedModelId, activeConversationId,
+                attachments, sessionHistory, geminiApiKey, openRouterApiKey, extraPhoneContext, onStreamingUpdate)
         }
+        val rawCleanPrompt = userPrompt.trim()
+
+        val cleanPrompt = rawCleanPrompt
 
         val allToolCalls = mutableListOf<ToolCallEvent>()
         val createdDiffs = mutableListOf<FileDiffItem>()
+        val allGeneratedMedia = mutableListOf<GeneratedMediaAttachment>()
 
         // Upload attachments if any
         val uploadedAttachments = mutableListOf<AttachedFileItem>()
@@ -1532,6 +1766,8 @@ class AntigravityBackendClient(
         val isPhoneMode = executionTarget == AgentExecutionTarget.PHONE_LOCAL_RESOURCES
         // Basic device telemetry ONLY (NO pre-scanned keyword dump!)
         val basePhoneTelemetry = buildString {
+            appendLine("Клиент пользователя — приложение Antigravity на Android. История и вложения хранятся на телефоне. Не предлагай подключить телефон через ADB: доступные локальные действия выполняет само приложение по выданным разрешениям.")
+            appendLine(if (isPhoneMode) "Выбран режим инструментов телефона." else "Выбран режим рабочей сессии ПК. Для инструментов телефона пользователь может выбрать режим телефона; не утверждай, что они уже вызваны.")
             if (isPhoneMode) {
                 append(phoneController.getDeviceTelemetrySummary())
             }
@@ -1567,6 +1803,7 @@ class AntigravityBackendClient(
                 phoneContext = basePhoneTelemetry,
                 phoneToolObservation = accumulatedObservations.toString(),
                 phoneStepIndex = stepIndex,
+                transientChat = transientChat,
                 onUpdate = { stepUpdate ->
                     if (stepUpdate.tokensPerSecond > 0f) latestTokensPerSecond = stepUpdate.tokensPerSecond
                     if (stepUpdate.outputTokensCount > 0) latestOutputTokensCount = stepUpdate.outputTokensCount
@@ -1582,6 +1819,7 @@ class AntigravityBackendClient(
                     }.trim()
                     val mergedTools = (allToolCalls + stepUpdate.toolCalls).distinctBy { "${it.toolName}:${it.summary}:${it.details}" }
                     val mergedDiffs = (createdDiffs + stepUpdate.createdDiffs).distinctBy { "${it.path}:${it.additions}:${it.deletions}" }
+                    val mergedMedia = (allGeneratedMedia + stepUpdate.generatedMedia).distinctBy { it.mediaUrl.ifBlank { it.fileName } }
                     onStreamingUpdate(
                         StreamingTurnUpdate(
                             thinking = mergedThinking,
@@ -1590,6 +1828,7 @@ class AntigravityBackendClient(
                             textDelta = stepUpdate.textDelta,
                             fullText = stepUpdate.fullText,
                             createdDiffs = mergedDiffs,
+                            generatedMedia = mergedMedia,
                             isDone = false,
                             tokensPerSecond = stepUpdate.tokensPerSecond,
                             outputTokensCount = stepUpdate.outputTokensCount,
@@ -1610,7 +1849,7 @@ class AntigravityBackendClient(
                 currentConvId = stepBridgeResp.conversationId
             }
 
-            // Merge PC tools & diffs if any
+            // Merge PC tools, diffs, and generated media if any
             for (pcTool in stepBridgeResp.toolCalls) {
                 if (allToolCalls.none { it.toolName == pcTool.toolName && it.summary == pcTool.summary && it.details == pcTool.details }) {
                     allToolCalls.add(pcTool)
@@ -1619,6 +1858,11 @@ class AntigravityBackendClient(
             for (pcDiff in stepBridgeResp.createdDiffs) {
                 if (createdDiffs.none { it.path == pcDiff.path && it.additions == pcDiff.additions && it.deletions == pcDiff.deletions }) {
                     createdDiffs.add(pcDiff)
+                }
+            }
+            for (pcMedia in stepBridgeResp.generatedMedia) {
+                if (allGeneratedMedia.none { it.mediaUrl == pcMedia.mediaUrl && it.fileName == pcMedia.fileName }) {
+                    allGeneratedMedia.add(pcMedia)
                 }
             }
 
@@ -1701,7 +1945,8 @@ class AntigravityBackendClient(
             if (finalVisibleMarkdown.isBlank() && currentConvId.isNotBlank()) {
                 val recoveredMsgs = try {
                     fetchSessionMessages(pcBridgeUrl, currentConvId)
-                } catch (_: Throwable) {
+                } catch (failure: Throwable) {
+                    if (failure is kotlinx.coroutines.CancellationException) throw failure;
                     emptyList()
                 }
                 val lastAgent = recoveredMsgs.lastOrNull { it.role == MessageRole.AGENT && it.content.isNotBlank() }
@@ -1743,7 +1988,7 @@ class AntigravityBackendClient(
                 } else {
                     ((estTokens.toFloat() / (elapsedMs.toFloat() / 1000f)) * 10f).toInt().toFloat() / 10f
                 }
-                val finalTtft = if (latestFirstTokenLatencyMs > 0L) latestFirstTokenLatencyMs else 340L
+                val finalTtft = if (latestFirstTokenLatencyMs > 0L) latestFirstTokenLatencyMs else 0L
                 onStreamingUpdate(
                     StreamingTurnUpdate(
                         thinking = finalThinking,
@@ -1752,8 +1997,9 @@ class AntigravityBackendClient(
                         textDelta = "",
                         fullText = sanitizedMarkdown,
                         createdDiffs = createdDiffs.toList(),
+                        generatedMedia = allGeneratedMedia.toList(),
                         isDone = true,
-                        tokensPerSecond = estTps.coerceAtLeast(12.4f),
+                        tokensPerSecond = estTps.coerceAtLeast(0f),
                         outputTokensCount = estTokens,
                         firstTokenLatencyMs = finalTtft
                     )
@@ -1766,18 +2012,36 @@ class AntigravityBackendClient(
                     updatedConversationId = currentConvId,
                     toolCalls = allToolCalls,
                     createdDiffs = createdDiffs,
-                    tokensPerSecond = estTps.coerceAtLeast(12.4f),
+                    generatedMedia = allGeneratedMedia.toList(),
+                    tokensPerSecond = estTps.coerceAtLeast(0f),
                     outputTokensCount = estTokens,
                     firstTokenLatencyMs = finalTtft
                 )
             }
         }
 
+        // Direct OpenRouter API fallback if an OpenRouter model is selected and user provided an OpenRouter API key
+        if (selectedModelId.contains("/") && openRouterApiKey.isNotBlank()) {
+            val orResult = callDirectOpenRouterApi(
+                cleanPrompt = cleanPrompt,
+                openRouterApiKey = openRouterApiKey,
+                sessionHistory = sessionHistory,
+                selectedModelId = selectedModelId,
+                activeConversationId = activeConversationId,
+                turnStartMs = turnStartMs,
+                allToolCalls = allToolCalls,
+                createdDiffs = createdDiffs,
+                onStreamingUpdate = onStreamingUpdate
+            )
+            if (orResult != null) return@withContext orResult
+        }
+
         // Fallback ONLY if user explicitly configured a direct Gemini API key in Settings
-        if (geminiApiKey.isNotBlank()) {
+        if (!selectedModelId.contains("/") && !selectedModelId.startsWith("gemini-4-argon") && !selectedModelId.startsWith("gemini-3.8-") && geminiApiKey.isNotBlank()) {
             val geminiResult = executeDirectGeminiLoop(
                 cleanPrompt = cleanPrompt,
                 geminiApiKey = geminiApiKey,
+                sessionHistory = sessionHistory,
                 selectedModelId = selectedModelId,
                 isPhoneMode = isPhoneMode,
                 basePhoneTelemetry = basePhoneTelemetry,
@@ -1791,7 +2055,12 @@ class AntigravityBackendClient(
         }
 
         // Honest Offline / Bridge Down message (Scenario G — zero fake template responses!)
-        val honestError = "Не удалось подключиться к мосту ПК. Проверьте соединение с рабочей станцией или укажите ключ Gemini API в настройках."
+        val honestError = when {
+            selectedModelId.startsWith("gemini-4-argon") || selectedModelId.startsWith("gemini-3.8-") ->
+                "Модель $selectedModelId доступна через сессию ПК, но мост не отвечает. Проверьте адрес моста и запустите PC-Bridge. Ключ Gemini API не подключает эту модель ПК. Переписка сохранена на телефоне; после восстановления связи нажмите «Повторить»."
+            selectedModelId.contains("/") -> "Не удалось получить ответ $selectedModelId. Проверьте подключение к мосту и ключ OpenRouter. Переписка сохранена на телефоне."
+            else -> "Не удалось получить ответ $selectedModelId. Проверьте подключение и ключ Gemini API. Переписка сохранена на телефоне."
+        }
         AgentTurnResult(
             thinkingTrace = "",
             thinkingDurationSec = 0,
@@ -1799,7 +2068,8 @@ class AntigravityBackendClient(
             spokenSummaryRu = honestError,
             updatedConversationId = activeConversationId,
             toolCalls = allToolCalls,
-            createdDiffs = createdDiffs
+            createdDiffs = createdDiffs,
+            isError = true
         )
     }
 
@@ -1807,9 +2077,149 @@ class AntigravityBackendClient(
         return phoneController.loadAgentSystemPrompt()
     }
 
+    /** Phone orchestration never discovers a bridge, uploads files to PC or polls a PC session. */
+    private suspend fun executePhoneTurn(
+        prompt: String, modelId: String, conversationId: String, attachments: List<AttachedFileItem>,
+        history: List<ChatMessage>, geminiKey: String, routerKey: String, context: String,
+        update: suspend (StreamingTurnUpdate) -> Unit
+    ): AgentTurnResult {
+        val unavailable = when {
+            modelId.isBlank() -> "Выберите API-модель для работы на телефоне."
+            modelId.startsWith("gemini-4-argon") || modelId.startsWith("gemini-3.8-") ->
+                "Модель $modelId работает через CLI на ПК. Для работы на телефоне выберите API-модель и укажите её ключ. Подмена модели не выполнялась."
+            modelId.contains("/") && routerKey.isBlank() -> "Для выбранной модели укажите ключ OpenRouter. Режим телефона не требует PC-Bridge."
+            !modelId.contains("/") && geminiKey.isBlank() -> "Для выбранной модели укажите ключ Gemini API. Режим телефона не требует PC-Bridge."
+            else -> null
+        }
+        if (unavailable != null) return AgentTurnResult(thinkingTrace = "", thinkingDurationSec = 0,
+            responseMarkdown = unavailable, spokenSummaryRu = unavailable, updatedConversationId = conversationId, isError = true)
+        val start = System.currentTimeMillis()
+        val attachedContext = attachments.joinToString("\n") { "Вложение ${it.name}: ${it.textPreview.take(24000).ifBlank {
+            "Текстовое превью недоступно. Содержимое изображения/аудио не передано в этот текстовый запрос; не утверждай, что изучил файл."
+        }}" }
+        val engine = com.google.antigravity.model.PhoneAgentEngine(
+            model = { request, child ->
+                currentCoroutineContext().ensureActive()
+                val modelHistory = if (child) emptyList() else history
+                if (modelId.contains("/")) {
+                    callDirectOpenRouterApi(request, routerKey, modelHistory, modelId, conversationId,
+                        start, mutableListOf(), mutableListOf(), {})?.responseMarkdown
+                        ?: throw java.io.IOException("OpenRouter не вернул ответ. Проверьте ключ, модель и соединение.")
+                } else {
+                    val raw = callGeminiRestApi(request, loadAssetSystemPrompt(), geminiKey, modelId, modelHistory)
+                        ?: throw java.io.IOException("Gemini API не вернул ответ. Проверьте ключ, модель и соединение.")
+                    extractClientSideThinking(raw).first
+                }
+            },
+            execute = { obj ->
+                val action = phoneController.executeSinglePhoneActionObject(obj)
+                if (action == null) com.google.antigravity.model.PhoneToolOutput(false, "Инструмент", "Неизвестное действие телефона")
+                else com.google.antigravity.model.PhoneToolOutput(action.success, action.summaryRu,
+                    action.outputOrDiff.ifBlank { action.targetPathOrCmd })
+            },
+            publish = { tools -> update(StreamingTurnUpdate(thinking = "", thinkingDurationSec = 0,
+                textDelta = "", toolCalls = tools, fullText = "", isDone = false)) }
+        )
+        val reply = engine.run(buildString {
+            appendLine(prompt)
+            appendLine(phoneController.getDeviceTelemetrySummary())
+            if (context.isNotBlank()) appendLine("Контекст пользователя:\n$context")
+            if (attachedContext.isNotBlank()) appendLine("Текст вложений:\n$attachedContext")
+        })
+        update(StreamingTurnUpdate(thinking = "", thinkingDurationSec = 0, textDelta = "",
+            fullText = reply.text, toolCalls = reply.tools, isDone = true))
+        return AgentTurnResult(thinkingTrace = "", thinkingDurationSec = 0, responseMarkdown = reply.text,
+            spokenSummaryRu = sanitizeSpokenSummary(reply.text), updatedConversationId = conversationId,
+            toolCalls = reply.tools)
+    }
+
+    private suspend fun callDirectOpenRouterApi(
+        cleanPrompt: String,
+        openRouterApiKey: String,
+        sessionHistory: List<ChatMessage>,
+        selectedModelId: String,
+        activeConversationId: String,
+        turnStartMs: Long,
+        allToolCalls: MutableList<ToolCallEvent>,
+        createdDiffs: MutableList<FileDiffItem>,
+        onStreamingUpdate: suspend (StreamingTurnUpdate) -> Unit
+    ): AgentTurnResult? {
+        return try {
+            val cleanModel = selectedModelId.removePrefix("openrouter/").trim().ifBlank { "google/gemini-2.0-flash-exp:free" }
+            val sysPrompt = loadAssetSystemPrompt() +
+                "\n\nТы работаешь как модель $cleanModel через OpenRouter API. Адаптируй ответы под возможности модели $cleanModel."
+            val messagesArr = JSONArray().apply {
+                put(JSONObject().put("role", "system").put("content", sysPrompt))
+                sessionHistory.forEach { message ->
+                    put(JSONObject().put("role", if (message.role == MessageRole.USER) "user" else "assistant").put("content", message.content))
+                }
+                put(JSONObject().put("role", "user").put("content", cleanPrompt))
+            }
+            val payload = JSONObject().apply {
+                put("model", cleanModel)
+                put("messages", messagesArr)
+                put("include_reasoning", true)
+            }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+
+            val req = Request.Builder()
+                .url("https://openrouter.ai/api/v1/chat/completions")
+                .header("Authorization", "Bearer ${openRouterApiKey.trim()}")
+                .header("HTTP-Referer", "https://antigravity.google")
+                .header("X-Title", "Google Antigravity Android 2.0")
+                .post(payload)
+                .build()
+
+            httpClient.newCall(req).useCancellable { resp ->
+                if (!resp.isSuccessful) return null
+                val json = JSONObject(resp.body?.string() ?: return null)
+                val choice = json.optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("message") ?: return null
+                val rawContent = choice.optString("content", "").trim()
+                if (rawContent.isBlank()) return null
+                val reasoning = choice.optString("reasoning", "").trim()
+                val (withoutThink, inlineThink) = extractClientSideThinking(rawContent)
+                val finalThink = reasoning.ifBlank { inlineThink }
+                val finalMd = sanitizeStoragePathsInMarkdown(withoutThink, cleanPrompt)
+                val elapsedMs = (System.currentTimeMillis() - turnStartMs).coerceAtLeast(180L)
+                val elapsedSec = (elapsedMs / 1000L).toInt().coerceAtLeast(1)
+                val estTokens = (finalMd.length / 3.6f).toInt().coerceAtLeast(12)
+                val estTps = (((estTokens.toFloat() / (elapsedMs.toFloat() / 1000f)) * 10f).toInt().toFloat() / 10f).coerceAtLeast(14.0f)
+                onStreamingUpdate(
+                    StreamingTurnUpdate(
+                        thinking = finalThink,
+                        thinkingDurationSec = if (finalThink.isNotBlank()) elapsedSec else 0,
+                        toolCalls = allToolCalls.toList(),
+                        textDelta = finalMd,
+                        fullText = finalMd,
+                        createdDiffs = createdDiffs.toList(),
+                        isDone = true,
+                        tokensPerSecond = estTps,
+                        outputTokensCount = estTokens,
+                        firstTokenLatencyMs = 320L
+                    )
+                )
+                AgentTurnResult(
+                    thinkingTrace = finalThink,
+                    thinkingDurationSec = if (finalThink.isNotBlank()) elapsedSec else 0,
+                    responseMarkdown = finalMd,
+                    spokenSummaryRu = sanitizeSpokenSummary(finalMd),
+                    updatedConversationId = activeConversationId,
+                    toolCalls = allToolCalls,
+                    createdDiffs = createdDiffs,
+                    tokensPerSecond = estTps,
+                    outputTokensCount = estTokens,
+                    firstTokenLatencyMs = 320L
+                )
+            }
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
+            null
+        }
+    }
+
     private suspend fun executeDirectGeminiLoop(
         cleanPrompt: String,
         geminiApiKey: String,
+        sessionHistory: List<ChatMessage>,
         selectedModelId: String,
         isPhoneMode: Boolean,
         basePhoneTelemetry: String,
@@ -1845,7 +2255,7 @@ class AntigravityBackendClient(
                     appendLine("\nПродолжи выполнение или дай итоговый ответ.")
                 }
             }
-            val rawReply = callGeminiRestApi(promptWithContext, unifiedSysPrompt, geminiApiKey, selectedModelId) ?: return null
+            val rawReply = callGeminiRestApi(promptWithContext, unifiedSysPrompt, geminiApiKey, selectedModelId, sessionHistory) ?: return null
             val (withoutThink, inlineThink) = extractClientSideThinking(rawReply)
             if (inlineThink.isNotBlank()) {
                 if (thinkingAcc.isNotEmpty()) thinkingAcc.append("\n\n")
@@ -1915,11 +2325,11 @@ class AntigravityBackendClient(
             try {
                 val url = "$base/api/chat/turn-status?turnId=$turnId&conversationId=$resolvedConvId"
                 val req = Request.Builder().url(url).get().build()
-                val bodyStr = fastProbeClient.newCall(req).execute().use { resp ->
+                val bodyStr = fastProbeClient.newCall(req).useCancellable { resp ->
                     if (resp.isSuccessful) resp.body?.string() else null
                 } ?: continue
                 val json = JSONObject(bodyStr)
-                if (!json.optBoolean("found", false)) continue
+                if (!json.optBoolean("found", json.optBoolean("ok", false))) continue
                 val cid = json.optString("conversationId", "")
                 if (cid.isNotBlank()) resolvedConvId = cid
                 val status = json.optString("status", "running")
@@ -1978,20 +2388,28 @@ class AntigravityBackendClient(
                         isDone = status != "running"
                     )
                 )
-                if (status == "done" || status == "error") {
+                if (status in setOf("done", "error", "completed", "failed", "cancelled")) {
+                    val polledMedia = parseGeneratedMediaArray(
+                        arr = json.optJSONArray("generatedMedia"),
+                        baseUrl = base,
+                        fallbackPrompt = "",
+                        fallbackModel = json.optString("model", "")
+                    )
                     return PcBridgeChatResponse(
-                        reply = latestText.ifBlank { srvReply }.trim(),
+                        reply = latestText.ifBlank { srvReply }.ifBlank { json.optString("error", "Запрос завершён без ответа. Повторите попытку.") }.trim(),
                         conversationId = resolvedConvId,
                         thinking = latestThinking.trim(),
                         thinkingDurationSec = json.optInt("thinkingDurationSec", elapsed),
                         toolCalls = streamTools.toList(),
                         createdDiffs = streamDiffs.toList(),
+                        generatedMedia = polledMedia,
                         resolvedBaseUrl = base
                     )
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
-            } catch (_: Throwable) {
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure;
             }
         }
         if (latestText.isNotBlank() || streamTools.isNotEmpty() || latestThinking.isNotBlank()) {
@@ -2021,6 +2439,7 @@ class AntigravityBackendClient(
         phoneContext: String,
         phoneToolObservation: String,
         phoneStepIndex: Int,
+        transientChat: Boolean = false,
         onUpdate: suspend (StreamingTurnUpdate) -> Unit
     ): PcBridgeChatResponse? {
         val cleanUrl = pcBridgeUrl.trim()
@@ -2042,12 +2461,12 @@ class AntigravityBackendClient(
             )
         }
         val historyArray = JSONArray()
-        sessionHistory.takeLast(8).forEach { m ->
+        sessionHistory.forEach { m ->
             if (m.content.isNotBlank() && !m.isContextResetDivider) {
                 historyArray.put(
                     JSONObject().apply {
                         put("role", if (m.role == MessageRole.USER) "USER" else "AGENT")
-                        put("content", m.content.take(900))
+                        put("content", m.content)
                     }
                 )
             }
@@ -2061,17 +2480,18 @@ class AntigravityBackendClient(
             put("history", historyArray)
             put("mode", if (isPhoneMode) "PHONE_ON_DEVICE" else "PC_REMOTE")
             put("voiceMode", voiceMode)
+            put("transient", transientChat)
             put("phoneContext", phoneContext)
             put("phoneToolObservation", phoneToolObservation)
             put("phoneStepIndex", phoneStepIndex)
             put("stream", true)
         }.toString()
 
-        if (lastWorkingBridgeUrl.isBlank() || (forcePublicTunnelOnly && isLocalOrLoopbackUrl(lastWorkingBridgeUrl))) {
-            checkPcBridgeStatus(pcBridgeUrl)
-        }
-
-        val initialCandidates = buildCandidateBridgeUrls(pcBridgeUrl)
+        val verifiedBase = resolveWorkingBaseUrl(pcBridgeUrl)
+        val initialCandidates = buildList {
+            if (!verifiedBase.isNullOrBlank()) add(verifiedBase)
+            addAll(buildCandidateBridgeUrls(pcBridgeUrl))
+        }.distinct()
         for (attempt in 0..1) {
             val urlsToTry = if (attempt == 0) {
                 initialCandidates
@@ -2095,6 +2515,7 @@ class AntigravityBackendClient(
                 var receivedAnyEvent = false
                 val streamTools = mutableListOf<ToolCallEvent>()
                 val streamDiffs = mutableListOf<FileDiffItem>()
+                val streamMedia = mutableListOf<GeneratedMediaAttachment>()
 
                 try {
                     if (base != lastWorkingBridgeUrl && probeSingleBridgeUrl(base) == null) {
@@ -2105,9 +2526,10 @@ class AntigravityBackendClient(
                         .post(payload.toRequestBody("application/json; charset=utf-8".toMediaType()))
                         .build()
 
-                    val success = clientForUrl(base).newCall(req).execute().use { resp ->
-                        if (!resp.isSuccessful) return@use false
-                        val reader: BufferedReader = resp.body?.charStream()?.buffered() ?: return@use false
+                    activeRemoteTurn.set(base to clientTurnId)
+                    val success = clientForUrl(base).newCall(req).useCancellable { resp ->
+                        if (!resp.isSuccessful) return@useCancellable false
+                        val reader: BufferedReader = resp.body?.charStream()?.buffered() ?: return@useCancellable false
                         var line: String?
                         while (true) {
                             currentCoroutineContext().ensureActive()
@@ -2116,7 +2538,8 @@ class AntigravityBackendClient(
                             if (trimmedLine.isEmpty()) continue
                             val ev = try {
                                 JSONObject(trimmedLine)
-                            } catch (_: Throwable) {
+                            } catch (failure: Throwable) {
+                                if (failure is kotlinx.coroutines.CancellationException) throw failure;
                                 continue
                             }
                             receivedAnyEvent = true
@@ -2241,7 +2664,7 @@ class AntigravityBackendClient(
                                     receivedDoneEvent = true
                                     val cid = ev.optString("conversationId", "")
                                     if (cid.isNotBlank()) returnedConvId = cid
-                                    val doneReply = ev.optString("reply", "")
+                                    val doneReply = ev.optString("reply", ev.optString("error", ""))
                                     if (doneReply.isNotBlank()) finalReply = doneReply
                                     val doneThink = ev.optString("thinking", "")
                                     if (doneThink.isNotBlank()) liveThinking = doneThink
@@ -2289,14 +2712,26 @@ class AntigravityBackendClient(
                                             }
                                         }
                                     }
+                                    val doneMedia = parseGeneratedMediaArray(
+                                        arr = ev.optJSONArray("generatedMedia"),
+                                        baseUrl = base,
+                                        fallbackPrompt = prompt,
+                                        fallbackModel = modelId
+                                    )
+                                    for (gm in doneMedia) {
+                                        if (streamMedia.none { it.mediaUrl == gm.mediaUrl && it.fileName == gm.fileName }) {
+                                            streamMedia.add(gm)
+                                        }
+                                    }
                                 }
                             }
                         }
                         true
                     }
 
+                    if (receivedDoneEvent) activeRemoteTurn.compareAndSet(activeRemoteTurn.get()?.takeIf { it.second == clientTurnId }, null)
                     val effectiveReply = finalReply.ifBlank { liveFullText }.trim()
-                    if (success && (effectiveReply.isNotEmpty() || (receivedDoneEvent && (liveThinking.isNotBlank() || streamTools.isNotEmpty())))) {
+                    if (success && receivedDoneEvent && (effectiveReply.isNotEmpty() || (receivedDoneEvent && (liveThinking.isNotBlank() || streamTools.isNotEmpty() || streamMedia.isNotEmpty())))) {
                         lastWorkingBridgeUrl = base
                         val elapsedMs = (System.currentTimeMillis() - streamStartMs).coerceAtLeast(180L)
                         val outTok = if (streamOutputTokensCount > 0) streamOutputTokensCount else (effectiveReply.length / 3.6f).toInt().coerceAtLeast(1)
@@ -2308,8 +2743,9 @@ class AntigravityBackendClient(
                             thinkingDurationSec = finalThinkingSec,
                             toolCalls = streamTools,
                             createdDiffs = streamDiffs,
+                            generatedMedia = streamMedia,
                             resolvedBaseUrl = base,
-                            tokensPerSecond = tps.coerceAtLeast(12.4f),
+                            tokensPerSecond = tps.coerceAtLeast(0f),
                             outputTokensCount = outTok
                         )
                     }
@@ -2334,7 +2770,8 @@ class AntigravityBackendClient(
                     }
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
-                } catch (_: Throwable) {
+                } catch (failure: Throwable) {
+                    if (failure is kotlinx.coroutines.CancellationException) throw failure;
                     // Mid-turn SSE disconnect recovery: if we already received events/tools on this turn, poll until completion!
                     if (!receivedDoneEvent && (receivedAnyEvent || streamTools.isNotEmpty() || liveThinking.isNotBlank())) {
                         val polled = pollTurnUntilComplete(
@@ -2418,14 +2855,15 @@ class AntigravityBackendClient(
             .take(520)
     }
 
-    private fun callGeminiRestApi(
+    private suspend fun callGeminiRestApi(
         prompt: String,
         systemPrompt: String,
         apiKey: String,
-        selectedModelId: String
+        selectedModelId: String,
+        sessionHistory: List<ChatMessage>
     ): String? {
         val directModel = mapToDirectGeminiModelId(selectedModelId)
-        val candidateModels = listOf(directModel, "gemini-2.5-flash", "gemini-2.0-flash").distinct()
+        val candidateModels = listOf(directModel)
         for (model in candidateModels) {
             try {
                 val url =
@@ -2436,7 +2874,14 @@ class AntigravityBackendClient(
                             put("parts", JSONArray().put(JSONObject().put("text", systemPrompt)))
                         })
                     }
-                    put("contents", JSONArray().put(JSONObject().apply {
+                    put("contents", JSONArray().apply {
+                        sessionHistory.forEach { message ->
+                            put(JSONObject().apply {
+                                put("role", if (message.role == MessageRole.USER) "user" else "model")
+                                put("parts", JSONArray().put(JSONObject().put("text", message.content)))
+                            })
+                        }
+                    }.put(JSONObject().apply {
                         put("role", "user")
                         put("parts", JSONArray().put(JSONObject().put("text", prompt)))
                     }))
@@ -2450,12 +2895,12 @@ class AntigravityBackendClient(
                     .post(payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
                     .build()
 
-                httpClient.newCall(req).execute().use { resp ->
-                    if (!resp.isSuccessful) return@use
-                    val json = JSONObject(resp.body?.string() ?: return@use)
-                    val candidates = json.optJSONArray("candidates") ?: return@use
-                    if (candidates.length() == 0) return@use
-                    val parts = candidates.getJSONObject(0).optJSONObject("content")?.optJSONArray("parts") ?: return@use
+                httpClient.newCall(req).useCancellable { resp ->
+                    if (!resp.isSuccessful) return@useCancellable
+                    val json = JSONObject(resp.body?.string() ?: return@useCancellable)
+                    val candidates = json.optJSONArray("candidates") ?: return@useCancellable
+                    if (candidates.length() == 0) return@useCancellable
+                    val parts = candidates.getJSONObject(0).optJSONObject("content")?.optJSONArray("parts") ?: return@useCancellable
                     val sb = StringBuilder()
                     for (i in 0 until parts.length()) {
                         sb.append(parts.getJSONObject(i).optString("text", ""))
@@ -2463,13 +2908,17 @@ class AntigravityBackendClient(
                     val text = sb.toString().trim()
                     if (text.isNotBlank()) return text
                 }
-            } catch (_: Throwable) {
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure;
             }
         }
         return null
     }
 }
 
+// SdCardPath: "/data/..." — шаблон вырезания служебных путей из отображаемого
+// текста модели, а не хардкод доступа к файлам.
+@SuppressLint("SdCardPath")
 internal fun sanitizeStoragePathsInMarkdown(markdown: String, userPrompt: String): String {
     val asksForPath = userPrompt.contains("путь", ignoreCase = true) ||
         userPrompt.contains("path", ignoreCase = true)

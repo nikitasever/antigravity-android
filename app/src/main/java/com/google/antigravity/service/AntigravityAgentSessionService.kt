@@ -30,15 +30,29 @@ class AntigravityAgentSessionService : Service() {
     override fun onCreate() {
         super.onCreate()
         ensureChannels(this)
+        // Promote immediately, even when a short turn finishes before onStartCommand.
+        try {
+            val notification = buildProgressNotification(this, "Antigravity", "Подготовка задачи…", ongoing = true)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(PROGRESS_NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            } else {
+                startForeground(PROGRESS_NOTIFICATION_ID, notification)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("AgentSessionService", "Cannot enter foreground", e)
+            stopSelf()
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val action = intent?.action ?: ACTION_START_PROGRESS
+        val requestedAction = intent?.action ?: ACTION_START_PROGRESS
+        // A very short turn may stop before Android delivers its start intent.
+        // onCreate has already fulfilled startForegroundService's promotion.
+        val action = if (!progressRequested) ACTION_STOP_PROGRESS else requestedAction
         when (action) {
             ACTION_START_PROGRESS, ACTION_UPDATE_PROGRESS -> {
                 val title = intent?.getStringExtra(EXTRA_TITLE) ?: "Antigravity ИИ выполняет задачу"
                 val step = intent?.getStringExtra(EXTRA_STEP) ?: "Синхронизация с рабочей сессией…"
-                acquireWakeLockIfNeeded()
                 val notification = buildProgressNotification(this, title, step, ongoing = true)
                 try {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -51,20 +65,23 @@ class AntigravityAgentSessionService : Service() {
                         startForeground(PROGRESS_NOTIFICATION_ID, notification)
                     }
                 } catch (_: Throwable) {
-                    val nm = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
-                    nm?.notify(PROGRESS_NOTIFICATION_ID, notification)
+                    releaseWakeLock()
+                    stopSelf()
+                    return START_NOT_STICKY
                 }
+                acquireWakeLockIfNeeded()
             }
             ACTION_STOP_PROGRESS -> {
+                if (progressRequested) return START_NOT_STICKY // An immediately queued next turn superseded this stop.
                 releaseWakeLock()
                 try {
                     stopForeground(STOP_FOREGROUND_REMOVE)
                 } catch (_: Throwable) {
                 }
-                stopSelf()
+                stopSelf(startId)
             }
         }
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     override fun onDestroy() {
@@ -98,6 +115,7 @@ class AntigravityAgentSessionService : Service() {
     }
 
     companion object {
+        @Volatile private var progressRequested = false
         const val APPROVAL_CHANNEL_ID = "antigravity_ccr_approval_channel"
         const val PROGRESS_CHANNEL_ID = "antigravity_agent_progress_channel"
         const val APPROVAL_NOTIFICATION_ID = 4202
@@ -110,26 +128,24 @@ class AntigravityAgentSessionService : Service() {
         const val EXTRA_STEP = "extra_step"
 
         private fun ensureChannels(context: Context) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
-                val approvalChannel = NotificationChannel(
-                    APPROVAL_CHANNEL_ID,
-                    context.getString(R.string.agent_channel_name),
-                    NotificationManager.IMPORTANCE_HIGH
-                ).apply {
-                    description = "Запросы подтверждения выполнения команд и патчей Antigravity Agent"
-                }
-                val progressChannel = NotificationChannel(
-                    PROGRESS_CHANNEL_ID,
-                    "Фоновое выполнение задач ИИ",
-                    NotificationManager.IMPORTANCE_LOW
-                ).apply {
-                    description = "Непрерывная работа агента Antigravity в фоновом режиме"
-                    setShowBadge(false)
-                }
-                nm.createNotificationChannel(approvalChannel)
-                nm.createNotificationChannel(progressChannel)
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+            val approvalChannel = NotificationChannel(
+                APPROVAL_CHANNEL_ID,
+                context.getString(R.string.agent_channel_name),
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Запросы подтверждения выполнения команд и патчей Antigravity Agent"
             }
+            val progressChannel = NotificationChannel(
+                PROGRESS_CHANNEL_ID,
+                "Фоновое выполнение задач ИИ",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Непрерывная работа агента Antigravity в фоновом режиме"
+                setShowBadge(false)
+            }
+            nm.createNotificationChannel(approvalChannel)
+            nm.createNotificationChannel(progressChannel)
         }
 
         private fun buildProgressNotification(
@@ -161,18 +177,16 @@ class AntigravityAgentSessionService : Service() {
         }
 
         fun startAgentTurnForeground(context: Context, title: String, stepText: String) {
+            progressRequested = true
             try {
                 val intent = Intent(context, AntigravityAgentSessionService::class.java).apply {
                     action = ACTION_START_PROGRESS
                     putExtra(EXTRA_TITLE, title)
                     putExtra(EXTRA_STEP, stepText)
                 }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    context.startForegroundService(intent)
-                } else {
-                    context.startService(intent)
-                }
+                context.startForegroundService(intent)
             } catch (_: Throwable) {
+                progressRequested = false
             }
         }
 
@@ -186,13 +200,14 @@ class AntigravityAgentSessionService : Service() {
         }
 
         fun stopAgentTurnForeground(context: Context) {
+            if (!progressRequested) return
+            progressRequested = false
             try {
-                val intent = Intent(context, AntigravityAgentSessionService::class.java).apply {
+                // Do not remove a pending foreground-service start before onCreate.
+                // Deliver stop through the same service lifecycle instead.
+                context.startService(Intent(context, AntigravityAgentSessionService::class.java).apply {
                     action = ACTION_STOP_PROGRESS
-                }
-                context.startService(intent)
-                val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
-                nm?.cancel(PROGRESS_NOTIFICATION_ID)
+                })
             } catch (_: Throwable) {
             }
         }

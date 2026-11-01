@@ -1,0 +1,926 @@
+[
+  {
+    "id": "1",
+    "backend": 1,
+    "role": "RootWebArea",
+    "name": "New chat - Claude"
+  },
+  {
+    "id": "430",
+    "backend": 430,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "443",
+    "backend": 443,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "831",
+    "backend": 831,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "837",
+    "backend": 837,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "843",
+    "backend": 843,
+    "role": "status",
+    "name": ""
+  },
+  {
+    "id": "448",
+    "backend": 448,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "838",
+    "backend": 838,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "450",
+    "backend": 450,
+    "role": "heading",
+    "name": "Claude"
+  },
+  {
+    "id": "452",
+    "backend": 452,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "839",
+    "backend": 839,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "846",
+    "backend": 846,
+    "role": "StaticText",
+    "name": "Claude"
+  },
+  {
+    "id": "454",
+    "backend": 454,
+    "role": "complementary",
+    "name": "Sidebar"
+  },
+  {
+    "id": "618",
+    "backend": 618,
+    "role": "main",
+    "name": ""
+  },
+  {
+    "id": "840",
+    "backend": 840,
+    "role": "status",
+    "name": ""
+  },
+  {
+    "id": "841",
+    "backend": 841,
+    "role": "region",
+    "name": "Notifications"
+  },
+  {
+    "id": "458",
+    "backend": 458,
+    "role": "button",
+    "name": "Hide sidebar"
+  },
+  {
+    "id": "221",
+    "backend": 221,
+    "role": "link",
+    "name": "Claude"
+  },
+  {
+    "id": "467",
+    "backend": 467,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "615",
+    "backend": 615,
+    "role": "separator",
+    "name": "Resize sidebar"
+  },
+  {
+    "id": "621",
+    "backend": 621,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "188",
+    "backend": 188,
+    "role": "StaticText",
+    "name": "Claude"
+  },
+  {
+    "id": "468",
+    "backend": 468,
+    "role": "heading",
+    "name": "Navigation"
+  },
+  {
+    "id": "469",
+    "backend": 469,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "598",
+    "backend": 598,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "622",
+    "backend": 622,
+    "role": "sectionheader",
+    "name": ""
+  },
+  {
+    "id": "642",
+    "backend": 642,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "847",
+    "backend": 847,
+    "role": "StaticText",
+    "name": "Navigation"
+  },
+  {
+    "id": "470",
+    "backend": 470,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "599",
+    "backend": 599,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "624",
+    "backend": 624,
+    "role": "toolbar",
+    "name": "Page tools"
+  },
+  {
+    "id": "225",
+    "backend": 225,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "224",
+    "backend": 224,
+    "role": "link",
+    "name": "New"
+  },
+  {
+    "id": "483",
+    "backend": 483,
+    "role": "button",
+    "name": "Search"
+  },
+  {
+    "id": "496",
+    "backend": 496,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "222",
+    "backend": 222,
+    "role": "link",
+    "name": "Artifacts"
+  },
+  {
+    "id": "220",
+    "backend": 220,
+    "role": "link",
+    "name": "Code Upgrade"
+  },
+  {
+    "id": "223",
+    "backend": 223,
+    "role": "link",
+    "name": "Customize"
+  },
+  {
+    "id": "535",
+    "backend": 535,
+    "role": "heading",
+    "name": "Chats and tasks"
+  },
+  {
+    "id": "540",
+    "backend": 540,
+    "role": "button",
+    "name": "Group and sort"
+  },
+  {
+    "id": "546",
+    "backend": 546,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "237",
+    "backend": 237,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "242",
+    "backend": 242,
+    "role": "button",
+    "name": "View all"
+  },
+  {
+    "id": "586",
+    "backend": 586,
+    "role": "status",
+    "name": ""
+  },
+  {
+    "id": "601",
+    "backend": 601,
+    "role": "button",
+    "name": "Nikita Free"
+  },
+  {
+    "id": "610",
+    "backend": 610,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "629",
+    "backend": 629,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "645",
+    "backend": 645,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "654",
+    "backend": 654,
+    "role": "heading",
+    "name": "New chat"
+  },
+  {
+    "id": "657",
+    "backend": 657,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "663",
+    "backend": 663,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "670",
+    "backend": 670,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "783",
+    "backend": 783,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "190",
+    "backend": 190,
+    "role": "StaticText",
+    "name": "New"
+  },
+  {
+    "id": "197",
+    "backend": 197,
+    "role": "StaticText",
+    "name": "Search"
+  },
+  {
+    "id": "218",
+    "backend": 218,
+    "role": "link",
+    "name": "Projects"
+  },
+  {
+    "id": "501",
+    "backend": 501,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "206",
+    "backend": 206,
+    "role": "StaticText",
+    "name": "Artifacts"
+  },
+  {
+    "id": "208",
+    "backend": 208,
+    "role": "StaticText",
+    "name": "Code"
+  },
+  {
+    "id": "209",
+    "backend": 209,
+    "role": "StaticText",
+    "name": "Upgrade"
+  },
+  {
+    "id": "211",
+    "backend": 211,
+    "role": "StaticText",
+    "name": "Customize"
+  },
+  {
+    "id": "536",
+    "backend": 536,
+    "role": "button",
+    "name": "Chats and tasks"
+  },
+  {
+    "id": "548",
+    "backend": 548,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "561",
+    "backend": 561,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "238",
+    "backend": 238,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "231",
+    "backend": 231,
+    "role": "StaticText",
+    "name": "View all"
+  },
+  {
+    "id": "214",
+    "backend": 214,
+    "role": "StaticText",
+    "name": "Nikita"
+  },
+  {
+    "id": "216",
+    "backend": 216,
+    "role": "StaticText",
+    "name": "Free"
+  },
+  {
+    "id": "219",
+    "backend": 219,
+    "role": "link",
+    "name": "Get apps and extensions"
+  },
+  {
+    "id": "631",
+    "backend": 631,
+    "role": "button",
+    "name": "Use incognito"
+  },
+  {
+    "id": "646",
+    "backend": 646,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "853",
+    "backend": 853,
+    "role": "StaticText",
+    "name": "New chat"
+  },
+  {
+    "id": "177",
+    "backend": 177,
+    "role": "StaticText",
+    "name": "Evening thoughts"
+  },
+  {
+    "id": "666",
+    "backend": 666,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "668",
+    "backend": 668,
+    "role": "status",
+    "name": ""
+  },
+  {
+    "id": "672",
+    "backend": 672,
+    "role": "group",
+    "name": ""
+  },
+  {
+    "id": "785",
+    "backend": 785,
+    "role": "list",
+    "name": "Prompt categories"
+  },
+  {
+    "id": "204",
+    "backend": 204,
+    "role": "StaticText",
+    "name": "Projects"
+  },
+  {
+    "id": "226",
+    "backend": 226,
+    "role": "StaticText",
+    "name": "Chats and tasks"
+  },
+  {
+    "id": "549",
+    "backend": 549,
+    "role": "button",
+    "name": "Import memory Try"
+  },
+  {
+    "id": "558",
+    "backend": 558,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "562",
+    "backend": 562,
+    "role": "button",
+    "name": "Customize Claude for you Try"
+  },
+  {
+    "id": "571",
+    "backend": 571,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "232",
+    "backend": 232,
+    "role": "link",
+    "name": "Idle Знакомство с ассистентом"
+  },
+  {
+    "id": "580",
+    "backend": 580,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "647",
+    "backend": 647,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "667",
+    "backend": 667,
+    "role": "status",
+    "name": ""
+  },
+  {
+    "id": "677",
+    "backend": 677,
+    "role": "status",
+    "name": ""
+  },
+  {
+    "id": "678",
+    "backend": 678,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "680",
+    "backend": 680,
+    "role": "status",
+    "name": ""
+  },
+  {
+    "id": "681",
+    "backend": 681,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "786",
+    "backend": 786,
+    "role": "listitem",
+    "name": ""
+  },
+  {
+    "id": "794",
+    "backend": 794,
+    "role": "listitem",
+    "name": ""
+  },
+  {
+    "id": "802",
+    "backend": 802,
+    "role": "listitem",
+    "name": ""
+  },
+  {
+    "id": "810",
+    "backend": 810,
+    "role": "listitem",
+    "name": ""
+  },
+  {
+    "id": "818",
+    "backend": 818,
+    "role": "listitem",
+    "name": ""
+  },
+  {
+    "id": "245",
+    "backend": 245,
+    "role": "StaticText",
+    "name": "Import memory"
+  },
+  {
+    "id": "246",
+    "backend": 246,
+    "role": "StaticText",
+    "name": "Try"
+  },
+  {
+    "id": "559",
+    "backend": 559,
+    "role": "button",
+    "name": "Dismiss this suggestion"
+  },
+  {
+    "id": "249",
+    "backend": 249,
+    "role": "StaticText",
+    "name": "Customize Claude for you"
+  },
+  {
+    "id": "250",
+    "backend": 250,
+    "role": "StaticText",
+    "name": "Try"
+  },
+  {
+    "id": "572",
+    "backend": 572,
+    "role": "button",
+    "name": "Dismiss this suggestion"
+  },
+  {
+    "id": "576",
+    "backend": 576,
+    "role": "image",
+    "name": "Idle"
+  },
+  {
+    "id": "229",
+    "backend": 229,
+    "role": "StaticText",
+    "name": "Знакомство с ассистентом"
+  },
+  {
+    "id": "581",
+    "backend": 581,
+    "role": "button",
+    "name": "More options for Знакомство с ассистентом"
+  },
+  {
+    "id": "233",
+    "backend": 233,
+    "role": "StaticText",
+    "name": "Free plan"
+  },
+  {
+    "id": "651",
+    "backend": 651,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "652",
+    "backend": 652,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "679",
+    "backend": 679,
+    "role": "status",
+    "name": ""
+  },
+  {
+    "id": "682",
+    "backend": 682,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "787",
+    "backend": 787,
+    "role": "button",
+    "name": "Write"
+  },
+  {
+    "id": "795",
+    "backend": 795,
+    "role": "button",
+    "name": "Learn"
+  },
+  {
+    "id": "803",
+    "backend": 803,
+    "role": "button",
+    "name": "Code"
+  },
+  {
+    "id": "811",
+    "backend": 811,
+    "role": "button",
+    "name": "Life stuff"
+  },
+  {
+    "id": "819",
+    "backend": 819,
+    "role": "button",
+    "name": "Claude’s choice"
+  },
+  {
+    "id": "236",
+    "backend": 236,
+    "role": "link",
+    "name": "Upgrade"
+  },
+  {
+    "id": "683",
+    "backend": 683,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "253",
+    "backend": 253,
+    "role": "StaticText",
+    "name": "Write"
+  },
+  {
+    "id": "255",
+    "backend": 255,
+    "role": "StaticText",
+    "name": "Learn"
+  },
+  {
+    "id": "257",
+    "backend": 257,
+    "role": "StaticText",
+    "name": "Code"
+  },
+  {
+    "id": "259",
+    "backend": 259,
+    "role": "StaticText",
+    "name": "Life stuff"
+  },
+  {
+    "id": "261",
+    "backend": 261,
+    "role": "StaticText",
+    "name": "Claude’s choice"
+  },
+  {
+    "id": "234",
+    "backend": 234,
+    "role": "StaticText",
+    "name": "Upgrade"
+  },
+  {
+    "id": "684",
+    "backend": 684,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "686",
+    "backend": 686,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "698",
+    "backend": 698,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "687",
+    "backend": 687,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "697",
+    "backend": 697,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "699",
+    "backend": 699,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "287",
+    "backend": 287,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "693",
+    "backend": 693,
+    "role": "textbox",
+    "name": "Write your prompt to Claude"
+  },
+  {
+    "id": "696",
+    "backend": 696,
+    "role": "status",
+    "name": ""
+  },
+  {
+    "id": "700",
+    "backend": 700,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "710",
+    "backend": 710,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "724",
+    "backend": 724,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "733",
+    "backend": 733,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "763",
+    "backend": 763,
+    "role": "button",
+    "name": "Use voice mode"
+  },
+  {
+    "id": "694",
+    "backend": 694,
+    "role": "paragraph",
+    "name": ""
+  },
+  {
+    "id": "702",
+    "backend": 702,
+    "role": "button",
+    "name": "Add files, connectors, and more"
+  },
+  {
+    "id": "711",
+    "backend": 711,
+    "role": "radiogroup",
+    "name": "Surface"
+  },
+  {
+    "id": "725",
+    "backend": 725,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "734",
+    "backend": 734,
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "id": "695",
+    "backend": 695,
+    "role": "LineBreak",
+    "name": "\n"
+  },
+  {
+    "id": "714",
+    "backend": 714,
+    "role": "radio",
+    "name": "Chat"
+  },
+  {
+    "id": "718",
+    "backend": 718,
+    "role": "radio",
+    "name": "Cowork"
+  },
+  {
+    "id": "726",
+    "backend": 726,
+    "role": "button",
+    "name": "Model: Haiku 5.5 Medium"
+  },
+  {
+    "id": "735",
+    "backend": 735,
+    "role": "group",
+    "name": "Dictate"
+  },
+  {
+    "id": "185",
+    "backend": 185,
+    "role": "StaticText",
+    "name": "Chat"
+  },
+  {
+    "id": "186",
+    "backend": 186,
+    "role": "StaticText",
+    "name": "Cowork"
+  },
+  {
+    "id": "179",
+    "backend": 179,
+    "role": "StaticText",
+    "name": "Haiku 5.5"
+  },
+  {
+    "id": "180",
+    "backend": 180,
+    "role": "StaticText",
+    "name": " "
+  },
+  {
+    "id": "181",
+    "backend": 181,
+    "role": "StaticText",
+    "name": "Medium"
+  },
+  {
+    "id": "738",
+    "backend": 738,
+    "role": "button",
+    "name": "Dictate"
+  },
+  {
+    "id": "745",
+    "backend": 745,
+    "role": "button",
+    "name": "Microphone"
+  }
+]

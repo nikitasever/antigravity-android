@@ -1,0 +1,37 @@
+{
+  "files": [
+    {
+      "name": "referencePaletteCompressed",
+      "path": "orbit-runtime/tables/192a3d078c1ee7499fa31c34e7c0b5a683d3f26eea436259e15584b494e1a3ed.orbittable",
+      "sha256": "192a3d078c1ee7499fa31c34e7c0b5a683d3f26eea436259e15584b494e1a3ed",
+      "size": 340685
+    },
+    {
+      "name": "studioLightingCompressed",
+      "path": "orbit-runtime/tables/4c6a776c8b8c975f33f262545b7350920f6f1272e993301d6beb56f606274312.orbittable",
+      "sha256": "4c6a776c8b8c975f33f262545b7350920f6f1272e993301d6beb56f606274312",
+      "size": 60569
+    },
+    {
+      "name": "paletteFieldCompressed",
+      "path": "orbit-runtime/tables/610ad2f1b606ebcc1df73f88ac62840b68fb4a9d9bfd24dc848e1763d301a4be.orbittable",
+      "sha256": "610ad2f1b606ebcc1df73f88ac62840b68fb4a9d9bfd24dc848e1763d301a4be",
+      "size": 24877
+    }
+  ],
+  "schemaVersion": 1,
+  "sourceFiles": [
+    {
+      "path": "PaletteFieldsData.inc",
+      "sha256": "99c834654212d573db7321359974ec1015f7f56042e0aea82281f90936c97ee8"
+    },
+    {
+      "path": "ReferencePaletteData.inc",
+      "sha256": "15b8f3e57aa6149560a3c932d6b0490c368759426c668f815cf4eb09b24eb0e4"
+    },
+    {
+      "path": "StudioLightingData.inc",
+      "sha256": "ecc466fba4f50c5ac484f0ed62f93bb20ff14c176f7045705728144d37a8f6b4"
+    }
+  ]
+}

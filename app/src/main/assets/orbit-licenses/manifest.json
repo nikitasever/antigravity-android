@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "sdkVersion": "0.13.0",
+  "files": [
+    {
+      "path": "THIRD_PARTY_NOTICES.md",
+      "size": 3244,
+      "sha256": "d73ed18410d80a84edd3fdd3de8b5eff53fc8b71b376bf7edcd5bbf0727fbe7d"
+    },
+    {
+      "path": "android-ndk/NOTICE",
+      "size": 516438,
+      "sha256": "faf0dc52cf6ce9ab09a04b0c074a378dd2565ee1ed9bc1179d83793bcdba012e"
+    },
+    {
+      "path": "android-ndk/NOTICE.toolchain",
+      "size": 799639,
+      "sha256": "789714a9076571c580cf531bdcebec776a4d889c12c3c1108adafc6e4338710a"
+    },
+    {
+      "path": "llvm/NOTICE",
+      "size": 130424,
+      "sha256": "f96f763beb66a7ba7a667647fc64c0226ace875e590c831fdd9579ec1c1d91e1"
+    },
+    {
+      "path": "third_party/android-runtime/NDK-r29-LLVM-NOTICE.txt",
+      "size": 130424,
+      "sha256": "f96f763beb66a7ba7a667647fc64c0226ace875e590c831fdd9579ec1c1d91e1"
+    },
+    {
+      "path": "third_party/android-runtime/README.md",
+      "size": 646,
+      "sha256": "c065d469523c9be4e82acfc4a46daaeb28525e4183beeceec1edb8375079aef2"
+    },
+    {
+      "path": "third_party/khronos/LICENSE.txt",
+      "size": 10280,
+      "sha256": "074e6e32c86a4c0ef8b3ed25b721ca23aca83df277cd88106ef7177c354615ff"
+    },
+    {
+      "path": "third_party/khronos/NOTICE.txt",
+      "size": 532,
+      "sha256": "41e0ed80026c76836a0cfd95608212d47a0b9990b085d96af5f014104b0ad04e"
+    },
+    {
+      "path": "third_party/openlibm/LICENSE.txt",
+      "size": 817,
+      "sha256": "c34c3c355fae7dd78f719026e2d568398796f9143716dc25da035edba2b810b5"
+    },
+    {
+      "path": "third_party/openlibm/NOTICE.txt",
+      "size": 1050,
+      "sha256": "ada7418d768b36499b9348c7e7047eb099c646143b4f381a4205c1ddd44601dc"
+    }
+  ]
+}

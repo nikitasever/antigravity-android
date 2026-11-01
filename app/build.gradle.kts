@@ -12,8 +12,8 @@ android {
         applicationId = "com.google.antigravity"
         minSdk = 26
         targetSdk = 35
-        versionCode = 20261031
-        versionName = "2.0.0-agy"
+        versionCode = 20261102
+        versionName = "2.0.1-agy"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -36,7 +36,9 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
+    sourceSets.getByName("main").assets.exclude("pc_sessions_snapshot.json")
     packaging {
         jniLibs {
             useLegacyPackaging = false
@@ -93,6 +95,7 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

@@ -1,5 +1,8 @@
 package com.google.antigravity.assistant
 
+import android.annotation.SuppressLint
+import androidx.annotation.RequiresApi
+import android.speech.SpeechRecognizer
 import android.app.PendingIntent
 import android.app.assist.AssistContent
 import android.app.assist.AssistStructure
@@ -27,6 +30,7 @@ class AntigravityVoiceInteractionSessionService : VoiceInteractionSessionService
 }
 
 class AntigravityVoiceInteractionSession(context: Context) : VoiceInteractionSession(context) {
+    @RequiresApi(Build.VERSION_CODES.Q)
     override fun onHandleAssist(state: AssistState) {
         super.onHandleAssist(state)
         val summary = extractStructureSummary(state.assistStructure)
@@ -88,9 +92,13 @@ class AntigravityVoiceInteractionSession(context: Context) : VoiceInteractionSes
 }
 
 class AntigravityRecognitionService : RecognitionService() {
-    override fun onStartListening(intent: Intent?, listener: Callback?) {}
+    override fun onStartListening(intent: Intent?, listener: Callback?) {
+        listener?.error(SpeechRecognizer.ERROR_RECOGNIZER_BUSY)
+    }
     override fun onCancel(listener: Callback?) {}
-    override fun onStopListening(listener: Callback?) {}
+    override fun onStopListening(listener: Callback?) {
+        listener?.error(SpeechRecognizer.ERROR_NO_MATCH)
+    }
 }
 
 /**
@@ -111,6 +119,7 @@ class AntigravityQuickTileService : TileService() {
         }
     }
 
+    @SuppressLint("StartActivityAndCollapseDeprecated") // Intent overload is required below API 34.
     override fun onClick() {
         super.onClick()
         val intent = Intent(this, AntigravityAssistActivity::class.java).apply {

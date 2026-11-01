@@ -1,5 +1,8 @@
 package com.google.antigravity.ui.components
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.view.ViewGroup
@@ -45,6 +48,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -468,6 +472,13 @@ fun AntigravityGoogleWebConsole(
     var isLoading by remember { mutableStateOf(true) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
     var triedMirrorFallback by remember { mutableStateOf(false) }
+    DisposableEffect(webViewRef) {
+        val view = webViewRef
+        onDispose { view?.stopLoading(); view?.destroy() }
+    }
+    LaunchedEffect(primaryMirrorUrl) {
+        if (isLiveMirrorMode) webViewRef?.loadUrl(primaryMirrorUrl)
+    }
 
     Column(
         modifier = Modifier
@@ -602,16 +613,25 @@ fun AntigravityGoogleWebConsole(
                             useWideViewPort = true
                             loadWithOverviewMode = true
                             mediaPlaybackRequiresUserGesture = false
-                            allowFileAccess = true
+                            allowFileAccess = false
                             allowContentAccess = true
-                            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                            mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                             userAgentString =
                                 "Mozilla/5.0 (Linux; Android 15; Pixel 9 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
                         }
 
                         webChromeClient = object : WebChromeClient() {
                             override fun onPermissionRequest(request: PermissionRequest?) {
-                                request?.grant(request.resources)
+                                if (request == null) return
+                                val trustedOrigin = request.origin.host in listOf(
+                                    android.net.Uri.parse(primaryMirrorUrl).host,
+                                    android.net.Uri.parse(initialUrl).host
+                                )
+                                val allowed = request.resources.filter { resource ->
+                                    trustedOrigin && resource == PermissionRequest.RESOURCE_AUDIO_CAPTURE &&
+                                        ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                                }
+                                if (allowed.isEmpty()) request.deny() else request.grant(allowed.toTypedArray())
                             }
                         }
 

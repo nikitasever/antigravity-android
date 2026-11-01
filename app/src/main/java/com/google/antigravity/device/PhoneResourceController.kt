@@ -1,6 +1,8 @@
 package com.google.antigravity.device
 
+import com.google.antigravity.model.processPhoneActionBlocks
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.ActivityManager
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -128,8 +130,9 @@ class PhoneResourceController(private val context: Context) {
             context.assets.open("agent_system_prompt.md").bufferedReader(Charsets.UTF_8).use { reader ->
                 reader.readText().trim()
             }
-        } catch (_: Throwable) {
-            "Ты — агент Google Antigravity на русском языке. Пиши живые рассуждения от первого лица в блоке <thinking>...</thinking>."
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
+            "Ты — агент Google Antigravity на русском языке. Отвечай по существу и используй только фактические результаты инструментов."
         }
     }
 
@@ -176,6 +179,9 @@ class PhoneResourceController(private val context: Context) {
     val publicMoviesDir: File
         get() = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES)
 
+    // SdCardPath: "/sdcard/" здесь — пользовательский алиас пути для отображения
+    // и парсинга ввода, а не хардкод доступа к файлам.
+    @SuppressLint("SdCardPath")
     fun humanizePhoneFolderRu(rawPath: String, category: PhoneSearchCategory = PhoneSearchCategory.ALL): String {
         val norm = rawPath.replace('\\', '/').trim()
         val lower = norm.lowercase(Locale.getDefault())
@@ -302,10 +308,12 @@ class PhoneResourceController(private val context: Context) {
                             "# Отчёт по синхронизации Android и ПК\nВсе сессии рабочей станции cr05318-orbital-mars и локальные файлы смартфона проиндексированы."
                         )
                     }
-                } catch (_: Throwable) {
+                } catch (failure: Throwable) {
+                    if (failure is kotlinx.coroutines.CancellationException) throw failure;
                 }
             }
-        } catch (_: Throwable) {
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
         }
     }
 
@@ -742,7 +750,8 @@ class PhoneResourceController(private val context: Context) {
     ): List<PhoneSearchResultItem> {
         val out = mutableListOf<PhoneSearchResultItem>()
         val fmt = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault())
-        val extRoot = try { Environment.getExternalStorageDirectory() } catch (_: Throwable) { null }
+        val extRoot = try { Environment.getExternalStorageDirectory() } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure; null }
         val roots = buildList {
             add(appSandboxWorkspace)
             if (publicDownloadDir.exists()) add(publicDownloadDir)
@@ -765,7 +774,8 @@ class PhoneResourceController(private val context: Context) {
             if (depth > maxDepthForRoot || out.size >= limit || scanned > 2200) return
             val children = try {
                 dir.listFiles()
-            } catch (_: Throwable) {
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure;
                 null
             } ?: return
 
@@ -883,7 +893,8 @@ class PhoneResourceController(private val context: Context) {
                 .replace(Regex("[ \\t]+"), " ")
                 .trim()
             cleaned.take(maxChars)
-        } catch (_: Throwable) {
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
             ""
         }
     }
@@ -1014,7 +1025,8 @@ class PhoneResourceController(private val context: Context) {
                         )
                     }
                 }
-            } catch (_: Throwable) {
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure;
             }
         }
         return out
@@ -1050,7 +1062,8 @@ class PhoneResourceController(private val context: Context) {
                 )
                 if (out.size >= limit) break
             }
-        } catch (_: Throwable) {
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
         }
         return out.sortedBy { it.title.lowercase(Locale.getDefault()) }
     }
@@ -1094,7 +1107,8 @@ class PhoneResourceController(private val context: Context) {
                     )
                 }
             }
-        } catch (_: Throwable) {
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
         }
         return out
     }
@@ -1130,7 +1144,8 @@ class PhoneResourceController(private val context: Context) {
                     true
                 }
             }
-        } catch (_: Throwable) {
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
             false
         }
     }
@@ -1156,7 +1171,8 @@ class PhoneResourceController(private val context: Context) {
             }
             context.startActivity(chooser)
             true
-        } catch (_: Throwable) {
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
             false
         }
     }
@@ -1178,7 +1194,8 @@ class PhoneResourceController(private val context: Context) {
             } else {
                 null
             }
-        } catch (_: Throwable) {
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
             if (item.contentUriString.startsWith("content://")) Uri.parse(item.contentUriString) else null
         }
     }
@@ -1262,7 +1279,8 @@ class PhoneResourceController(private val context: Context) {
 
         fun scanDir(dir: File, depth: Int) {
             if (depth > 4 || matches.size >= 45 || scannedCount > 2000) return
-            val children = try { dir.listFiles() } catch (_: Throwable) { null } ?: return
+            val children = try { dir.listFiles() } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure; null } ?: return
             for (f in children) {
                 if (matches.size >= 45 || scannedCount > 2000) break
                 if (f.isDirectory) {
@@ -1287,7 +1305,8 @@ class PhoneResourceController(private val context: Context) {
                     if (cleanContent.isNotEmpty()) {
                         if (extLower !in textExtensions || f.length() > 2 * 1024 * 1024) continue
                         val fileText = extractCleanReadableText(f, 8000).ifEmpty {
-                            try { f.readText() } catch (_: Throwable) { "" }
+                            try { f.readText() } catch (failure: Throwable) {
+                                if (failure is kotlinx.coroutines.CancellationException) throw failure; "" }
                         }
                         val idx = fileText.lowercase(Locale.getDefault()).indexOf(cleanContent)
                         if (idx < 0) continue
@@ -1401,7 +1420,8 @@ class PhoneResourceController(private val context: Context) {
 
         fun scanMediaFs(dir: File, depth: Int) {
             if (depth > 4 || fsItems.size >= 40) return
-            val children = try { dir.listFiles() } catch (_: Throwable) { null } ?: return
+            val children = try { dir.listFiles() } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure; null } ?: return
             for (f in children) {
                 if (f.isDirectory) {
                     if (!f.name.startsWith(".")) scanMediaFs(f, depth + 1)
@@ -1492,7 +1512,8 @@ class PhoneResourceController(private val context: Context) {
                     out.add("$name — ${humanizePhoneFolderRu(path)} [путь: $path] (${formatSizeRu(actualSize)}, ${fmt.format(Date(actualDateMs))})")
                 }
             }
-        } catch (_: Throwable) {
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
         }
         return out
     }
@@ -1524,6 +1545,7 @@ class PhoneResourceController(private val context: Context) {
                 )
             }
         } catch (e: Throwable) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             PhoneActionExecutionResult(
                 actionType = "read_file",
                 targetPathOrCmd = path,
@@ -1572,6 +1594,7 @@ class PhoneResourceController(private val context: Context) {
                 outputOrDiff = diff
             )
         } catch (e: Throwable) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             try {
                 val fallbackFile = File(appSandboxWorkspace, File(path).name)
                 fallbackFile.parentFile?.mkdirs()
@@ -1596,6 +1619,7 @@ class PhoneResourceController(private val context: Context) {
                     outputOrDiff = buildSimpleUnifiedDiff(fallbackFile.name, if (isCreated) null else oldText, newText)
                 )
             } catch (inner: Throwable) {
+                if (inner is kotlinx.coroutines.CancellationException) throw inner;
                 PhoneActionExecutionResult(
                     actionType = "create_file",
                     targetPathOrCmd = path,
@@ -1632,6 +1656,7 @@ class PhoneResourceController(private val context: Context) {
                 outputOrDiff = buildSimpleUnifiedDiff(file.name, oldContent, newContent)
             )
         } catch (e: Throwable) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             PhoneActionExecutionResult(
                 actionType = "edit_file",
                 targetPathOrCmd = file.absolutePath,
@@ -1666,6 +1691,7 @@ class PhoneResourceController(private val context: Context) {
                 outputOrDiff = "--- ${src.absolutePath}\n+++ ${dst.absolutePath} (${formatSizeRu(dst.length())})"
             )
         } catch (e: Throwable) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             PhoneActionExecutionResult(
                 actionType = if (move) "move_file" else "copy_file",
                 targetPathOrCmd = "$srcPath -> $dstPath",
@@ -1695,6 +1721,7 @@ class PhoneResourceController(private val context: Context) {
                 outputOrDiff = "- ${file.absolutePath}"
             )
         } catch (e: Throwable) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             PhoneActionExecutionResult(
                 actionType = "delete_file",
                 targetPathOrCmd = path,
@@ -1717,6 +1744,7 @@ class PhoneResourceController(private val context: Context) {
                 outputOrDiff = text.ifBlank { "(пусто)" }
             )
         } catch (e: Throwable) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             PhoneActionExecutionResult(
                 actionType = "clipboard_get",
                 targetPathOrCmd = "Буфер обмена",
@@ -1741,6 +1769,7 @@ class PhoneResourceController(private val context: Context) {
                 outputOrDiff = "+ $text"
             )
         } catch (e: Throwable) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             PhoneActionExecutionResult(
                 actionType = "clipboard_set",
                 targetPathOrCmd = "Буфер обмена",
@@ -1779,6 +1808,7 @@ class PhoneResourceController(private val context: Context) {
                 outputOrDiff = apps.joinToString("\n") { (label, pkg) -> "• $label ($pkg)" }
             )
         } catch (e: Throwable) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             PhoneActionExecutionResult(
                 actionType = "list_apps",
                 targetPathOrCmd = query,
@@ -1822,6 +1852,7 @@ class PhoneResourceController(private val context: Context) {
                 outputOrDiff = ""
             )
         } catch (e: Throwable) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             PhoneActionExecutionResult(
                 actionType = "open_app",
                 targetPathOrCmd = query,
@@ -1864,6 +1895,7 @@ class PhoneResourceController(private val context: Context) {
                 outputOrDiff = if (out.isEmpty()) "Контакты не найдены." else out.joinToString("\n")
             )
         } catch (e: Throwable) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             PhoneActionExecutionResult(
                 actionType = "search_contacts",
                 targetPathOrCmd = query,
@@ -1896,6 +1928,7 @@ class PhoneResourceController(private val context: Context) {
                 outputOrDiff = output.ifEmpty { "(команда выполнена успешно)" }.take(5000)
             )
         } catch (e: Throwable) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             PhoneActionExecutionResult(
                 actionType = "phone_shell",
                 targetPathOrCmd = command,
@@ -1906,6 +1939,8 @@ class PhoneResourceController(private val context: Context) {
         }
     }
 
+    // SdCardPath: "/sdcard" — ключевое слово распознавания запроса пользователя.
+    @SuppressLint("SdCardPath")
     fun isPhoneRelatedPrompt(prompt: String): Boolean {
         val lower = prompt.lowercase(Locale.getDefault()).replace('ё', 'е')
         val parsed = parseNaturalSearchQuery(prompt)
@@ -2158,6 +2193,7 @@ class PhoneResourceController(private val context: Context) {
                 outputOrDiff = if (lines.isEmpty()) "Папка пуста: $resolvedPath" else lines.joinToString("\n")
             )
         } catch (e: Throwable) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             PhoneActionExecutionResult(
                 actionType = "list_dir",
                 targetPathOrCmd = dirPath.orEmpty(),
@@ -2198,6 +2234,7 @@ class PhoneResourceController(private val context: Context) {
                 outputOrDiff = "+ Подготовлена отправка: ${file?.absolutePath ?: text}"
             )
         } catch (e: Throwable) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             PhoneActionExecutionResult(
                 actionType = "share",
                 targetPathOrCmd = path.ifBlank { text.take(40) },
@@ -2238,9 +2275,12 @@ class PhoneResourceController(private val context: Context) {
 
         return try {
             workingDir.mkdirs()
+            val outputFile = File.createTempFile("antigravity-cli-", ".log", context.cacheDir)
+            try {
             val pb = ProcessBuilder("sh", "-c", trimmedCmd)
                 .directory(workingDir)
                 .redirectErrorStream(true)
+                .redirectOutput(outputFile)
             pb.environment()["HOME"] = workingDir.absolutePath
             pb.environment()["TMPDIR"] = File(context.cacheDir, "cli_tmp").apply { mkdirs() }.absolutePath
             val proc = pb.start()
@@ -2248,7 +2288,11 @@ class PhoneResourceController(private val context: Context) {
             if (!finished) {
                 proc.destroyForcibly()
             }
-            val rawOut = proc.inputStream.bufferedReader().use { it.readText() }.trim()
+            val rawOut = outputFile.bufferedReader().use { reader ->
+                val buffer = CharArray(4000)
+                val count = reader.read(buffer)
+                if (count < 0) "" else String(buffer, 0, count).trim()
+            }
             val code = if (finished) proc.exitValue() else 124
             val dur = (System.currentTimeMillis() - startMs).coerceAtLeast(1L)
             AndroidCliCommandResult(
@@ -2258,7 +2302,11 @@ class PhoneResourceController(private val context: Context) {
                 durationMs = dur,
                 timestamp = timeFmt
             )
+            } finally {
+                outputFile.delete()
+            }
         } catch (e: Throwable) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             AndroidCliCommandResult(
                 command = trimmedCmd,
                 output = "Ошибка выполнения: ${e.localizedMessage ?: e.javaClass.simpleName}",
@@ -2389,17 +2437,18 @@ class PhoneResourceController(private val context: Context) {
             )
         }
 
-        if (!testScript.exists()) {
+        if (!testScript.exists() || testScript.readText().contains("Status: ALL SANDBOX CHECKS PASSED")) {
             testScript.writeText(
                 """
                 #!/system/bin/sh
-                echo "=== Antigravity Phone Virtual Sandbox Check ==="
-                echo "Sandbox Root: $(pwd)"
-                echo "Files in workspace:"
-                ls -la workspace/
-                echo "Lines in index.html: $(wc -l < workspace/index.html)"
-                echo "Lines in app.js: $(wc -l < workspace/app.js)"
-                echo "Status: ALL SANDBOX CHECKS PASSED (0 errors)"
+                set -eu
+                test -d workspace
+                test -s workspace/index.html
+                test -s workspace/app.js
+                test -d tmp
+                touch tmp/.write_check
+                rm tmp/.write_check
+                echo "PASS: workspace exists, HTML and JS are nonempty, temp directory is writable."
                 """.trimIndent()
             )
             testScript.setExecutable(true)
@@ -2454,7 +2503,8 @@ class PhoneResourceController(private val context: Context) {
         try {
             File(rootDir, "workspace").deleteRecursively()
             File(rootDir, "tmp").deleteRecursively()
-        } catch (_: Throwable) {
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
         }
         return ensureDefaultVirtualSandbox(cleanId).copy(
             lastRunOutput = "♻️ Песочница сброшена к чистому эталонному состоянию"
@@ -2464,7 +2514,8 @@ class PhoneResourceController(private val context: Context) {
     fun writeSandboxFile(sandboxId: String = "default", relativeName: String, content: String): VirtualSandboxProject {
         val project = ensureDefaultVirtualSandbox(sandboxId)
         val workspaceDir = File(File(project.rootPath), "workspace").apply { mkdirs() }
-        val safeName = relativeName.substringAfterLast('/').ifBlank { "custom_module.js" }
+        val safeName = relativeName.substringAfterLast('/').substringAfterLast('\\').ifBlank { "custom_module.js" }
+        require(safeName != "." && safeName != "..") { "Недопустимое имя файла" }
         File(workspaceDir, safeName).writeText(content)
         return ensureDefaultVirtualSandbox(sandboxId).copy(
             lastRunOutput = "💾 Записан файл workspace/$safeName (${content.length} байт)"
@@ -2509,10 +2560,12 @@ class PhoneResourceController(private val context: Context) {
                     null,
                     null
                 )
-            } catch (_: Throwable) {
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure;
             }
             true to destFile.absolutePath
         } catch (e: Throwable) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             false to "Не удалось сохранить файл: ${e.localizedMessage ?: "ошибка ввода-вывода"}"
         }
     }
@@ -2532,7 +2585,7 @@ class PhoneResourceController(private val context: Context) {
         val dst = obj.optString("destination", "")
         val append = obj.optBoolean("append", false)
 
-        if (action in setOf("create_file", "write_file", "edit_file", "patch_file", "append_file", "delete_file", "move_file", "copy_file") &&
+        if (action in setOf("create_file", "write_file", "edit_file", "patch_file", "append_file", "delete_file", "move_file", "copy_file", "read_file", "list_dir", "ls", "search_files") &&
             !aiPermissions.phoneFileSystemAccess
         ) {
             return PhoneActionExecutionResult(
@@ -2556,6 +2609,16 @@ class PhoneResourceController(private val context: Context) {
             )
         }
 
+        val denied = when (action) {
+            "search_contacts", "contacts" -> !aiPermissions.phoneContactsRead
+            "search_media" -> !aiPermissions.phoneMediaCameraMic
+            "open_app" -> !aiPermissions.phoneOpenExternalApps
+            else -> false
+        }
+        if (denied) return PhoneActionExecutionResult(
+            actionType = action, targetPathOrCmd = path, success = false,
+            summaryRu = "Действие отключено в настройках доступа ИИ", outputOrDiff = ""
+        )
         return when (action) {
             "create_file", "write_file" -> writeOrModifyFile(path, content, append = append, isExplicitCreate = !append)
             "edit_file" -> writeOrModifyFile(path, content, append = append, isExplicitCreate = false)
@@ -2642,31 +2705,26 @@ class PhoneResourceController(private val context: Context) {
     }
 
     /**
-     * Извлекает и выполняет все блоки ```phone_action { ... } ``` (или ```json { "action": "..." } ```) из ответа ИИ.
+     * Извлекает и выполняет все блоки ```phone_action { ... } ``` из ответа ИИ.
      */
     fun extractAndExecuteAiPhoneActions(aiResponse: String): Pair<String, List<PhoneActionExecutionResult>> {
         val results = mutableListOf<PhoneActionExecutionResult>()
-        val regex = Regex("```(?:phone_action|json)\\s*([\\s\\S]*?)```", RegexOption.IGNORE_CASE)
-
-        val cleanedText = regex.replace(aiResponse) { match ->
-            val jsonStr = match.groupValues[1].trim()
+        val cleanedText = processPhoneActionBlocks(aiResponse) { jsonStr ->
             try {
-                val obj = JSONObject(jsonStr)
-                val res = executeSinglePhoneActionObject(obj)
-                if (res != null) {
-                    results.add(res)
-                    ""
-                } else {
-                    match.value
-                }
-            } catch (_: Throwable) {
-                match.value
+                val res = executeSinglePhoneActionObject(JSONObject(jsonStr))
+                if (res != null) results.add(res)
+                res != null
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                false
             }
-        }.trim()
-
+        }
         return cleanedText to results
     }
 
+    // SdCardPath: "/sdcard/" — префикс пользовательского ввода; само открытие
+    // файла идёт через Environment.getExternalStorageDirectory().
+    @SuppressLint("SdCardPath")
     private fun resolvePhonePath(rawPath: String): File {
         val trimmed = rawPath.trim().trim('"', '\'', '`')
         return when {

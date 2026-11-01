@@ -1,8 +1,10 @@
 package com.google.antigravity.voice
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioFormat
@@ -26,6 +28,7 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.speech.tts.Voice
 import android.util.Base64
+import androidx.core.content.ContextCompat
 import com.google.antigravity.R
 import com.google.antigravity.model.VoiceProvider
 import com.google.antigravity.model.VoiceSessionStatus
@@ -36,6 +39,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -132,6 +136,13 @@ class RealtimeVoiceEngine(
     private val _bargeInCount = MutableStateFlow(0)
     val bargeInCount: StateFlow<Int> = _bargeInCount.asStateFlow()
 
+    private val _micCheckState = MutableStateFlow<MicCheckResult?>(null)
+    val micCheckState: StateFlow<MicCheckResult?> = _micCheckState.asStateFlow()
+
+    /** Пользовательски видимая ошибка голосового режима (микрофон, диктовка, связь). */
+    private val _voiceError = MutableStateFlow<String?>(null)
+    val voiceError: StateFlow<String?> = _voiceError.asStateFlow()
+
     private val _callDurationSeconds = MutableStateFlow(0L)
     val callDurationSeconds: StateFlow<Long> = _callDurationSeconds.asStateFlow()
 
@@ -183,6 +194,15 @@ class RealtimeVoiceEngine(
     private var aec: AcousticEchoCanceler? = null
     private var ns: NoiseSuppressor? = null
     private var agc: AutomaticGainControl? = null
+
+    // Восстановление живого WebSocket: счётчик попыток и отложенное переподключение.
+    private var wsReconnectAttempts = 0
+    private var wsReconnectJob: Job? = null
+    private var wsModelName: String = ""
+    private var wsFallbackUsed = false
+
+    /** Поколение сессии: события устаревших сокетов не запускают переподключение. */
+    private var wsSessionGeneration = 0
 
     private var visualizerTickerJob: Job? = null
     private var callTimerJob: Job? = null
@@ -244,7 +264,8 @@ class RealtimeVoiceEngine(
                         })
                     }
                 }, "com.google.android.tts")
-            } catch (_: Throwable) {
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure;
             }
         }, 600L)
     }
@@ -282,7 +303,8 @@ class RealtimeVoiceEngine(
             if (preferredVoice != null) {
                 tts.voice = preferredVoice
             }
-        } catch (_: Throwable) {
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
         }
     }
 
@@ -355,7 +377,8 @@ class RealtimeVoiceEngine(
                 if (!resp.isSuccessful) {
                     val errMsg = try {
                         JSONObject(raw).optJSONObject("error")?.optString("message").orEmpty()
-                    } catch (_: Throwable) {
+                    } catch (failure: Throwable) {
+                        if (failure is kotlinx.coroutines.CancellationException) throw failure;
                         ""
                     }
                     return@withContext false to "Ключ не прошёл проверку (HTTP ${resp.code})${if (errMsg.isNotBlank()) ": $errMsg" else ""}"
@@ -365,6 +388,7 @@ class RealtimeVoiceEngine(
                 return@withContext true to "Ключ активен • Доступны Gemini Live и Gemini 2.5 TTS (моделей: $count)"
             }
         } catch (e: Throwable) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
             return@withContext false to "Ошибка сети при проверке ключа: ${e.localizedMessage ?: "неизвестная ошибка"}"
         }
     }
@@ -403,7 +427,8 @@ class RealtimeVoiceEngine(
                     false
                 }
             }
-        } catch (_: Throwable) {
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
             false
         }
     }
@@ -418,6 +443,13 @@ class RealtimeVoiceEngine(
             stopInlineDictation()
             return
         }
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            _voiceError.value = "Нет разрешения на запись с микрофона — диктовка недоступна"
+            return
+        }
+        _voiceError.value = null
         stopActiveAiSpeechPlayback()
         committedDictationText = initialText.trim()
         currentPartialDictation = ""
@@ -440,7 +472,97 @@ class RealtimeVoiceEngine(
             try {
                 speechRecognizer?.stopListening()
                 speechRecognizer?.cancel()
-            } catch (_: Throwable) {
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure;
+            }
+        }
+    }
+
+    fun clearVoiceError() {
+        _voiceError.value = null
+    }
+
+    fun clearMicrophoneCheck() {
+        _micCheckState.value = null
+    }
+
+    /**
+     * Полноценная проверка микрофона: реальная запись ~1.2 секунды с измерением
+     * пикового и среднего уровней сигнала. Запускается из настроек голоса.
+     */
+    fun runMicrophoneCheck() {
+        scope.launch(Dispatchers.IO) {
+            _micCheckState.value = MicCheckResult(
+                ok = false, hardwareOk = false, peakLevel = 0f, averageLevel = 0f,
+                samplesRead = 0, message = "Проверка микрофона…"
+            )
+            _micCheckState.value = performMicrophoneCheck()
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun performMicrophoneCheck(): MicCheckResult {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            return MicCheckResult(false, false, 0f, 0f, 0, "Нет разрешения на запись с микрофона")
+        }
+        val sampleRate = 16000
+        val minBuf = AudioRecord.getMinBufferSize(
+            sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT
+        ).coerceAtLeast(3200)
+        val record = try {
+            AudioRecord(
+                MediaRecorder.AudioSource.MIC, sampleRate,
+                AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, minBuf * 2
+            )
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
+            null
+        } ?: return MicCheckResult(false, false, 0f, 0f, 0,
+            VoiceDiagnostics.micCheckMessage(false, 0f, 0))
+        try {
+            if (record.state != AudioRecord.STATE_INITIALIZED) {
+                return MicCheckResult(false, false, 0f, 0f, 0,
+                    VoiceDiagnostics.micCheckMessage(false, 0f, 0))
+            }
+            record.startRecording()
+            val buffer = ShortArray(1600)
+            var samplesRead = 0
+            var peak = 0.0
+            var sumSq = 0.0
+            val deadline = System.currentTimeMillis() + 1200L
+            while (System.currentTimeMillis() < deadline) {
+                val count = record.read(buffer, 0, buffer.size)
+                if (count <= 0) break
+                for (i in 0 until count) {
+                    val sample = buffer[i].toInt()
+                    val abs = kotlin.math.abs(sample)
+                    if (abs > peak) peak = abs.toDouble()
+                    sumSq += (sample * sample).toDouble()
+                }
+                samplesRead += count
+            }
+            val peakLevel = (peak / 32768.0).toFloat().coerceIn(0f, 1f)
+            val averageLevel = if (samplesRead > 0) {
+                kotlin.math.sqrt(sumSq / samplesRead).toFloat() / 32768f
+            } else 0f
+            val hardwareOk = samplesRead > 0
+            val ok = hardwareOk && peakLevel >= VoiceDiagnostics.MIC_CHECK_SILENCE_THRESHOLD
+            return MicCheckResult(
+                ok = ok, hardwareOk = hardwareOk, peakLevel = peakLevel,
+                averageLevel = averageLevel.coerceIn(0f, 1f), samplesRead = samplesRead,
+                message = VoiceDiagnostics.micCheckMessage(hardwareOk, peakLevel, samplesRead)
+            )
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
+            return MicCheckResult(false, false, 0f, 0f, 0, "Ошибка проверки микрофона: ${failure.message}")
+        } finally {
+            try {
+                record.stop()
+                record.release()
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure;
             }
         }
     }
@@ -478,6 +600,8 @@ class RealtimeVoiceEngine(
         _livePartialTranscript.value = ""
         _liveAiSubtitle.value = ""
         _status.value = VoiceSessionStatus.LISTENING
+        wsReconnectAttempts = 0
+        wsFallbackUsed = false
 
         configureAudioRouting(speakerphone = _isSpeakerphone.value)
         playVoiceSoundCue(R.raw.listening_start_v2)
@@ -526,7 +650,8 @@ class RealtimeVoiceEngine(
                 speechRecognizer?.stopListening()
                 speechRecognizer?.cancel()
                 speechRecognizer?.destroy()
-            } catch (_: Throwable) {
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure;
             }
             speechRecognizer = null
         }
@@ -545,7 +670,8 @@ class RealtimeVoiceEngine(
             mainHandler.post {
                 try {
                     speechRecognizer?.cancel()
-                } catch (_: Throwable) {
+                } catch (failure: Throwable) {
+                    if (failure is kotlinx.coroutines.CancellationException) throw failure;
                 }
             }
         } else if (_isCallActive.value) {
@@ -572,11 +698,13 @@ class RealtimeVoiceEngine(
                 mp.setOnCompletionListener { player ->
                     try {
                         player.release()
-                    } catch (_: Throwable) {
+                    } catch (failure: Throwable) {
+                        if (failure is kotlinx.coroutines.CancellationException) throw failure;
                     }
                 }
                 mp.start()
-            } catch (_: Throwable) {
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure;
             }
         }
     }
@@ -585,25 +713,14 @@ class RealtimeVoiceEngine(
      * Принудительный Barge-In (перебивание ИИ голосом или касанием сферы).
      */
     fun interruptAiAndListenNow() {
-        val wasSpeakingOrThinking = _status.value == VoiceSessionStatus.AI_SPEAKING ||
-            _status.value == VoiceSessionStatus.THINKING ||
-            _isSpeakingMessageAloud.value ||
-            (textToSpeech?.isSpeaking == true)
-        stopActiveAiSpeechPlayback()
-        try {
-            onBargeInInterruptCallback?.invoke()
-        } catch (_: Throwable) {
-        }
+        performBargeInInterrupt()
         try {
             audioTrack?.pause()
             audioTrack?.flush()
             audioTrack?.play()
-        } catch (_: Throwable) {
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
         }
-        if (wasSpeakingOrThinking) {
-            _bargeInCount.value += 1
-        }
-        isAiSpeakingOrThinking = false
         if (_isCallActive.value && !_isMuted.value) {
             _status.value = VoiceSessionStatus.LISTENING
             _liveAiSubtitle.value = ""
@@ -611,6 +728,29 @@ class RealtimeVoiceEngine(
                 scheduleStartListening(100L)
             }
         }
+    }
+
+    /**
+     * Общая часть прерывания: останавливает озвучку, отменяет текущую генерацию
+     * ответа (через `onBargeInInterruptCallback`) и сбрасывает счётчик barge-in.
+     * Вызывается из всех путей перебивания: распознаватель речи, уровень PCM,
+     * касание сферы и прямой вызов.
+     */
+    private fun performBargeInInterrupt() {
+        val wasSpeakingOrThinking = _status.value == VoiceSessionStatus.AI_SPEAKING ||
+            _status.value == VoiceSessionStatus.THINKING ||
+            _isSpeakingMessageAloud.value ||
+            (textToSpeech?.isSpeaking == true)
+        stopActiveAiSpeechPlayback()
+        try {
+            onBargeInInterruptCallback?.invoke()
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
+        }
+        if (wasSpeakingOrThinking) {
+            _bargeInCount.value += 1
+        }
+        isAiSpeakingOrThinking = false
     }
 
     private fun stopActiveAiSpeechPlayback() {
@@ -626,16 +766,19 @@ class RealtimeVoiceEngine(
         mainHandler.post {
             try {
                 activeSpeechMediaPlayer?.stop()
-            } catch (_: Throwable) {
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure;
             }
             try {
                 activeSpeechMediaPlayer?.release()
-            } catch (_: Throwable) {
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure;
             }
             activeSpeechMediaPlayer = null
             try {
                 textToSpeech?.stop()
-            } catch (_: Throwable) {
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure;
             }
         }
         _isSpeakingMessageAloud.value = false
@@ -659,7 +802,8 @@ class RealtimeVoiceEngine(
             try {
                 speechRecognizer?.stopListening()
                 speechRecognizer?.cancel()
-            } catch (_: Throwable) {
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure;
             }
         }
     }
@@ -750,7 +894,8 @@ class RealtimeVoiceEngine(
                     nextPrefetchDeferred = null
                     try {
                         def.await()
-                    } catch (_: Throwable) {
+                    } catch (failure: Throwable) {
+                        if (failure is kotlinx.coroutines.CancellationException) throw failure;
                         null
                     }
                 } else {
@@ -827,7 +972,8 @@ class RealtimeVoiceEngine(
             try {
                 speechRecognizer?.stopListening()
                 speechRecognizer?.cancel()
-            } catch (_: Throwable) {
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure;
             }
         }
 
@@ -885,7 +1031,8 @@ class RealtimeVoiceEngine(
                     if (!isActive || !isAiSpeakingOrThinking) break
                     val currentBytes = try {
                         nextPrefetch?.await()
-                    } catch (_: Throwable) {
+                    } catch (failure: Throwable) {
+                        if (failure is kotlinx.coroutines.CancellationException) throw failure;
                         null
                     }
                     nextPrefetch = if (i + 1 < chunks.size && isActive && isAiSpeakingOrThinking) {
@@ -973,7 +1120,8 @@ class RealtimeVoiceEngine(
 
             val validPcm = pcmBytes ?: return false
             playRawPcm24kHzBlocking(validPcm)
-        } catch (_: Throwable) {
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
             false
         }
     }
@@ -1003,7 +1151,8 @@ class RealtimeVoiceEngine(
                 .setBufferSizeInBytes(max(minBuf * 2, pcmBytes.size.coerceAtMost(96000)))
                 .setTransferMode(AudioTrack.MODE_STREAM)
                 .build()
-        } catch (_: Throwable) {
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
             return@withContext false
         }
 
@@ -1020,13 +1169,15 @@ class RealtimeVoiceEngine(
             val durationMs = ((pcmBytes.size / 2L) * 1000L) / sampleRate
             delay(durationMs.coerceIn(100L, 15000L))
             true
-        } catch (_: Throwable) {
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
             false
         } finally {
             try {
                 track.stop()
                 track.release()
-            } catch (_: Throwable) {
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure;
             }
         }
     }
@@ -1038,7 +1189,8 @@ class RealtimeVoiceEngine(
     private fun fetchBridgeNeuralTtsMp3Bytes(chunkText: String): ByteArray? {
         val encoded = try {
             URLEncoder.encode(chunkText, "UTF-8")
-        } catch (_: Throwable) {
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
             return null
         }
 
@@ -1074,7 +1226,8 @@ class RealtimeVoiceEngine(
                         }
                     }
                 }
-            } catch (_: Throwable) {
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure;
             }
         }
         return null
@@ -1085,7 +1238,8 @@ class RealtimeVoiceEngine(
             File(context.cacheDir, "agy_neural_${System.currentTimeMillis()}_${validBytes.size}.mp3").apply {
                 FileOutputStream(this).use { it.write(validBytes) }
             }
-        } catch (_: Throwable) {
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
             return false
         }
 
@@ -1105,7 +1259,8 @@ class RealtimeVoiceEngine(
                 mp.setOnCompletionListener { player ->
                     try {
                         player.release()
-                    } catch (_: Throwable) {
+                    } catch (failure: Throwable) {
+                        if (failure is kotlinx.coroutines.CancellationException) throw failure;
                     }
                     if (activeSpeechMediaPlayer === player) {
                         activeSpeechMediaPlayer = null
@@ -1116,7 +1271,8 @@ class RealtimeVoiceEngine(
                 mp.setOnErrorListener { player, _, _ ->
                     try {
                         player.release()
-                    } catch (_: Throwable) {
+                    } catch (failure: Throwable) {
+                        if (failure is kotlinx.coroutines.CancellationException) throw failure;
                     }
                     if (activeSpeechMediaPlayer === player) {
                         activeSpeechMediaPlayer = null
@@ -1127,7 +1283,8 @@ class RealtimeVoiceEngine(
                 }
                 mp.prepare()
                 mp.start()
-            } catch (_: Throwable) {
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure;
                 tempFile.delete()
                 completionSignal.complete(false)
             }
@@ -1138,7 +1295,8 @@ class RealtimeVoiceEngine(
         } finally {
             try {
                 tempFile.delete()
-            } catch (_: Throwable) {
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure;
             }
         }
     }
@@ -1266,7 +1424,8 @@ class RealtimeVoiceEngine(
                 )
             }
             speechRecognizer?.startListening(intent)
-        } catch (_: Throwable) {
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
         }
     }
 
@@ -1282,9 +1441,8 @@ class RealtimeVoiceEngine(
                 if (_isDictatingInline.value) return
                 if (!_isCallActive.value || _isMuted.value) return
                 if (bargeInEnabled && (isAiSpeakingOrThinking || _status.value == VoiceSessionStatus.AI_SPEAKING)) {
-                    stopActiveAiSpeechPlayback()
-                    isAiSpeakingOrThinking = false
-                    _bargeInCount.value += 1
+                    // Речь пользователя прерывает и озвучку, и текущую генерацию ответа.
+                    performBargeInInterrupt()
                 }
                 if (pendingVoiceUtteranceBuffer.isNotBlank()) {
                     scheduleVoiceUtteranceDebounce(2600L)
@@ -1318,6 +1476,17 @@ class RealtimeVoiceEngine(
             override fun onError(error: Int) {
                 // КРИТИЧНО: В режиме диктовки НЕ выключаем микрофон при паузах/таймаутах, а перезапускаем слушание!
                 if (_isDictatingInline.value) {
+                    if (VoiceDiagnostics.isFatalSpeechRecognizerError(error)) {
+                        // Фатальная ошибка: бесконечный повтор бессмыслен — честно останавливаемся.
+                        _isDictatingInline.value = false
+                        currentPartialDictation = ""
+                        _voiceError.value = when (error) {
+                            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Нет разрешения на запись с микрофона — диктовка остановлена"
+                            SpeechRecognizer.ERROR_CLIENT -> "Служба распознавания речи недоступна — диктовка остановлена"
+                            else -> "Распознавание речи не поддерживается для выбранного языка"
+                        }
+                        return
+                    }
                     val delayMs = if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) 450L else 120L
                     mainHandler.postDelayed({
                         if (_isDictatingInline.value) {
@@ -1421,7 +1590,8 @@ class RealtimeVoiceEngine(
             try {
                 speechRecognizer?.stopListening()
                 speechRecognizer?.cancel()
-            } catch (_: Throwable) {
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure;
             }
         }
 
@@ -1470,6 +1640,8 @@ class RealtimeVoiceEngine(
         allowFallbackModel: Boolean
     ) {
         stopGeminiLiveWebSocketSession()
+        val generation = ++wsSessionGeneration
+        wsModelName = modelName
 
         val wsUrl =
             "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=$apiKey"
@@ -1479,6 +1651,7 @@ class RealtimeVoiceEngine(
 
         liveWebSocket = okHttpClient.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
+                wsReconnectAttempts = 0
                 val setupJson = JSONObject().apply {
                     put("setup", JSONObject().apply {
                         put("model", modelName)
@@ -1553,20 +1726,65 @@ class RealtimeVoiceEngine(
                 handleGeminiLiveServerMessage(webSocket, text)
             }
 
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                // Сервер закрыл соединение — восстанавливаем его, пока звонок активен.
+                handleLiveConnectionLost(generation, apiKey, modelName, allowFallbackModel)
+            }
+
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                if (allowFallbackModel && _isCallActive.value) {
-                    startGeminiLiveWebSocketSession(
-                        apiKey = apiKey,
-                        modelName = "models/gemini-2.0-flash-live-001",
-                        allowFallbackModel = false
-                    )
-                    return
-                }
-                liveWebSocket = null
-                _status.value = VoiceSessionStatus.LISTENING
-                scheduleStartListening(200L)
+                handleLiveConnectionLost(generation, apiKey, modelName, allowFallbackModel)
             }
         })
+    }
+
+    /**
+     * Восстановление живого соединения: одна попытка запасной модели, затем
+     * переподключение с экспоненциальной паузой (см. VoiceDiagnostics).
+     * События устаревших сокетов игнорируются по номеру поколения.
+     */
+    private fun handleLiveConnectionLost(
+        generation: Int,
+        apiKey: String,
+        modelName: String,
+        allowFallbackModel: Boolean
+    ) {
+        if (generation != wsSessionGeneration) return
+        liveWebSocket = null
+        if (!_isCallActive.value) return
+        if (allowFallbackModel && !wsFallbackUsed) {
+            wsFallbackUsed = true
+            startGeminiLiveWebSocketSession(
+                apiKey = apiKey,
+                modelName = "models/gemini-2.0-flash-live-001",
+                allowFallbackModel = false
+            )
+            return
+        }
+        scheduleWsReconnect(apiKey, modelName)
+    }
+
+    private fun scheduleWsReconnect(apiKey: String, modelName: String) {
+        if (!_isCallActive.value) return
+        val exhausted = wsReconnectAttempts >= VoiceDiagnostics.WS_MAX_RECONNECT_ATTEMPTS
+        _status.value = VoiceSessionStatus.RECONNECTING
+        _liveAiSubtitle.value = if (exhausted) {
+            "Связь потеряна — повторная попытка…"
+        } else {
+            "Переподключение… (попытка ${wsReconnectAttempts + 1})"
+        }
+        val delayMs = if (exhausted) {
+            30_000L // после исчерпания быстрых попыток — редкие повторы, пока звонок не завершён
+        } else {
+            VoiceDiagnostics.wsReconnectDelayMs(wsReconnectAttempts)
+        }
+        wsReconnectAttempts += 1
+        wsReconnectJob?.cancel()
+        wsReconnectJob = scope.launch {
+            delay(delayMs)
+            if (_isCallActive.value && liveWebSocket == null) {
+                startGeminiLiveWebSocketSession(apiKey, modelName, allowFallbackModel = false)
+            }
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -1588,7 +1806,8 @@ class RealtimeVoiceEngine(
                     AudioFormat.ENCODING_PCM_16BIT,
                     minBuf * 2
                 )
-            } catch (_: Throwable) {
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure;
                 null
             } ?: return@launch
 
@@ -1618,10 +1837,11 @@ class RealtimeVoiceEngine(
                         _audioLevel.value = normLevel
 
                         if (bargeInEnabled && normLevel > 0.42f && _status.value == VoiceSessionStatus.AI_SPEAKING) {
+                            // Речь пользователя прерывает и озвучку, и текущую генерацию ответа.
+                            performBargeInInterrupt()
                             audioTrack?.pause()
                             audioTrack?.flush()
                             audioTrack?.play()
-                            _bargeInCount.value += 1
                             _status.value = VoiceSessionStatus.USER_SPEAKING
                         }
 
@@ -1637,12 +1857,14 @@ class RealtimeVoiceEngine(
                         webSocket.send(chunkPayload.toString())
                     }
                 }
-            } catch (_: Throwable) {
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure;
             } finally {
                 try {
                     record.stop()
                     record.release()
-                } catch (_: Throwable) {
+                } catch (failure: Throwable) {
+                    if (failure is kotlinx.coroutines.CancellationException) throw failure;
                 }
             }
         }
@@ -1670,7 +1892,8 @@ class RealtimeVoiceEngine(
                 .setTransferMode(AudioTrack.MODE_STREAM)
                 .build()
                 .apply { play() }
-        } catch (_: Throwable) {
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
         }
     }
 
@@ -1695,6 +1918,7 @@ class RealtimeVoiceEngine(
                                 onLiveToolCallRequested?.invoke(fnName, argsObj)
                                     ?: "Инструмент выполнен успешно"
                             } catch (e: Throwable) {
+                                if (e is kotlinx.coroutines.CancellationException) throw e;
                                 "Ошибка выполнения: ${e.localizedMessage ?: "неизвестно"}"
                             }
                             responsesArray.put(JSONObject().apply {
@@ -1747,7 +1971,8 @@ class RealtimeVoiceEngine(
             if (serverContent.optBoolean("turnComplete", false)) {
                 _status.value = VoiceSessionStatus.LISTENING
             }
-        } catch (_: Throwable) {
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
         }
     }
 
@@ -1762,16 +1987,21 @@ class RealtimeVoiceEngine(
             if (AutomaticGainControl.isAvailable()) {
                 agc = AutomaticGainControl.create(audioSessionId)?.apply { enabled = true }
             }
-        } catch (_: Throwable) {
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
         }
     }
 
     private fun stopGeminiLiveWebSocketSession() {
+        wsSessionGeneration++ // события закрываемого сокета не должны переподключать его снова
+        wsReconnectJob?.cancel()
+        wsReconnectJob = null
         pcmRecordJob?.cancel()
         pcmRecordJob = null
         try {
             liveWebSocket?.close(1000, "Session closed")
-        } catch (_: Throwable) {
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
         }
         liveWebSocket = null
 
@@ -1779,7 +2009,8 @@ class RealtimeVoiceEngine(
             aec?.release()
             ns?.release()
             agc?.release()
-        } catch (_: Throwable) {
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
         }
         aec = null
         ns = null
@@ -1788,7 +2019,8 @@ class RealtimeVoiceEngine(
         try {
             audioTrack?.stop()
             audioTrack?.release()
-        } catch (_: Throwable) {
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
         }
         audioTrack = null
     }
@@ -1799,24 +2031,22 @@ class RealtimeVoiceEngine(
         try {
             val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
             am.mode = AudioManager.MODE_NORMAL
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
-                    .setAudioAttributes(speechAudioAttributes)
-                    .build()
-                activeFocusRequest = req
-                am.requestAudioFocus(req)
-            }
-        } catch (_: Throwable) {
+            val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+                .setAudioAttributes(speechAudioAttributes)
+                .build()
+            activeFocusRequest = req
+            am.requestAudioFocus(req)
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
         }
     }
 
     private fun abandonSpeechAudioFocus() {
         try {
             val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                activeFocusRequest?.let { am.abandonAudioFocusRequest(it) }
-            }
-        } catch (_: Throwable) {
+            activeFocusRequest?.let { am.abandonAudioFocusRequest(it) }
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
         }
     }
 
@@ -1828,7 +2058,8 @@ class RealtimeVoiceEngine(
             if (curVol < (maxVol * 0.25f).toInt()) {
                 am.setStreamVolume(AudioManager.STREAM_MUSIC, (maxVol * 0.55f).toInt(), 0)
             }
-        } catch (_: Throwable) {
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
         }
     }
 
@@ -1838,7 +2069,8 @@ class RealtimeVoiceEngine(
             audioManager.mode = AudioManager.MODE_NORMAL
             @Suppress("DEPRECATION")
             audioManager.isSpeakerphoneOn = speakerphone
-        } catch (_: Throwable) {
+        } catch (failure: Throwable) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure;
         }
     }
 
@@ -1903,7 +2135,10 @@ class RealtimeVoiceEngine(
     fun release() {
         stopRealtimeSession()
         visualizerTickerJob?.cancel()
+        scope.cancel()
         mainHandler.post {
+            speechRecognizer?.destroy()
+            speechRecognizer = null
             textToSpeech?.shutdown()
             textToSpeech = null
         }

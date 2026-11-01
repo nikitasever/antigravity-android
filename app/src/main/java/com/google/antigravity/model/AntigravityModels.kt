@@ -14,7 +14,8 @@ enum class ToolCallStatus {
     APPROVED,
     DENIED,
     COMPLETED,
-    FAILED
+    FAILED,
+    CANCELLED
 }
 
 enum class ApprovalDecision {
@@ -175,6 +176,7 @@ data class ToolApprovalRequest(
 fun humanizeToolNameRu(rawToolName: String): String {
     val normalized = rawToolName.trim().lowercase()
     return when {
+        normalized == "delegate_task" -> "Делегирование"
         normalized.contains("create_file") || normalized.contains("write_file") || normalized.contains("write_to_file") -> "Создание файла"
         normalized.contains("patch_file") || normalized.contains("edit_file") || normalized.contains("replace_file") || normalized.contains("modify") -> "Точечное изменение файла"
         normalized.contains("append_file") -> "Дозапись в файл"
@@ -210,7 +212,10 @@ data class ToolCallEvent(
     val toolTitleRu: String = humanizeToolNameRu(toolName),
     val unifiedDiff: String? = details.takeIf { it.isNotBlank() },
     val requiresApproval: Boolean = false,
-    val approvalDecision: ApprovalDecision = ApprovalDecision.PENDING
+    val approvalDecision: ApprovalDecision = ApprovalDecision.PENDING,
+    val parentTaskId: String? = null,
+    val executionTarget: AgentExecutionTarget? = null,
+    val leadingText: String = ""
 )
 
 data class ArtifactDocument(
@@ -220,7 +225,12 @@ data class ArtifactDocument(
     val summary: String,
     val content: String,
     val requestFeedback: Boolean = false,
-    val updatedAt: String = "Сегодня"
+    val updatedAt: String = "Сегодня",
+    val versions: List<ArtifactVersion> = emptyList(),
+    /** Время последнего изменения копии; метка для слияния с ПК. */
+    val updatedAtMs: Long = 0L,
+    /** Закрепление артефакта (как «Закрепить артефакт» в ChatGPT/Claude). */
+    val pinned: Boolean = false
 )
 
 enum class ArtifactType(val label: String) {
@@ -274,10 +284,13 @@ data class ChatMessage(
     val approvalRequest: ToolApprovalRequest? = null,
     val artifactId: String? = null,
     val isContextResetDivider: Boolean = false,
+    /** Сводка сжатия контекста: входит в контекст модели как первый материал. */
+    val isCompactionSummary: Boolean = false,
     val tokensPerSecond: Float = 0f,
     val outputTokensCount: Int = 0,
     val firstTokenLatencyMs: Long = 0L,
-    val modelBadge: String = ""
+    val modelBadge: String = "",
+    val versionState: MessageVersionState? = null
 )
 
 data class TerminalSessionItem(
@@ -291,6 +304,7 @@ data class TerminalSessionItem(
 enum class VoiceSessionStatus(val labelRu: String) {
     INACTIVE("Отключён"),
     CONNECTING("Подключение…"),
+    RECONNECTING("Переподключение…"),
     LISTENING("Слушаю…"),
     USER_SPEAKING("Вы говорите…"),
     THINKING("Думаю…"),
@@ -376,12 +390,8 @@ val AVAILABLE_AGY_MODELS = listOf(
 )
 
 fun mapToDirectGeminiModelId(selectedModelId: String): String {
-    val lower = selectedModelId.lowercase()
-    return when {
-        lower.contains("flash") || lower.contains("low") -> "gemini-2.5-flash"
-        lower.contains("argon-high") || lower.contains("opus") || lower.contains("pro") -> "gemini-2.5-pro"
-        else -> "gemini-2.5-flash"
-    }
+    return selectedModelId.trim().removePrefix("models/")
+
 }
 
 enum class OpenRouterCategory(val code: String, val labelRu: String, val emoji: String) {
@@ -430,8 +440,12 @@ data class SwarmAgentNode(
     val currentStep: String = currentTask,
     val completedTasks: Int = 0,
     val stepLogs: List<String> = emptyList(),
-    val logs: List<String> = stepLogs
-)
+    val logs: List<String> = stepLogs,
+    val changeReview: String = "",
+    val isSettling: Boolean = false
+) {
+    val isInProgress: Boolean get() = isSettling || status in setOf("queued", "running")
+}
 
 typealias SwarmSubAgentItem = SwarmAgentNode
 
@@ -455,7 +469,7 @@ data class VirtualSandboxProject(
     val htmlEntryPath: String = "",
     val previewHtmlPath: String = htmlEntryPath.removePrefix("file://"),
     val lastRunOutput: String = "",
-    val lastTestSummary: String = "12/12 PASS",
+    val lastTestSummary: String = "Проверки ещё не запускались",
     val snapshots: List<String> = emptyList(),
     val updatedAt: String = "Только что"
 )
@@ -473,16 +487,11 @@ data class AiPermissionsConfig(
     val runInBackgroundKeepAwake: Boolean = true,
     // Смартфон Android
     val phoneFileReadWrite: Boolean = true,
-    val phoneFileSystemAccess: Boolean = phoneFileReadWrite,
     val phoneAndroidCliShell: Boolean = true,
-    val phoneAndroidCliAccess: Boolean = phoneAndroidCliShell,
     val phoneVirtualSandboxExec: Boolean = true,
-    val phoneVirtualSandboxAccess: Boolean = phoneVirtualSandboxExec,
     val phoneOpenExternalApps: Boolean = true,
     val phoneContactsRead: Boolean = true,
     val phoneMediaCameraMic: Boolean = true,
-    val phoneCameraMediaAccess: Boolean = phoneMediaCameraMic,
-    val phoneContactsCalendarSmsAccess: Boolean = phoneContactsRead,
     val phoneInstallPackagesAccess: Boolean = true,
     // Рабочая станция ПК
     val pcTerminalExec: Boolean = true,
@@ -490,12 +499,18 @@ data class AiPermissionsConfig(
     val pcBrowserAutomation: Boolean = true,
     val pcMcpToolsExec: Boolean = true,
     val pcOpenRouterCloudGen: Boolean = true,
-    val pcWorkspaceReadWrite: Boolean = pcFilesystemWrite,
-    val pcPowerShellExecution: Boolean = pcTerminalExec,
-    val pcBrowserAndNetworkAccess: Boolean = pcBrowserAutomation,
-    val pcPluginsMcpSkillsAccess: Boolean = pcMcpToolsExec,
     val pcFullDiskAccess: Boolean = true
-)
+) {
+    val phoneFileSystemAccess: Boolean get() = phoneFileReadWrite
+    val phoneAndroidCliAccess: Boolean get() = phoneAndroidCliShell
+    val phoneVirtualSandboxAccess: Boolean get() = phoneVirtualSandboxExec
+    val phoneCameraMediaAccess: Boolean get() = phoneMediaCameraMic
+    val phoneContactsCalendarSmsAccess: Boolean get() = phoneContactsRead
+    val pcWorkspaceReadWrite: Boolean get() = pcFilesystemWrite
+    val pcPowerShellExecution: Boolean get() = pcTerminalExec
+    val pcBrowserAndNetworkAccess: Boolean get() = pcBrowserAutomation
+    val pcPluginsMcpSkillsAccess: Boolean get() = pcMcpToolsExec
+}
 
 data class ContextWindowStatus(
     val conversationId: String = "",
@@ -577,7 +592,7 @@ data class GoogleDriveFileItem(
     val mimeType: String = "text/markdown",
     val sizeBytes: Long = 0L,
     val updatedAt: String = "Только что",
-    val webViewLink: String = "https://drive.google.com/drive/u/0/folders/antigravity-cloud",
+    val webViewLink: String = "",
     val downloadUrl: String = "",
     val localUri: String = "",
     val previewSnippet: String = "",
@@ -586,13 +601,13 @@ data class GoogleDriveFileItem(
 )
 
 data class GoogleDriveStatus(
-    val connected: Boolean = true,
-    val accountEmail: String = "antigravity.cloud.sync@gmail.com",
+    val connected: Boolean = false,
+    val accountEmail: String = "",
     val folderPath: String = "/AntigravityCloud",
     val rootFolder: String = folderPath,
-    val filesCount: Int = 3,
-    val usedBytes: Long = 4096L,
-    val quotaBytes: Long = 15L * 1024L * 1024L * 1024L,
+    val filesCount: Int = 0,
+    val usedBytes: Long = 0L,
+    val quotaBytes: Long = 0L,
     val engines: List<String> = listOf("Gemini", "OpenRouter")
 )
 

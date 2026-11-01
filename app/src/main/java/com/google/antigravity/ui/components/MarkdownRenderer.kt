@@ -18,6 +18,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material3.Text
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.OpenInFull
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.SaveAlt
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -101,7 +108,7 @@ fun ChatGptMarkdownText(
         segments.forEachIndexed { idx, seg ->
             if (seg.isCodeBlock) {
                 var copied by remember { mutableStateOf(false) }
-                var saved by remember { mutableStateOf(false) }
+                var expanded by remember { mutableStateOf(false) }
                 val langLabel = seg.language.ifBlank { "code" }
                 val ext = when (langLabel.lowercase()) {
                     "kotlin", "kt" -> "kt"
@@ -139,37 +146,25 @@ fun ChatGptMarkdownText(
                             fontFamily = ChatGptMenloFontFamily
                         )
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = if (copied) "✓ Скопировано" else "Копировать код",
-                                color = if (copied) Color(0xFF10A37F) else Color(0xFFB4B4B4),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .clickable {
-                                        clipboard.setText(AnnotatedString(seg.text.trimEnd()))
-                                        copied = true
-                                    }
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                            if (onSaveCodeToPhone != null) {
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = if (saved) "✓ Сохранено" else "Скачать",
-                                    color = if (saved) Color(0xFF10A37F) else Color(0xFFB4B4B4),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .clickable {
-                                            onSaveCodeToPhone("snippet_${System.currentTimeMillis() / 1000}.$ext", seg.text.trimEnd())
-                                            saved = true
-                                        }
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
+                            IconButton(onClick = { expanded = true }) {
+                                Icon(Icons.Default.OpenInFull, "Открыть код", tint = Color(0xFFB4B4B4))
                             }
+                            IconButton(onClick = {
+                                clipboard.setText(AnnotatedString(seg.text.trimEnd())); copied = true
+                            }) {
+                                Icon(if (copied) Icons.Default.Check else Icons.Default.ContentCopy,
+                                    if (copied) "Код скопирован" else "Копировать код", tint = Color(0xFFB4B4B4))
+                            }
+                            if (onSaveCodeToPhone != null) IconButton(onClick = {
+                                onSaveCodeToPhone("snippet_${System.currentTimeMillis() / 1000}.$ext", seg.text.trimEnd())
+                            }) { Icon(Icons.Default.SaveAlt, "Сохранить код", tint = Color(0xFFB4B4B4)) }
                         }
                     }
+
+                    if (expanded) CodeArtifactViewer(
+                        code = seg.text.trimEnd(), language = langLabel, fileName = "snippet.$ext",
+                        onDismiss = { expanded = false }, onSave = onSaveCodeToPhone
+                    )
 
                     val codeAnnotated = remember(seg.text, seg.language) {
                         buildCodeBlockAnnotatedString(seg.text.trimEnd(), seg.language)

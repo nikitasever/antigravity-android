@@ -1,0 +1,662 @@
+[
+  {
+    "role": "RootWebArea",
+    "name": "New chat - Claude"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "status",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "heading",
+    "name": "Claude"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "StaticText",
+    "name": "Claude"
+  },
+  {
+    "role": "complementary",
+    "name": "Sidebar"
+  },
+  {
+    "role": "main",
+    "name": ""
+  },
+  {
+    "role": "status",
+    "name": ""
+  },
+  {
+    "role": "region",
+    "name": "Notifications"
+  },
+  {
+    "role": "button",
+    "name": "Hide sidebar"
+  },
+  {
+    "role": "link",
+    "name": "Claude"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "separator",
+    "name": "Resize sidebar"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "StaticText",
+    "name": "Claude"
+  },
+  {
+    "role": "heading",
+    "name": "Navigation"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "sectionheader",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "StaticText",
+    "name": "Navigation"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "toolbar",
+    "name": "Page tools"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "link",
+    "name": "New"
+  },
+  {
+    "role": "button",
+    "name": "Search"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "link",
+    "name": "Artifacts"
+  },
+  {
+    "role": "link",
+    "name": "Code Upgrade"
+  },
+  {
+    "role": "link",
+    "name": "Customize"
+  },
+  {
+    "role": "heading",
+    "name": "Chats and tasks"
+  },
+  {
+    "role": "button",
+    "name": "Group and sort"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "button",
+    "name": "View all"
+  },
+  {
+    "role": "status",
+    "name": ""
+  },
+  {
+    "role": "button",
+    "name": "Nikita Free"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "heading",
+    "name": "New chat"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "StaticText",
+    "name": "New"
+  },
+  {
+    "role": "StaticText",
+    "name": "Search"
+  },
+  {
+    "role": "link",
+    "name": "Projects"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "StaticText",
+    "name": "Artifacts"
+  },
+  {
+    "role": "StaticText",
+    "name": "Code"
+  },
+  {
+    "role": "StaticText",
+    "name": "Upgrade"
+  },
+  {
+    "role": "StaticText",
+    "name": "Customize"
+  },
+  {
+    "role": "button",
+    "name": "Chats and tasks"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "StaticText",
+    "name": "View all"
+  },
+  {
+    "role": "StaticText",
+    "name": "Nikita"
+  },
+  {
+    "role": "StaticText",
+    "name": "Free"
+  },
+  {
+    "role": "link",
+    "name": "Get apps and extensions"
+  },
+  {
+    "role": "button",
+    "name": "Use incognito"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "StaticText",
+    "name": "New chat"
+  },
+  {
+    "role": "StaticText",
+    "name": "Evening thoughts"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "status",
+    "name": ""
+  },
+  {
+    "role": "group",
+    "name": ""
+  },
+  {
+    "role": "list",
+    "name": "Prompt categories"
+  },
+  {
+    "role": "StaticText",
+    "name": "Projects"
+  },
+  {
+    "role": "StaticText",
+    "name": "Chats and tasks"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "button",
+    "name": "Import memory Try"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "button",
+    "name": "Customize Claude for you Try"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "link",
+    "name": "Idle Знакомство с ассистентом"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "status",
+    "name": ""
+  },
+  {
+    "role": "status",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "status",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "listitem",
+    "name": ""
+  },
+  {
+    "role": "listitem",
+    "name": ""
+  },
+  {
+    "role": "listitem",
+    "name": ""
+  },
+  {
+    "role": "listitem",
+    "name": ""
+  },
+  {
+    "role": "listitem",
+    "name": ""
+  },
+  {
+    "role": "menu",
+    "name": "Group and sort"
+  },
+  {
+    "role": "StaticText",
+    "name": "Import memory"
+  },
+  {
+    "role": "StaticText",
+    "name": "Try"
+  },
+  {
+    "role": "button",
+    "name": "Dismiss this suggestion"
+  },
+  {
+    "role": "StaticText",
+    "name": "Customize Claude for you"
+  },
+  {
+    "role": "StaticText",
+    "name": "Try"
+  },
+  {
+    "role": "button",
+    "name": "Dismiss this suggestion"
+  },
+  {
+    "role": "image",
+    "name": "Idle"
+  },
+  {
+    "role": "StaticText",
+    "name": "Знакомство с ассистентом"
+  },
+  {
+    "role": "button",
+    "name": "More options for Знакомство с ассистентом"
+  },
+  {
+    "role": "StaticText",
+    "name": "Free plan"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "status",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "button",
+    "name": "Write"
+  },
+  {
+    "role": "button",
+    "name": "Learn"
+  },
+  {
+    "role": "button",
+    "name": "Code"
+  },
+  {
+    "role": "button",
+    "name": "Life stuff"
+  },
+  {
+    "role": "button",
+    "name": "Claude’s choice"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "link",
+    "name": "Upgrade"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "StaticText",
+    "name": "Write"
+  },
+  {
+    "role": "StaticText",
+    "name": "Learn"
+  },
+  {
+    "role": "StaticText",
+    "name": "Code"
+  },
+  {
+    "role": "StaticText",
+    "name": "Life stuff"
+  },
+  {
+    "role": "StaticText",
+    "name": "Claude’s choice"
+  },
+  {
+    "role": "menuitem",
+    "name": "Group by None"
+  },
+  {
+    "role": "menuitem",
+    "name": "Sort by Last activity"
+  },
+  {
+    "role": "StaticText",
+    "name": "Upgrade"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "StaticText",
+    "name": "Group by"
+  },
+  {
+    "role": "StaticText",
+    "name": "None"
+  },
+  {
+    "role": "StaticText",
+    "name": "Sort by"
+  },
+  {
+    "role": "StaticText",
+    "name": "Last activity"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "textbox",
+    "name": "Write your prompt to Claude"
+  },
+  {
+    "role": "status",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "button",
+    "name": "Use voice mode"
+  },
+  {
+    "role": "paragraph",
+    "name": ""
+  },
+  {
+    "role": "button",
+    "name": "Add files, connectors, and more"
+  },
+  {
+    "role": "radiogroup",
+    "name": "Surface"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "LineBreak",
+    "name": "\n"
+  },
+  {
+    "role": "radio",
+    "name": "Chat"
+  },
+  {
+    "role": "radio",
+    "name": "Cowork"
+  },
+  {
+    "role": "button",
+    "name": "Model: Haiku 5.5 Medium"
+  },
+  {
+    "role": "group",
+    "name": "Dictate"
+  },
+  {
+    "role": "StaticText",
+    "name": "Chat"
+  },
+  {
+    "role": "StaticText",
+    "name": "Cowork"
+  },
+  {
+    "role": "StaticText",
+    "name": "Haiku 5.5"
+  },
+  {
+    "role": "StaticText",
+    "name": " "
+  },
+  {
+    "role": "StaticText",
+    "name": "Medium"
+  },
+  {
+    "role": "button",
+    "name": "Dictate"
+  },
+  {
+    "role": "button",
+    "name": "Microphone"
+  }
+]

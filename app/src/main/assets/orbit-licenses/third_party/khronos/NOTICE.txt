@@ -1,0 +1,10 @@
+Khronos PBR Neutral tone mapping
+Copyright 2024 The Khronos Group, Inc.
+Licensed under the Apache License, Version 2.0. See LICENSE.txt.
+
+Source: https://github.com/KhronosGroup/ToneMapping/tree/b5a2eed5ddf6c2227090449399de9c7affb9e4c9
+
+Orbit adapts the small PBR Neutral tone mapping function in the Metal and
+GLSL character shaders. Names and syntax are changed for the two backends.
+The rendering backend, lighting, geometry, and resource handling are separate
+Orbit implementations. No Filament implementation code is included.

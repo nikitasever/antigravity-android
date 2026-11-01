@@ -1,0 +1,498 @@
+[
+  {
+    "role": "RootWebArea",
+    "name": "Upgrade - Claude"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "banner",
+    "name": ""
+  },
+  {
+    "role": "banner",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "toolbar",
+    "name": "Page tools"
+  },
+  {
+    "role": "heading",
+    "name": "Plans that grow with you"
+  },
+  {
+    "role": "link",
+    "name": "Free Meet Claude €0 Use Claude for free Chat on web, iOS, Android, and desktop Generate code and visualize data Connect Slack and Google Workspace Extended thinking for complex work Built-in web search"
+  },
+  {
+    "role": "link",
+    "name": "Monthly Yearly · Save 17% Pro Research, code, and organize €18 EUR / month billed monthly + VAT Get Pro plan No commitment · Cancel anytime Everything in Free and: Claude Code directly in your codebase Power through tasks with Claude Build and prototype with Claude Design Higher usage limits Access to more Claude models Memory that carries across conversations"
+  },
+  {
+    "role": "link",
+    "name": "Max and Ultra Higher limits, priority access From €90 EUR / month billed monthly + VAT Get Max or Ultra plan No commitment · Cancel anytime Everything in Pro, plus: Up to 10x Pro usage every week* Recommended for Claude Code and long-running tasks Early access to advanced Claude features Priority access at high traffic times"
+  },
+  {
+    "role": "link",
+    "name": "See Team and Enterprise plans"
+  },
+  {
+    "role": "StaticText",
+    "name": "*"
+  },
+  {
+    "role": "link",
+    "name": "Usage limits apply."
+  },
+  {
+    "role": "StaticText",
+    "name": " How fast you reach a limit depends on the model you use, how long your chats are, and how large your files are."
+  },
+  {
+    "role": "StaticText",
+    "name": "Prices and plans are subject to change at Anthropic’s discretion."
+  },
+  {
+    "role": "StaticText",
+    "name": "Ultra has no 5-hour limit for "
+  },
+  {
+    "role": "link",
+    "name": "verified accounts"
+  },
+  {
+    "role": "StaticText",
+    "name": "."
+  },
+  {
+    "role": "paragraph",
+    "name": ""
+  },
+  {
+    "role": "status",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "button",
+    "name": "Back to Claude"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "StaticText",
+    "name": "Plans that grow with you"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "StaticText",
+    "name": "See Team and Enterprise plans"
+  },
+  {
+    "role": "StaticText",
+    "name": "Usage limits apply."
+  },
+  {
+    "role": "StaticText",
+    "name": "verified accounts"
+  },
+  {
+    "role": "StaticText",
+    "name": "You will be charged 25.5% VAT, the standard rate in "
+  },
+  {
+    "role": "StaticText",
+    "name": "Finland"
+  },
+  {
+    "role": "StaticText",
+    "name": ", at checkout."
+  },
+  {
+    "role": "status",
+    "name": ""
+  },
+  {
+    "role": "region",
+    "name": "Notifications"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "heading",
+    "name": "Free"
+  },
+  {
+    "role": "paragraph",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "list",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "heading",
+    "name": "Pro"
+  },
+  {
+    "role": "paragraph",
+    "name": ""
+  },
+  {
+    "role": "StaticText",
+    "name": "€18"
+  },
+  {
+    "role": "StaticText",
+    "name": "EUR / month"
+  },
+  {
+    "role": "StaticText",
+    "name": "billed monthly + VAT"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "paragraph",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "list",
+    "name": ""
+  },
+  {
+    "role": "heading",
+    "name": "Max and Ultra"
+  },
+  {
+    "role": "paragraph",
+    "name": ""
+  },
+  {
+    "role": "StaticText",
+    "name": "From €90"
+  },
+  {
+    "role": "StaticText",
+    "name": "EUR / month"
+  },
+  {
+    "role": "StaticText",
+    "name": "billed monthly + VAT"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "paragraph",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "list",
+    "name": ""
+  },
+  {
+    "role": "StaticText",
+    "name": "Free"
+  },
+  {
+    "role": "StaticText",
+    "name": "Meet Claude"
+  },
+  {
+    "role": "StaticText",
+    "name": "€0"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "listitem",
+    "name": ""
+  },
+  {
+    "role": "listitem",
+    "name": ""
+  },
+  {
+    "role": "listitem",
+    "name": ""
+  },
+  {
+    "role": "listitem",
+    "name": ""
+  },
+  {
+    "role": "listitem",
+    "name": ""
+  },
+  {
+    "role": "button",
+    "name": "Monthly"
+  },
+  {
+    "role": "button",
+    "name": "Yearly · Save 17%"
+  },
+  {
+    "role": "StaticText",
+    "name": "Pro"
+  },
+  {
+    "role": "StaticText",
+    "name": "Research, code, and organize"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "StaticText",
+    "name": "No commitment · Cancel anytime"
+  },
+  {
+    "role": "StaticText",
+    "name": "Everything in Free and:"
+  },
+  {
+    "role": "listitem",
+    "name": ""
+  },
+  {
+    "role": "listitem",
+    "name": ""
+  },
+  {
+    "role": "listitem",
+    "name": ""
+  },
+  {
+    "role": "listitem",
+    "name": ""
+  },
+  {
+    "role": "listitem",
+    "name": ""
+  },
+  {
+    "role": "listitem",
+    "name": ""
+  },
+  {
+    "role": "StaticText",
+    "name": "Max and Ultra"
+  },
+  {
+    "role": "StaticText",
+    "name": "Higher limits, priority access"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "StaticText",
+    "name": "No commitment · Cancel anytime"
+  },
+  {
+    "role": "StaticText",
+    "name": "Everything in Pro, plus:"
+  },
+  {
+    "role": "listitem",
+    "name": ""
+  },
+  {
+    "role": "listitem",
+    "name": ""
+  },
+  {
+    "role": "listitem",
+    "name": ""
+  },
+  {
+    "role": "listitem",
+    "name": ""
+  },
+  {
+    "role": "button",
+    "name": "Use Claude for free"
+  },
+  {
+    "role": "StaticText",
+    "name": "Chat on web, iOS, Android, and desktop"
+  },
+  {
+    "role": "StaticText",
+    "name": "Generate code and visualize data"
+  },
+  {
+    "role": "StaticText",
+    "name": "Connect Slack and Google Workspace"
+  },
+  {
+    "role": "StaticText",
+    "name": "Extended thinking for complex work"
+  },
+  {
+    "role": "StaticText",
+    "name": "Built-in web search"
+  },
+  {
+    "role": "StaticText",
+    "name": "Monthly"
+  },
+  {
+    "role": "StaticText",
+    "name": "Yearly "
+  },
+  {
+    "role": "StaticText",
+    "name": "· Save 17%"
+  },
+  {
+    "role": "button",
+    "name": "Get Pro plan"
+  },
+  {
+    "role": "StaticText",
+    "name": "Claude Code directly in your codebase"
+  },
+  {
+    "role": "StaticText",
+    "name": "Power through tasks with Claude"
+  },
+  {
+    "role": "StaticText",
+    "name": "Build and prototype with Claude Design"
+  },
+  {
+    "role": "StaticText",
+    "name": "Higher usage limits"
+  },
+  {
+    "role": "StaticText",
+    "name": "Access to more Claude models"
+  },
+  {
+    "role": "StaticText",
+    "name": "Memory that carries across conversations"
+  },
+  {
+    "role": "button",
+    "name": "Get Max or Ultra plan"
+  },
+  {
+    "role": "StaticText",
+    "name": "Up to 10x Pro usage every week*"
+  },
+  {
+    "role": "StaticText",
+    "name": "Recommended for Claude Code and long-running tasks"
+  },
+  {
+    "role": "StaticText",
+    "name": "Early access to advanced Claude features"
+  },
+  {
+    "role": "StaticText",
+    "name": "Priority access at high traffic times"
+  },
+  {
+    "role": "StaticText",
+    "name": "Use Claude for free"
+  },
+  {
+    "role": "StaticText",
+    "name": "Get Pro plan"
+  },
+  {
+    "role": "StaticText",
+    "name": "Get Max or Ultra plan"
+  }
+]

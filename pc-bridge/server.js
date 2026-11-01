@@ -1,4 +1,5 @@
 const http = require('http');
+const { readJsonBody } = require('./lib/read-json-body');
 const https = require('https');
 const { spawn, exec } = require('child_process');
 const fs = require('fs');
@@ -1273,7 +1274,8 @@ function invalidateAllIdleWorkers() {
     setTimeout(() => {
         const wHigh = ensureSpareWorker('gemini-4-argon-high', CHAT_FAST_WORKSPACE);
         waitForWorkerReady(wHigh, 12000).then(() => {
-            setTimeout(() => ensureSpareWorker('gemini-4-argon-low', CHAT_FAST_WORKSPACE), 500);
+            setTimeout(() => ensureSpareWorker('gemini-4-argon-high', DEFAULT_WORKSPACE), 400);
+            setTimeout(() => ensureSpareWorker('gemini-4-argon-low', CHAT_FAST_WORKSPACE), 900);
         });
     }, 300);
 }
@@ -1282,7 +1284,8 @@ function invalidateAllIdleWorkers() {
 setTimeout(() => {
     const wHigh = ensureSpareWorker('gemini-4-argon-high', CHAT_FAST_WORKSPACE);
     waitForWorkerReady(wHigh, 12000).then(() => {
-        setTimeout(() => ensureSpareWorker('gemini-4-argon-low', CHAT_FAST_WORKSPACE), 500);
+        setTimeout(() => ensureSpareWorker('gemini-4-argon-high', DEFAULT_WORKSPACE), 400);
+        setTimeout(() => ensureSpareWorker('gemini-4-argon-low', CHAT_FAST_WORKSPACE), 900);
     });
 }, 300);
 
@@ -1291,7 +1294,7 @@ function buildSmartphoneToolsSystemPrompt() {
         `Ты работаешь в режиме **Локальные ресурсы смартфона (PHONE_LOCAL_RESOURCES)**.\n` +
         `У тебя есть прямой доступ к инструментам смартфона пользователя. Ты САМ решаешь, какой инструмент вызвать на каждом шаге.\n` +
         `Когда тебе нужно найти файлы, прочитать документ (включая PDF/DOCX/TXT/MD), создать или пропатчить файл, посмотреть медиафайлы/фото, контакты или открыть приложение — ` +
-        `сначала напиши живое рассуждение от первого лица в \`<thinking>...</thinking>\` (почему ты выбираешь этот инструмент и что проверяешь), а затем выведи блок \`\`\`phone_action ... \`\`\` с JSON-вызовом инструмента:\n\n` +
+        `кратко сообщи пользователю о действии, если это полезно, и выведи блок \`\`\`phone_action ... \`\`\` с JSON-вызовом инструмента:\n\n` +
         `Доступные инструменты смартфона (\`phone_action\`):\n` +
         `1. \`search_files\` — поиск файлов и документов на смартфоне по ключевому слову или расширению:\n` +
         `   \`\`\`phone_action\n   {"action":"search_files","query":"договор","extension":"pdf"}\n   \`\`\`\n` +
@@ -1367,11 +1370,12 @@ function parseStreamingThinkingAndReply(rawText, nativeThinkingParts = []) {
 
 // Реестр активных и недавно завершённых ходов для бесшовного восстановления при обрыве SSE
 const activeTurnsById = new Map();
+const turnCancellations = new Map();
 const activeTurnsByConv = new Map();
 const resetConversationsSet = new Set();
 
 function recordActiveTurnSnapshot(turnId, convId, patch) {
-    const prev = (turnId && activeTurnsById.get(turnId)) || (convId && activeTurnsByConv.get(convId)) || {
+    const prev = (turnId ? activeTurnsById.get(turnId) : (convId && activeTurnsByConv.get(convId))) || {
         turnId: turnId || `turn_${Date.now()}`,
         conversationId: convId || '',
         status: 'running',
@@ -1439,169 +1443,7 @@ async function executeAgyTurnStreaming(options, onEvent = () => {}) {
         }, onEvent);
     }
 
-    const lowerPrompt = effectivePromptText.toLowerCase();
-    if (
-        lowerPrompt.startsWith('/verify') ||
-        lowerPrompt.startsWith('/plan') ||
-        lowerPrompt.includes('round5_release_notes') ||
-        lowerPrompt.includes('проверь структуру проекта')
-    ) {
-        const resolvedConvId = conversationId || require('crypto').randomUUID();
-        const targetDir = (workspacePath && fs.existsSync(workspacePath)) ? workspacePath : DEFAULT_WORKSPACE;
-        const releaseFile = path.join(targetDir, 'ROUND5_RELEASE_NOTES.md');
-        const dirEntries = fs.existsSync(targetDir) ? fs.readdirSync(targetDir).slice(0, 12) : [];
-        const prevContent = fs.existsSync(releaseFile)
-            ? fs.readFileSync(releaseFile, 'utf8')
-            : '# Antigravity Android — Release Notes\nVersion: 1.9.0\nStatus: Draft\n';
-        const updatedContent = [
-            '# Antigravity Android 2.0.0 — Round 5 Verified Release',
-            'Version: 2.0.0 (Build 25)',
-            'Status: PRODUCTION READY (Zero Crashes)',
-            '- Live OpenRouter Hub (452 models synced from openrouter.ai/api/v1/models)',
-            '- Multi-Agent Swarm Orchestrator (@lead-orchestrator, @self, @phone-cli)',
-            '- Android CLI & Virtual Sandbox + AI Permissions 2.0',
-            '- Continuous Multi-Segment Voice Input & Persistent Turn Status Polling'
-        ].join('\n') + '\n';
-        try {
-            fs.writeFileSync(releaseFile, updatedContent, 'utf8');
-        } catch (_) {}
-
-        const diffPatchLines = [
-            '--- a/ROUND5_RELEASE_NOTES.md',
-            '+++ b/ROUND5_RELEASE_NOTES.md',
-            '@@ -1,3 +1,8 @@',
-            '-# Antigravity Android — Release Notes',
-            '-Version: 1.9.0',
-            '-Status: Draft',
-            '+# Antigravity Android 2.0.0 — Round 5 Verified Release',
-            '+Version: 2.0.0 (Build 25)',
-            '+Status: PRODUCTION READY (Zero Crashes)',
-            '+- Live OpenRouter Hub (452 models synced from openrouter.ai/api/v1/models)',
-            '+- Multi-Agent Swarm Orchestrator (@lead-orchestrator, @self, @phone-cli)',
-            '+- Android CLI & Virtual Sandbox + AI Permissions 2.0',
-            '+- Continuous Multi-Segment Voice Input & Persistent Turn Status Polling'
-        ].join('\n');
-
-        const toolCallsList = [
-            {
-                id: 'tc_r5_1',
-                name: 'list_dir',
-                summary: `antigravity-android (${dirEntries.length} элементов)`,
-                status: 'COMPLETED',
-                output: dirEntries.join(', ')
-            },
-            {
-                id: 'tc_r5_2',
-                name: 'view_file',
-                summary: 'ROUND5_RELEASE_NOTES.md',
-                status: 'COMPLETED',
-                output: prevContent.trim()
-            },
-            {
-                id: 'tc_r5_3',
-                name: 'replace_file_content',
-                summary: 'ROUND5_RELEASE_NOTES.md (+7 -3)',
-                status: 'COMPLETED',
-                output: 'Updated ROUND5_RELEASE_NOTES.md successfully.'
-            }
-        ];
-
-        const createdDiffsList = [
-            {
-                id: `diff_r5_${Date.now()}`,
-                path: 'ROUND5_RELEASE_NOTES.md',
-                filePath: 'ROUND5_RELEASE_NOTES.md',
-                fullPath: releaseFile,
-                additions: 7,
-                addedLines: 7,
-                deletions: 3,
-                removedLines: 3,
-                diffPatch: diffPatchLines,
-                diffText: diffPatchLines,
-                timestamp: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
-            }
-        ];
-
-        const finalThinking = 'Проанализирую структуру рабочей директории проекта antigravity-android, проверю файл ROUND5_RELEASE_NOTES.md и внесу актуальные изменения релиза 2.0.0 с генерацией патча diff.';
-        const finalReply = [
-            'Проверка рабочей директории и обновление документации успешно завершены:',
-            '',
-            '1. **Анализ структуры проекта** (`list_dir`): проверены корневые модули `app`, `pc-bridge`, `scripts` и артефакты сборки.',
-            '2. **Обновление файла** [`ROUND5_RELEASE_NOTES.md`](file:///C:/Users/st811210/.gemini/antigravity/scratch/antigravity-android/ROUND5_RELEASE_NOTES.md): зафиксирован релиз **Antigravity Android 2.0.0** (`+7` добавлено, `-3` удалено).',
-            '3. **Статус синхронизации**: все инструменты выполнены со статусом `COMPLETED`, соединение с мостом ПК стабильно (`http://127.0.0.1:8787`).'
-        ].join('\n');
-
-        onEvent({
-            type: 'init',
-            turnId,
-            conversationId: resolvedConvId,
-            model: model || 'gemini-4-argon-high',
-            instanceName: INSTANCE_NAME,
-            elapsedMs: 15
-        });
-        onEvent({
-            type: 'thinking_delta',
-            turnId,
-            delta: finalThinking,
-            thinking: finalThinking,
-            fullThinking: finalThinking,
-            elapsedMs: 120
-        });
-        for (const t of toolCallsList) {
-            onEvent({
-                type: 'tool',
-                turnId,
-                id: t.id,
-                toolName: t.name,
-                summary: t.summary,
-                details: t.output,
-                status: t.status,
-                tool: t,
-                createdDiffs: createdDiffsList,
-                elapsedMs: 350
-            });
-        }
-        onEvent({
-            type: 'text_delta',
-            turnId,
-            delta: finalReply,
-            text: finalReply,
-            fullText: finalReply,
-            elapsedMs: 520
-        });
-        const donePayload = {
-            type: 'done',
-            ok: true,
-            turnId,
-            instanceName: INSTANCE_NAME,
-            conversationId: resolvedConvId,
-            model: model || 'gemini-4-argon-high',
-            thinking: finalThinking,
-            thinkingDurationSec: 2,
-            reply: finalReply,
-            toolCalls: toolCallsList,
-            createdDiffs: createdDiffsList,
-            phoneActions: [],
-            ttfbMs: 120,
-            totalMs: 650
-        };
-        recordActiveTurnSnapshot(turnId, resolvedConvId, {
-            status: 'completed',
-            conversationId: resolvedConvId,
-            model: model || 'gemini-4-argon-high',
-            thinking: finalThinking,
-            thinkingDurationSec: 2,
-            reply: finalReply,
-            toolCalls: toolCallsList,
-            createdDiffs: createdDiffsList,
-            phoneActions: [],
-            totalMs: 650
-        });
-        onEvent(donePayload);
-        return Promise.resolve(donePayload);
-    }
-
-    const dedupKey = `${mode}::${conversationId || 'default'}::${effectivePromptText.slice(0, 120)}::${phoneStepIndex}`;
+    const dedupKey = `${mode}::${turnId}::${phoneStepIndex}`;
     if (inFlightTurns.has(dedupKey)) {
         const activeTurn = inFlightTurns.get(dedupKey);
         activeTurn.listeners.add(onEvent);
@@ -1649,11 +1491,15 @@ async function executeAgyTurnStreaming(options, onEvent = () => {}) {
     }
 
     const validIds = cachedAgyModels.map(m => m.id);
-    const requestedModel = validIds.includes(model) ? model : 'gemini-4-argon-high';
+    if (!validIds.includes(model)) {
+        const failure = { type: 'done', ok: false, turnId, conversationId, model,
+            reply: 'Выбранная модель недоступна. Выберите другую модель.', error: 'Unsupported model' };
+        onEvent(failure);
+        return failure;
+    }
+    const requestedModel = model;
     // Приоритет Gemini 4: НИКОГДА не занижаем выбранную пользователем модель gemini-4-argon-high!
-    const effectiveCliModel = requestedModel.startsWith('gemini-2.5')
-        ? 'gemini-4-argon-high'
-        : requestedModel;
+    const effectiveCliModel = requestedModel;
 
     const isPhoneMode = mode === 'PHONE_ON_DEVICE' || mode === 'PHONE_LOCAL_RESOURCES';
     const wasContextReset = conversationId && resetConversationsSet.has(conversationId);
@@ -1666,8 +1512,9 @@ async function executeAgyTurnStreaming(options, onEvent = () => {}) {
         syncConversationBeforeCli(conversationId)
     );
 
-    // ИСПРАВЛЕНИЕ БАГА «папка chat-fast пуста»: все PC_REMOTE задачи ВСЕГДА выполняются в рабочей папке проекта (DEFAULT_WORKSPACE)!
-    const isWorkspaceTask = !isPhoneMode && !voiceMode;
+    // Быстрые диалоговые и мультимодальные вопросы выполняем в лёгкой среде CHAT_FAST_WORKSPACE из прогретого пула,
+    // а явные задачи по файлам/коду проекта — в рабочей папке DEFAULT_WORKSPACE!
+    const isWorkspaceTask = !isPhoneMode && !voiceMode && (isExplicitPcWorkspaceTask(effectivePromptText) || hasExistingSessionDb);
     const targetCwd = isWorkspaceTask
         ? ((workspacePath && fs.existsSync(workspacePath)) ? workspacePath : DEFAULT_WORKSPACE)
         : CHAT_FAST_WORKSPACE;
@@ -1682,6 +1529,15 @@ async function executeAgyTurnStreaming(options, onEvent = () => {}) {
             ).join('\n');
     }
 
+    const openRouterProfile = null;
+    const openRouterAdaptationBlock = openRouterProfile
+        ? `\n\n<OPENROUTER_MODEL_ADAPTATION>\n` +
+          `Активная модель чата (выбрана пользователем в OpenRouter): ${openRouterProfile.name} (\`${openRouterProfile.id}\`).\n` +
+          `Профиль модели: категория=${openRouterProfile.primaryCategory || 'TEXT'}, модальность=${openRouterProfile.modality || 'text->text'}, контекстное окно=${Math.round((openRouterProfile.contextLength || 128000) / 1000)}K токенов.\n` +
+          `Отвечай и адаптируй формат ответа в точном соответствии с профилем выбранной модели ${openRouterProfile.name} (\`${openRouterProfile.id}\`), сохраняя доступ ко всем инструментам рабочей области, Google Диску (/AntigravityCloud) и смартфону.\n` +
+          `</OPENROUTER_MODEL_ADAPTATION>`
+        : '';
+
     let promptForCli = '';
     const isPhoneContinuation = Boolean(isPhoneMode && (phoneToolObservation || phoneStepIndex > 0));
 
@@ -1691,27 +1547,43 @@ async function executeAgyTurnStreaming(options, onEvent = () => {}) {
             `Результат выполнения инструмента на смартфоне (шаг ${phoneStepIndex}):\n` +
             `${phoneToolObservation || phoneContext}\n` +
             `</PHONE_TOOL_OBSERVATION>\n\n` +
-            `Проанализируй полученный результат в \`<thinking>...</thinking>\` (живым русским языком от первого лица). ` +
+            `Используй фактический результат инструмента. Не выдумывай результаты или ход выполнения. ` +
             `Если для полного выполнения задачи пользователя («${effectivePromptText}») нужно вызвать ещё один инструмент смартфона (например, \`read_file\` или \`patch_file\`), выведи следующий блок \`\`\`phone_action ... \`\`\`. ` +
-            `Если все данные получены и задача выполнена — дай финальный проверенный ответ пользователю на русском языке.`;
+            `Если все данные получены и задача выполнена — дай финальный проверенный ответ пользователю на русском языке.${openRouterAdaptationBlock}`;
     } else if (voiceMode) {
         promptForCli =
             `${effectivePromptText}\n\n` +
             `<AGENT_SYSTEM_INSTRUCTION>\n` +
             `Ты общаешься с пользователем в голосовом режиме реального времени (как в ChatGPT Live Voice). ` +
-            `Не трать время на внутреннее планирование — МГНОВЕННО открой <thinking>, напиши 1 короткое предложение живого рассуждения от первого лица на русском языке, закрой </thinking> и сразу отвечай естественной, живой русской устной речью (2–3 лаконичных предложения без символов разметки Markdown, без списков и без технических путей), чтобы ответ сразу озвучивался по предложениям.\n` +
-            `</AGENT_SYSTEM_INSTRUCTION>${attachmentSection}`;
+            `Отвечай естественной русской устной речью (2–3 лаконичных предложения без символов разметки Markdown, без списков и без технических путей), чтобы ответ сразу озвучивался по предложениям.\n` +
+            `</AGENT_SYSTEM_INSTRUCTION>${openRouterAdaptationBlock}${attachmentSection}`;
     } else if (isPhoneMode) {
         const phoneSys = buildSmartphoneToolsSystemPrompt();
         const extraCtx = phoneContext ? `\n\nДополнительный контекст устройства:\n${phoneContext}` : '';
         promptForCli =
             `${effectivePromptText}\n\n` +
             `<AGENT_SYSTEM_INSTRUCTION>\n${sysPromptText}\n\n${phoneSys}\n</AGENT_SYSTEM_INSTRUCTION>` +
-            `${extraCtx}${attachmentSection}`;
+            `${openRouterAdaptationBlock}${extraCtx}${attachmentSection}`;
+    } else if (!isWorkspaceTask) {
+        let historyBlock = '';
+        if (!wasContextReset && Array.isArray(clientHistory) && clientHistory.length > 0) {
+            const ctxLines = clientHistory.slice(-6).map(m =>
+                `${(m.role === 'USER' || m.role === 'user') ? 'Пользователь' : 'Агент'}: ${String(m.content || '').slice(0, 600)}`
+            ).join('\n');
+            historyBlock = `\n\nКонтекст предыдущих сообщений диалога:\n${ctxLines}`;
+        }
+        promptForCli =
+            `СООБЩЕНИЕ ПОЛЬЗОВАТЕЛЯ:\n${effectivePromptText}\n\n` +
+            `<AGENT_SYSTEM_INSTRUCTION>\n` +
+            `Ответь пользователю на русском языке быстро, точно и по существу вопроса. ` +
+            `Дай чёткий ответ без искусственного процесса размышления. ` +
+            `Если прикреплены файлы или скриншоты с путями на ПК, можешь посмотреть только указанные прикреплённые файлы, но НЕ сканируй другие папки и репозитории без явной просьбы.\n` +
+            `</AGENT_SYSTEM_INSTRUCTION>` +
+            `${openRouterAdaptationBlock}${attachmentSection}${historyBlock}`;
     } else {
         let historyBlock = '';
         if (!wasContextReset && Array.isArray(clientHistory) && clientHistory.length > 0) {
-            const ctxLines = clientHistory.slice(-8).map(m =>
+            const ctxLines = clientHistory.map(m =>
                 `${(m.role === 'USER' || m.role === 'user') ? 'Пользователь' : 'Агент'}: ${String(m.content || '').slice(0, 700)}`
             ).join('\n');
             historyBlock = `\n\nКонтекст предыдущих сообщений диалога (для непрерывности контекста):\n${ctxLines}`;
@@ -1720,7 +1592,11 @@ async function executeAgyTurnStreaming(options, onEvent = () => {}) {
             `ЗАДАЧА ПОЛЬЗОВАТЕЛЯ:\n${effectivePromptText}\n\n` +
             `РАБОЧАЯ ДИРЕКТОРИЯ ПРОЕКТА: ${targetCwd}\n` +
             `<AGENT_SYSTEM_INSTRUCTION>\n${sysPromptText}\n</AGENT_SYSTEM_INSTRUCTION>` +
-            `${attachmentSection}${historyBlock}`;
+            `${openRouterAdaptationBlock}${attachmentSection}${historyBlock}`;
+    }
+
+    if (!isPhoneMode && phoneContext) {
+        promptForCli += `\n\n<ANDROID_CLIENT_CONTEXT>\n${phoneContext}\n</ANDROID_CLIENT_CONTEXT>`;
     }
 
     if (wasContextReset && conversationId) {
@@ -1744,6 +1620,7 @@ async function executeAgyTurnStreaming(options, onEvent = () => {}) {
             if (candidate && !candidate.closed && !candidate.busy) {
                 worker = candidate;
                 spareWorkers.delete(spareKey);
+                setTimeout(() => ensureSpareWorker(effectiveCliModel, CHAT_FAST_WORKSPACE), 250);
             } else {
                 worker = createStreamJsonWorker({
                     conversationId: '',
@@ -1774,6 +1651,7 @@ async function executeAgyTurnStreaming(options, onEvent = () => {}) {
         if (candidate && !candidate.closed && !candidate.busy) {
             worker = candidate;
             spareWorkers.delete(spareKey);
+            setTimeout(() => ensureSpareWorker(effectiveCliModel, targetCwd), 250);
         } else {
             worker = createStreamJsonWorker({
                 conversationId: '',
@@ -1994,6 +1872,7 @@ async function executeAgyTurnStreaming(options, onEvent = () => {}) {
                 clearInterval(heartbeatTimer);
                 clearTimeout(turnTimeout);
                 inFlightTurns.delete(dedupKey);
+                turnCancellations.delete(turnId);
                 worker.activeTurnHandler = null;
                 worker.busy = false;
 
@@ -2020,7 +1899,7 @@ async function executeAgyTurnStreaming(options, onEvent = () => {}) {
                         fallbackTimeoutReply = 'Превышено время ожидания ответа от модели (240 с).';
                     }
                 }
-                const finalReply = separated.reply || lastEmittedCleanReply || fallbackTimeoutReply;
+                const finalReply = separated.reply || lastEmittedCleanReply || fallbackTimeoutReply || (resultObj && resultObj.error) || 'Модель завершила запрос без ответа. Повторите попытку.';
                 const resolvedConvId = (hasExistingSessionDb && isWorkspaceTask)
                     ? conversationId
                     : clientConversationId;
@@ -2073,34 +1952,43 @@ async function executeAgyTurnStreaming(options, onEvent = () => {}) {
                     replyChars: finalReply.length
                 });
 
+                const reportedModelId = options.requestedOpenRouterModelId || effectiveCliModel;
+                const estOutTokens = Math.max(16, Math.round((finalReply || '').length / 3.5));
+                const estTps = Number((estOutTokens / Math.max(0.25, elapsedMs / 1000)).toFixed(1));
                 const donePayload = {
                     type: 'done',
-                    ok: true,
+                    ok: !isTimeout && !(resultObj && resultObj.error),
                     turnId,
                     instanceName: INSTANCE_NAME,
                     conversationId: resolvedConvId,
-                    model: effectiveCliModel,
+                    model: reportedModelId,
                     thinking: finalThinking,
                     thinkingDurationSec: finalThinking ? elapsedSec : 0,
                     reply: finalReply,
                     toolCalls: toolCallsList,
                     createdDiffs: createdDiffsList,
+                    generatedMedia: [],
                     phoneActions: phoneActions,
                     ttfbMs: ttfbMs || elapsedMs,
-                    totalMs: elapsedMs
+                    totalMs: elapsedMs,
+                    outputTokensCount: estOutTokens,
+                    tokensPerSecond: estTps
                 };
 
                 recordActiveTurnSnapshot(turnId, resolvedConvId, {
-                    status: 'completed',
+                    status: isTimeout || (resultObj && resultObj.error) ? 'failed' : 'completed',
                     conversationId: resolvedConvId,
-                    model: effectiveCliModel,
+                    model: reportedModelId,
                     thinking: finalThinking,
                     thinkingDurationSec: finalThinking ? elapsedSec : 0,
                     reply: finalReply,
                     toolCalls: toolCallsList,
                     createdDiffs: createdDiffsList,
+                    generatedMedia: [],
                     phoneActions: phoneActions,
-                    totalMs: elapsedMs
+                    totalMs: elapsedMs,
+                    outputTokensCount: estOutTokens,
+                    tokensPerSecond: estTps
                 });
 
                 emitToAll(donePayload);
@@ -2112,6 +2000,10 @@ async function executeAgyTurnStreaming(options, onEvent = () => {}) {
                 finishTurn(null, true);
             }, 240000);
 
+            turnCancellations.set(turnId, () => {
+                killWorkerProcess(worker);
+                finishTurn({ response: lastEmittedCleanReply, error: 'Generation cancelled' }, false);
+            });
             worker.activeTurnHandler = (obj) => {
                 if (!obj || settled) return;
                 if (obj.event === 'process_closed' || obj.event === 'process_error') {
@@ -3155,6 +3047,7 @@ const OPENROUTER_CONFIG_FILE = path.join(DEFAULT_WORKSPACE, 'pc-bridge', 'openro
 const OPENROUTER_CACHE_FILE = path.join(DEFAULT_WORKSPACE, 'pc-bridge', 'openrouter-models-cache.json');
 const PERMISSIONS_CONFIG_FILE = path.join(DEFAULT_WORKSPACE, 'pc-bridge', 'permissions-config.json');
 const SWARM_STATE_FILE = path.join(DEFAULT_WORKSPACE, 'pc-bridge', 'swarm-state.json');
+const SYNC_STATE_FILE = path.join(DEFAULT_WORKSPACE, 'pc-bridge', 'sync-state.json');
 
 function loadOpenRouterConfig() {
     try {
@@ -3173,6 +3066,11 @@ function loadOpenRouterConfig() {
 function saveOpenRouterConfig(patch) {
     const current = loadOpenRouterConfig();
     const updated = { ...current, ...patch, updatedAt: new Date().toISOString() };
+    const aliases = {"phoneFileSystemAccess":"phoneFileReadWrite","phoneAndroidCliAccess":"phoneAndroidCliShell","phoneVirtualSandboxAccess":"phoneVirtualSandboxExec","phoneCameraMediaAccess":"phoneMediaCameraMic","phoneContactsCalendarSmsAccess":"phoneContactsRead","pcWorkspaceReadWrite":"pcFilesystemWrite","pcPowerShellExecution":"pcTerminalExec","pcBrowserAndNetworkAccess":"pcBrowserAutomation","pcPluginsMcpSkillsAccess":"pcMcpToolsExec"};
+    for (const [alias, canonical] of Object.entries(aliases)) {
+        if (typeof patch[canonical] === 'boolean') updated[alias] = patch[canonical];
+        else if (typeof patch[alias] === 'boolean') updated[canonical] = patch[alias];
+    }
     try {
         fs.writeFileSync(OPENROUTER_CONFIG_FILE, JSON.stringify(updated, null, 2), 'utf8');
     } catch (_) {}
@@ -3210,15 +3108,13 @@ function classifyOpenRouterModel(raw) {
     const lowerName = name.toLowerCase();
 
     const isImageGen = outputModalities.includes('image') ||
-        lowerId.includes('flux') || lowerId.includes('stable-diffusion') ||
-        lowerId.includes('ideogram') || lowerId.includes('recraft') ||
-        lowerId.includes('imagen') || lowerId.includes('image');
+        modality.includes('->image') ||
+        /(flux|stable-diffusion|sdxl|dall-e|ideogram|recraft|imagen|seedream|midjourney|playground|gpt-image|riverflow)/i.test(lowerId);
 
     const isVideoGen = outputModalities.includes('video') ||
-        lowerId.includes('video') || lowerId.includes('wan') ||
-        lowerId.includes('kling') || lowerId.includes('veo') ||
-        lowerId.includes('sora') || lowerId.includes('luma') ||
-        lowerId.includes('hunyuan-video') || lowerId.includes('minimax/video');
+        modality.includes('->video') ||
+        /\b(veo|sora|kling|runway|luma|ray-2|pika|wan|hunyuan-video|minimax\/video|minimax-video|cogvideo|mochi|seedance|vidu|hailuo|video-01)\b/i.test(lowerId) ||
+        lowerId.includes('video');
 
     const isAudio = inputModalities.includes('audio') || outputModalities.includes('audio') ||
         lowerId.includes('audio') || lowerId.includes('whisper') || lowerId.includes('sonar');
@@ -3451,63 +3347,7 @@ function saveGDriveMetadataMap(mapObj) {
     } catch (_) {}
 }
 
-function ensureDefaultGoogleDriveFilesSeeded() {
-    const meta = loadGDriveMetadataMap();
-    const seeds = [
-        {
-            name: 'project_architecture_2026.md',
-            engine: 'Gemini',
-            modelId: 'gemini-4-argon-high',
-            mimeType: 'text/markdown',
-            content: `# Архитектура Google Antigravity 2.0 (Облако Google Диск)\n\n- **Движок**: Gemini 4 Argon (High) + OpenRouter 452 Live Models\n- **Синхронизация**: Двусторонняя синхронизация с папкой \`/AntigravityCloud\` на Google Диске\n- **Фоновые задачи**: Claude BackgroundTasksDetail (Phases + 2D Pixel Grid + 4-колоночная таблица)\n- **Статус**: Проверено и активно.`
-        },
-        {
-            name: 'openrouter_452_models_report.md',
-            engine: 'OpenRouter',
-            modelId: 'particle-ai/particle-1',
-            mimeType: 'text/markdown',
-            content: `# Отчёт по моделям OpenRouter (Создано через OpenRouter API)\n\n1. **particle-ai/particle-1** — 1048K ctx, Reasoning + Vision (2026-10-28)\n2. **openai/gpt-6.1-terra-pro** — 1050K ctx, Reasoning + Vision (2026-10-26)\n3. **black-forest-labs/flux.2-pro** — Генерация PNG высокого разрешения\n4. **google/veo-3.1-video** — Генерация MP4 видеопотока H.264\n\nКэш моделей сохранён в \`openrouter_models_cache.json\` (452 модели).`
-        },
-        {
-            name: 'claude_background_tasks_audit.json',
-            engine: 'Gemini',
-            modelId: 'gemini-4-argon-high',
-            mimeType: 'application/json',
-            content: JSON.stringify({
-                workflow: 'claude-security:scan',
-                agents: 17,
-                tokens: '2.8M',
-                phases: ['Inventory', 'Threat model', 'Research', 'Verification'],
-                syncedWithGoogleDrive: true
-            }, null, 2)
-        }
-    ];
-    let changed = false;
-    for (const s of seeds) {
-        const fPath = path.join(GDRIVE_WORKSPACE_DIR, s.name);
-        if (!fs.existsSync(fPath)) {
-            try {
-                fs.writeFileSync(fPath, s.content, 'utf8');
-                meta[s.name] = {
-                    id: `gdrive_${Buffer.from(s.name).toString('hex').slice(0, 16)}`,
-                    name: s.name,
-                    folder: '/AntigravityCloud',
-                    engine: s.engine,
-                    modelId: s.modelId,
-                    mimeType: s.mimeType,
-                    updatedAt: new Date().toISOString(),
-                    webViewLink: `https://drive.google.com/drive/u/0/folders/antigravity-cloud?file=${encodeURIComponent(s.name)}`
-                };
-                changed = true;
-            } catch (_) {}
-        }
-    }
-    if (changed) saveGDriveMetadataMap(meta);
-}
-ensureDefaultGoogleDriveFilesSeeded();
-
 function listGoogleDriveFiles(query = '') {
-    ensureDefaultGoogleDriveFilesSeeded();
     const meta = loadGDriveMetadataMap();
     const q = String(query || '').toLowerCase().trim();
     const entries = [];
@@ -3528,7 +3368,7 @@ function listGoogleDriveFiles(query = '') {
                 mimeType: m.mimeType || (f.name.endsWith('.json') ? 'application/json' : 'text/markdown'),
                 sizeBytes: st.size,
                 updatedAt: m.updatedAt || new Date(st.mtimeMs).toISOString(),
-                webViewLink: m.webViewLink || `https://drive.google.com/drive/u/0/folders/antigravity-cloud?file=${encodeURIComponent(f.name)}`,
+                webViewLink: `/download/gdrive/${encodeURIComponent(f.name)}`,
                 downloadUrl: `/download/gdrive/${encodeURIComponent(f.name)}`,
                 localUri: `file:///${fullPath.replace(/\\/g, '/')}`,
                 previewSnippet: rawText.slice(0, 260)
@@ -3555,7 +3395,7 @@ function readGoogleDriveFile(fileName) {
         modelId: meta.modelId || 'gemini-4-argon-high',
         content,
         sizeBytes: Buffer.byteLength(content, 'utf8'),
-        webViewLink: meta.webViewLink || `https://drive.google.com/drive/u/0/folders/antigravity-cloud?file=${encodeURIComponent(safeName)}`,
+        webViewLink: `/download/gdrive/${encodeURIComponent(safeName)}`,
         downloadUrl: `/download/gdrive/${encodeURIComponent(safeName)}`
     };
 }
@@ -3569,9 +3409,10 @@ function createOrUpdateGoogleDriveFile(payload = {}) {
     const fullPath = path.join(GDRIVE_WORKSPACE_DIR, safeName);
     const existed = fs.existsSync(fullPath);
     const prevContent = existed ? fs.readFileSync(fullPath, 'utf8') : '';
-    const content = (payload.content !== undefined && payload.content !== null && String(payload.content).trim() !== '')
-        ? String(payload.content)
-        : `# Документ Google Диска: ${safeName}\n\n- **Создано ИИ-движком**: ${engine} (\`${modelId}\`)\n- **Облачная папка**: \`${folder}\`\n- **Время синхронизации**: ${new Date().toLocaleString('ru-RU')}\n\n## Содержание\n${payload.prompt || 'Файл автоматически сформирован и синхронизирован с Google Диском через мост Antigravity 2.0.'}\n`;
+    if (payload.content === undefined || payload.content === null) {
+        return { ok: false, error: 'Provide file content; AI file generation is not connected.' };
+    }
+    const content = String(payload.content);
 
     fs.writeFileSync(fullPath, content, 'utf8');
     const meta = loadGDriveMetadataMap();
@@ -3583,7 +3424,7 @@ function createOrUpdateGoogleDriveFile(payload = {}) {
         modelId,
         mimeType: payload.mimeType || (safeName.endsWith('.json') ? 'application/json' : (safeName.endsWith('.py') || safeName.endsWith('.kt') ? 'text/plain' : 'text/markdown')),
         updatedAt: new Date().toISOString(),
-        webViewLink: `https://drive.google.com/drive/u/0/folders/antigravity-cloud?file=${encodeURIComponent(safeName)}`
+        webViewLink: `/download/gdrive/${encodeURIComponent(safeName)}`
     };
     meta[safeName] = itemMeta;
     saveGDriveMetadataMap(meta);
@@ -3608,7 +3449,7 @@ function createOrUpdateGoogleDriveFile(payload = {}) {
             content
         },
         diff: {
-            path: `GoogleDrive:${folder}/${safeName}`,
+            path: `${folder}/${safeName}`,
             additions: addedLines,
             deletions: removedLines,
             diffPatch: diffSnippet
@@ -3643,342 +3484,6 @@ const crc32Table = (() => {
     return table;
 })();
 
-function crc32Buf(buf) {
-    let c = 0xFFFFFFFF;
-    for (let i = 0; i < buf.length; i++) {
-        c = crc32Table[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
-    }
-    return (c ^ 0xFFFFFFFF) >>> 0;
-}
-
-function makePngChunk(typeStr, dataBuf) {
-    const typeBuf = Buffer.from(typeStr, 'ascii');
-    const lenBuf = Buffer.alloc(4);
-    lenBuf.writeUInt32BE(dataBuf.length, 0);
-    const crcInput = Buffer.concat([typeBuf, dataBuf]);
-    const crcBuf = Buffer.alloc(4);
-    crcBuf.writeUInt32BE(crc32Buf(crcInput), 0);
-    return Buffer.concat([lenBuf, typeBuf, dataBuf, crcBuf]);
-}
-
-function synthesizeHighResPngImage(promptText = '', modelId = '') {
-    const width = 640;
-    const height = 360;
-    const hashSeed = Array.from(String(promptText + modelId)).reduce((acc, ch) => ((acc * 31) + ch.charCodeAt(0)) >>> 0, 2166136261);
-    const hueShift = (hashSeed % 360);
-
-    const rawScanlines = Buffer.alloc((width * 3 + 1) * height);
-    const cx = width * 0.5;
-    const cy = height * 0.48;
-
-    for (let y = 0; y < height; y++) {
-        const rowOffset = y * (width * 3 + 1);
-        rawScanlines[rowOffset] = 0; // filter type 0
-        const ny = (y - cy) / height;
-        for (let x = 0; x < width; x++) {
-            const nx = (x - cx) / width;
-            const dist = Math.sqrt(nx * nx * 2.2 + ny * ny * 1.4);
-            const angle = Math.atan2(ny, nx);
-
-            const ring1 = Math.exp(-Math.pow((dist - 0.27) * 26, 2));
-            const ring2 = Math.exp(-Math.pow((dist - 0.16) * 32, 2));
-            const coreGlow = Math.exp(-dist * 5.2);
-            const wave = 0.5 + 0.5 * Math.sin(angle * 5 + dist * 18 + (hueShift * 0.05));
-            const grid = ((x % 32 === 0) || (y % 32 === 0)) && y > 220 ? 0.18 : 0.0;
-
-            const r = Math.min(255, Math.max(10, Math.round(14 + 55 * coreGlow + 165 * ring1 * wave + 90 * ring2 + 40 * grid)));
-            const g = Math.min(255, Math.max(12, Math.round(20 + 135 * coreGlow + 195 * ring1 + 210 * ring2 * wave + 95 * grid)));
-            const b = Math.min(255, Math.max(20, Math.round(36 + 215 * coreGlow + 240 * ring1 + 250 * ring2 + 160 * grid)));
-
-            const px = rowOffset + 1 + x * 3;
-            rawScanlines[px] = r;
-            rawScanlines[px + 1] = g;
-            rawScanlines[px + 2] = b;
-        }
-    }
-
-    const ihdr = Buffer.alloc(13);
-    ihdr.writeUInt32BE(width, 0);
-    ihdr.writeUInt32BE(height, 4);
-    ihdr[8] = 8;  // bit depth
-    ihdr[9] = 2;  // color type 2 (RGB)
-    ihdr[10] = 0;
-    ihdr[11] = 0;
-    ihdr[12] = 0;
-
-    const compressed = zlib.deflateSync(rawScanlines, { level: 6 });
-    const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
-    const pngBuffer = Buffer.concat([
-        signature,
-        makePngChunk('IHDR', ihdr),
-        makePngChunk('IDAT', compressed),
-        makePngChunk('IEND', Buffer.alloc(0))
-    ]);
-
-    const fileName = `antigravity_img_${Date.now()}.png`;
-    const filePath = path.join(MEDIA_DIR, fileName);
-    fs.writeFileSync(filePath, pngBuffer);
-    return {
-        fileName,
-        filePath,
-        mediaUrl: `/download/media/${fileName}`,
-        mimeType: 'image/png',
-        width,
-        height,
-        sizeBytes: pngBuffer.length
-    };
-}
-
-/**
- * Создаёт 100% валидный, воспроизводимый на Android и ПК файл `.mp4` (ISO BMFF + H.264 Baseline `avc1` I_PCM)
- * длительностью 3.0 секунды (36 кадров @ 12 fps, 160x96).
- */
-function buildMp4Box(typeStr, payloadBuffers) {
-    const body = Array.isArray(payloadBuffers) ? Buffer.concat(payloadBuffers) : payloadBuffers;
-    const head = Buffer.alloc(8);
-    head.writeUInt32BE(body.length + 8, 0);
-    head.write(typeStr, 4, 4, 'ascii');
-    return Buffer.concat([head, body]);
-}
-
-function synthesizePlayableMp4Video(promptText = '', modelId = '') {
-    const mbWidth = 10;  // 10 * 16 = 160 px
-    const mbHeight = 6;  // 6 * 16 = 96 px
-    const width = mbWidth * 16;
-    const height = mbHeight * 16;
-    const fps = 12;
-    const totalFrames = 36; // 3.0 сек
-    const timescale = 1200;
-    const sampleDelta = 100; // 1200 / 100 = 12 fps
-
-    // SPS (Baseline profile 66, constraint_set0=1, constraint_set1=1, level 30, 160x96, pic_order_cnt_type=2)
-    // Битовый поток RBSP после 0x67:
-    // 01000010 (66) | 11000000 (0xC0) | 00011110 (30) |
-    // seq_parameter_set_id ue(0)=1 | log2_max_frame_num_minus4 ue(0)=1 | pic_order_cnt_type ue(2)=011 |
-    // max_num_ref_frames ue(0)=1 | gaps=0 | pic_width_in_mbs_minus1 ue(9)=0001010 |
-    // pic_height_in_map_units_minus1 ue(5)=00110 | frame_mbs_only=1 | direct_8x8=0 | crop=0 | vui=0 | stop=1
-    // Склеиваем биты после первых 3 байт:
-    // 1 1 011 1 0 0001010 00110 1 0 0 0 1 -> 11011100 00101000 11010001 -> 0xDC, 0x28, 0xD1
-    const spsNal = Buffer.from([0x67, 0x42, 0xC0, 0x1E, 0xDC, 0x28, 0xD1]);
-
-    // PPS (pic_parameter_set_id=0, seq_parameter_set_id=0, CAVLC, deblocking_control=0)
-    // Биты после 0x68:
-    // ue(0)=1 | ue(0)=1 | entropy=0 | bottom_field=0 | slice_groups ue(0)=1 | ref_l0 ue(0)=1 | ref_l1 ue(0)=1 |
-    // weighted_pred=0 | weighted_bipred=00 | qp se(0)=1 | qs se(0)=1 | chroma se(0)=1 |
-    // deblocking=0 | constrained=0 | redundant=0 | stop=1
-    // 11001110 00111000 10000000 -> 0xCE, 0x38, 0x80
-    const ppsNal = Buffer.from([0x68, 0xCE, 0x38, 0x80]);
-
-    // Генерируем 36 IDR-кадров с использованием H.264 I_PCM макроблоков (mb_type = 25)
-    // Заголовок IDR-слайса (0x65) при pic_order_cnt_type=2 и deblocking_filter_control_present_flag=0:
-    // first_mb ue(0)=1 | slice_type ue(7)=0001000 | pps_id ue(0)=1 | frame_num u(4)=0000 |
-    // idr_pic_id ue(0)=1 | no_output=0 | long_term=0 | qp_delta se(0)=1 |
-    // Итого 18 бит заголовка слайса: 1 0001000 1 0000 1 0 0 1
-    // Первый макроблок mb_type ue(25) = 000011010 (9 бит).
-    // 18 + 9 = 27 бит + 5 бит pcm_alignment_zero_bit (00000) = 32 бита (4 байта!):
-    // 10001000 10000100 10000110 10000000 -> 0x88, 0x84, 0x86, 0x80
-    const firstMbHeader = Buffer.from([0x65, 0x88, 0x84, 0x86, 0x80]);
-    // Каждый следующий макроблок после 384 байт YUV уже выровнен по байту:
-    // mb_type ue(25) = 000011010 (9 бит) + 7 бит pcm_alignment_zero_bit (0000000) = 16 бит (2 байта: 0x0D, 0x00)
-    const nextMbHeader = Buffer.from([0x0D, 0x00]);
-    const rbspTrailing = Buffer.from([0x80]);
-
-    const sampleBuffers = [];
-    const sampleSizes = [];
-    const totalMbs = mbWidth * mbHeight;
-
-    for (let f = 0; f < totalFrames; f++) {
-        const phase = (f / totalFrames) * Math.PI * 2;
-        const nalParts = [firstMbHeader];
-
-        for (let mbY = 0; mbY < mbHeight; mbY++) {
-            for (let mbX = 0; mbX < mbWidth; mbX++) {
-                const mbIdx = mbY * mbWidth + mbX;
-                if (mbIdx > 0) {
-                    nalParts.push(nextMbHeader);
-                }
-                const pcmBuf = Buffer.alloc(384); // 256 Y + 64 Cb + 64 Cr
-                // Заполняем Y (16x16) в диапазоне TV [18..230] (никогда не 0x00, чтобы не требовался emulation_prevention_three_byte)
-                for (let py = 0; py < 16; py++) {
-                    const gy = (mbY * 16 + py) / height - 0.5;
-                    for (let px = 0; px < 16; px++) {
-                        const gx = (mbX * 16 + px) / width - 0.5;
-                        const rDist = Math.sqrt(gx * gx * 2.2 + gy * gy * 1.5);
-                        const ring = Math.sin(rDist * 22 - phase * 2) * 0.5 + 0.5;
-                        const core = Math.exp(-rDist * 4.5);
-                        const yVal = Math.min(230, Math.max(18, Math.round(28 + 135 * core + 65 * ring)));
-                        pcmBuf[py * 16 + px] = yVal;
-                    }
-                }
-                // Заполняем Cb (8x8) и Cr (8x8) в диапазоне [40..220]
-                for (let cy = 0; cy < 8; cy++) {
-                    const gy = (mbY * 16 + cy * 2) / height - 0.5;
-                    for (let cx = 0; cx < 8; cx++) {
-                        const gx = (mbX * 16 + cx * 2) / width - 0.5;
-                        const wave = Math.sin(gx * 6 + phase) * 0.5 + 0.5;
-                        const cb = Math.min(220, Math.max(40, Math.round(145 + 45 * wave)));
-                        const cr = Math.min(220, Math.max(40, Math.round(110 - 35 * wave + 25 * gy)));
-                        pcmBuf[256 + cy * 8 + cx] = cb;
-                        pcmBuf[320 + cy * 8 + cx] = cr;
-                    }
-                }
-                nalParts.push(pcmBuf);
-            }
-        }
-        nalParts.push(rbspTrailing);
-        const nalBuf = Buffer.concat(nalParts);
-        const lenPrefix = Buffer.alloc(4);
-        lenPrefix.writeUInt32BE(nalBuf.length, 0);
-        const sampleBuf = Buffer.concat([lenPrefix, nalBuf]);
-        sampleBuffers.push(sampleBuf);
-        sampleSizes.push(sampleBuf.length);
-    }
-
-    // Собираем ISO BMFF дерево атомов (ftyp + moov + mdat)
-    const ftyp = buildMp4Box('ftyp', [
-        Buffer.from('isom', 'ascii'),
-        Buffer.from([0x00, 0x00, 0x02, 0x00]),
-        Buffer.from('isomiso2avc1mp41', 'ascii')
-    ]);
-
-    const mvhdBody = Buffer.alloc(100);
-    mvhdBody.writeUInt32BE(timescale, 12);
-    mvhdBody.writeUInt32BE(totalFrames * sampleDelta, 16);
-    mvhdBody.writeUInt32BE(0x00010000, 20); // rate 1.0
-    mvhdBody.writeUInt16BE(0x0100, 24);     // volume 1.0
-    mvhdBody.writeUInt32BE(0x00010000, 36); // matrix
-    mvhdBody.writeUInt32BE(0x00010000, 52);
-    mvhdBody.writeUInt32BE(0x40000000, 68);
-    mvhdBody.writeUInt32BE(2, 96);          // next_track_ID = 2
-    const mvhd = buildMp4Box('mvhd', mvhdBody);
-
-    const tkhdBody = Buffer.alloc(84);
-    tkhdBody.writeUInt32BE(0x00000003, 0);  // flags: track_enabled | track_in_movie
-    tkhdBody.writeUInt32BE(1, 12);          // track_ID = 1
-    tkhdBody.writeUInt32BE(totalFrames * sampleDelta, 20);
-    tkhdBody.writeUInt32BE(0x00010000, 40); // matrix
-    tkhdBody.writeUInt32BE(0x00010000, 56);
-    tkhdBody.writeUInt32BE(0x40000000, 72);
-    tkhdBody.writeUInt32BE(width << 16, 76);
-    tkhdBody.writeUInt32BE(height << 16, 80);
-    const tkhd = buildMp4Box('tkhd', tkhdBody);
-
-    const mdhdBody = Buffer.alloc(24);
-    mdhdBody.writeUInt32BE(timescale, 12);
-    mdhdBody.writeUInt32BE(totalFrames * sampleDelta, 16);
-    mdhdBody.writeUInt16BE(0x55C4, 20); // und language
-    const mdhd = buildMp4Box('mdhd', mdhdBody);
-
-    const hdlrBody = Buffer.alloc(25);
-    hdlrBody.write('vide', 8, 4, 'ascii');
-    hdlrBody.write('VideoHandler\0', 24 - 12, 13, 'ascii');
-    const hdlr = buildMp4Box('hdlr', hdlrBody);
-
-    const vmhdBody = Buffer.from([0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0]);
-    const vmhd = buildMp4Box('vmhd', vmhdBody);
-
-    const urlBox = buildMp4Box('url ', Buffer.from([0, 0, 0, 1]));
-    const drefBody = Buffer.alloc(8);
-    drefBody.writeUInt32BE(1, 4);
-    const dinf = buildMp4Box('dinf', [buildMp4Box('dref', [drefBody, urlBox])]);
-
-    // avcC box
-    const avcCBody = Buffer.concat([
-        Buffer.from([
-            0x01, spsNal[1], spsNal[2], spsNal[3], 0xFF, 0xE1,
-            (spsNal.length >> 8) & 0xFF, spsNal.length & 0xFF
-        ]),
-        spsNal,
-        Buffer.from([0x01, (ppsNal.length >> 8) & 0xFF, ppsNal.length & 0xFF]),
-        ppsNal
-    ]);
-    const avcC = buildMp4Box('avcC', avcCBody);
-
-    const avc1Header = Buffer.alloc(78);
-    avc1Header.writeUInt16BE(1, 6); // data_reference_index = 1
-    avc1Header.writeUInt16BE(width, 24);
-    avc1Header.writeUInt16BE(height, 26);
-    avc1Header.writeUInt32BE(0x00480000, 28); // 72 dpi
-    avc1Header.writeUInt32BE(0x00480000, 32);
-    avc1Header.writeUInt16BE(1, 40); // frame_count = 1
-    avc1Header.writeUInt16BE(24, 74); // depth = 24
-    avc1Header.writeInt16BE(-1, 76);
-    const avc1 = buildMp4Box('avc1', [avc1Header, avcC]);
-
-    const stsdHeader = Buffer.alloc(8);
-    stsdHeader.writeUInt32BE(1, 4);
-    const stsd = buildMp4Box('stsd', [stsdHeader, avc1]);
-
-    const sttsBody = Buffer.alloc(16);
-    sttsBody.writeUInt32BE(1, 4);
-    sttsBody.writeUInt32BE(totalFrames, 8);
-    sttsBody.writeUInt32BE(sampleDelta, 12);
-    const stts = buildMp4Box('stts', sttsBody);
-
-    const stssBody = Buffer.alloc(8 + totalFrames * 4);
-    stssBody.writeUInt32BE(totalFrames, 4);
-    for (let i = 0; i < totalFrames; i++) {
-        stssBody.writeUInt32BE(i + 1, 8 + i * 4);
-    }
-    const stss = buildMp4Box('stss', stssBody);
-
-    const stscBody = Buffer.alloc(20);
-    stscBody.writeUInt32BE(1, 4);
-    stscBody.writeUInt32BE(1, 8);
-    stscBody.writeUInt32BE(totalFrames, 12);
-    stscBody.writeUInt32BE(1, 16);
-    const stsc = buildMp4Box('stsc', stscBody);
-
-    const stszBody = Buffer.alloc(12 + totalFrames * 4);
-    stszBody.writeUInt32BE(0, 4);
-    stszBody.writeUInt32BE(totalFrames, 8);
-    for (let i = 0; i < totalFrames; i++) {
-        stszBody.writeUInt32BE(sampleSizes[i], 12 + i * 4);
-    }
-    const stsz = buildMp4Box('stsz', stszBody);
-
-    // Вычисляем смещение mdat данных:
-    const dummyStco = buildMp4Box('stco', Buffer.alloc(12));
-    const dummyStbl = buildMp4Box('stbl', [stsd, stts, stss, stsc, stsz, dummyStco]);
-    const dummyMinf = buildMp4Box('minf', [vmhd, dinf, dummyStbl]);
-    const dummyMdia = buildMp4Box('mdia', [mdhd, hdlr, dummyMinf]);
-    const dummyTrak = buildMp4Box('trak', [tkhd, dummyMdia]);
-    const dummyMoov = buildMp4Box('moov', [mvhd, dummyTrak]);
-    const mdatDataOffset = ftyp.length + dummyMoov.length + 8;
-
-    const stcoBody = Buffer.alloc(12);
-    stcoBody.writeUInt32BE(1, 4);
-    stcoBody.writeUInt32BE(mdatDataOffset, 8);
-    const stco = buildMp4Box('stco', stcoBody);
-
-    const stbl = buildMp4Box('stbl', [stsd, stts, stss, stsc, stsz, stco]);
-    const minf = buildMp4Box('minf', [vmhd, dinf, stbl]);
-    const mdia = buildMp4Box('mdia', [mdhd, hdlr, minf]);
-    const trak = buildMp4Box('trak', [tkhd, mdia]);
-    const moov = buildMp4Box('moov', [mvhd, trak]);
-    const mdat = buildMp4Box('mdat', sampleBuffers);
-
-    const mp4Buffer = Buffer.concat([ftyp, moov, mdat]);
-    const fileName = `antigravity_video_${Date.now()}.mp4`;
-    const filePath = path.join(MEDIA_DIR, fileName);
-    fs.writeFileSync(filePath, mp4Buffer);
-
-    return {
-        fileName,
-        filePath,
-        mediaUrl: `/download/media/${fileName}`,
-        mimeType: 'video/mp4',
-        width,
-        height,
-        durationSec: 3,
-        fps,
-        sizeBytes: mp4Buffer.length
-    };
-}
-
-/**
- * Выполнение хода через OpenRouter API (или встроенный генератор фото/видео + авто-фолбэк на бесплатные модели OpenRouter)
- */
 async function executeOpenRouterStreamingTurn(options, onEvent = () => {}) {
     const startMs = Date.now();
     const {
@@ -4008,172 +3513,18 @@ async function executeOpenRouterStreamingTurn(options, onEvent = () => {}) {
     });
     try { onEvent(initEvt); } catch (_) {}
 
-    const lowerPrompt = cleanUserPrompt.toLowerCase();
-    const wantsVideo = lowerPrompt.includes('видео') || lowerPrompt.includes('video') || lowerPrompt.includes('mp4') ||
-        lowerPrompt.includes('ролик') || cleanModelId.includes('video') || cleanModelId.includes('wan') || cleanModelId.includes('kling');
-    const wantsImage = !wantsVideo && (
-        lowerPrompt.includes('фото') || lowerPrompt.includes('картинк') || lowerPrompt.includes('изображен') ||
-        lowerPrompt.includes('нарисуй') || lowerPrompt.includes('сгенерируй фото') ||
-        cleanModelId.includes('flux') || cleanModelId.includes('diffusion') || cleanModelId.includes('image')
-    );
-
-    const EmitThinking = (text) => {
-        recordActiveTurnSnapshot(turnId, resolvedConvId, { status: 'running', thinking: text });
-        try {
-            onEvent({
-                type: 'thinking_delta',
-                turnId,
-                delta: text,
-                thinking: text,
-                fullThinking: text,
-                elapsedMs: Date.now() - startMs
-            });
-        } catch (_) {}
-    };
-
-    const wantsGDrive = lowerPrompt.includes('гугл диск') || lowerPrompt.includes('google диск') ||
-        lowerPrompt.includes('google drive') || lowerPrompt.includes('gdrive') || lowerPrompt.startsWith('/gdrive');
-
-    if (wantsGDrive) {
-        const nameMatch = cleanUserPrompt.match(/([a-zA-Z0-9_\-]+\.(?:md|txt|json|py|kt|html|csv))/i);
-        const targetFileName = nameMatch ? nameMatch[1] : `gdrive_openrouter_${Date.now()}.md`;
-        EmitThinking(`Пользователь запросил работу с облачным хранилищем Google Диск через модель ${cleanModelId}. Создаю и синхронизирую файл ${targetFileName} в папке /AntigravityCloud на Google Диске.`);
-        const gdResult = createOrUpdateGoogleDriveFile({
-            name: targetFileName,
-            engine: 'OpenRouter',
-            modelId: cleanModelId,
-            folder: '/AntigravityCloud',
-            prompt: cleanUserPrompt
-        });
-        const toolEntry = {
-            id: `tool_gdrive_${Date.now()}`,
-            name: 'gdrive_create_file',
-            summary: `☁️ Google Диск: ${gdResult.file.folder}/${gdResult.file.name} (${gdResult.file.sizeBytes} байт)`,
-            status: 'COMPLETED',
-            output: `Файл синхронизирован с Google Диском: ${gdResult.file.webViewLink}`
-        };
-        try {
-            onEvent({
-                type: 'tool',
-                turnId,
-                id: toolEntry.id,
-                toolName: toolEntry.name,
-                summary: toolEntry.summary,
-                details: toolEntry.output,
-                status: toolEntry.status,
-                tool: toolEntry,
-                elapsedMs: Date.now() - startMs
-            });
-        } catch (_) {}
-
-        const replyMd = `☁️ **Файл успешно создан и синхронизирован на Google Диске** (движок: **OpenRouter** \`${cleanModelId}\`):\n\n` +
-            `- 📄 **Файл**: \`${gdResult.file.folder}/${gdResult.file.name}\` (${gdResult.file.sizeBytes} байт)\n` +
-            `- 🔗 [Открыть в Google Диске (${gdResult.file.name})](${gdResult.file.webViewLink})\n` +
-            `- 📥 [Скачать копию с Google Диска](${gdResult.file.downloadUrl})\n` +
-            `- 📂 Локальное зеркало: [${gdResult.file.name}](${gdResult.file.localUri})`;
-
-        const totalMs = Math.max(180, Date.now() - startMs);
-        const outTokens = Math.max(48, Math.round(replyMd.length / 3.5));
-        const tokPerSec = Number((outTokens / Math.max(0.25, totalMs / 1000)).toFixed(1));
-        const donePayload = {
-            type: 'done',
-            ok: true,
-            turnId,
-            instanceName: INSTANCE_NAME,
-            conversationId: resolvedConvId,
-            model: cleanModelId,
-            thinking: `Создан и синхронизирован файл ${gdResult.file.name} на Google Диске через модель OpenRouter (${cleanModelId}).`,
-            thinkingDurationSec: 1,
-            reply: replyMd,
-            toolCalls: [toolEntry],
-            createdDiffs: [gdResult.diff],
-            generatedMedia: [],
-            phoneActions: [],
-            ttfbMs: Math.min(120, totalMs),
-            totalMs,
-            outputTokensCount: outTokens,
-            tokensPerSecond: tokPerSec
-        };
-        recordActiveTurnSnapshot(turnId, resolvedConvId, { status: 'completed', ...donePayload });
-        try { onEvent(donePayload); } catch (_) {}
-        return donePayload;
-    }
-
-    if (wantsVideo || wantsImage) {
-        const mediaKind = wantsVideo ? 'MP4-видео' : 'PNG-изображения';
-        EmitThinking(`Пользователь запросил генерацию ${mediaKind} через стек OpenRouter (${cleanModelId}). Подготавливаю сцену, синтезирую медиафайл и формирую прямую ссылку для просмотра и скачивания на смартфон.`);
-        const mediaObj = wantsVideo
-            ? synthesizePlayableMp4Video(cleanUserPrompt, cleanModelId)
-            : synthesizeHighResPngImage(cleanUserPrompt, cleanModelId);
-
-        const toolEntry = {
-            id: `tool_media_${Date.now()}`,
-            name: wantsVideo ? 'openrouter_generate_video' : 'openrouter_generate_image',
-            summary: `${mediaObj.fileName} (${Math.round(mediaObj.sizeBytes / 1024)} КБ)`,
-            status: 'COMPLETED',
-            output: `Сгенерирован медиафайл: ${mediaObj.mediaUrl} (${mediaObj.width}x${mediaObj.height}, ${mediaObj.mimeType})`
-        };
-        try {
-            onEvent({
-                type: 'tool',
-                turnId,
-                id: toolEntry.id,
-                toolName: toolEntry.name,
-                summary: toolEntry.summary,
-                details: toolEntry.output,
-                status: toolEntry.status,
-                tool: toolEntry,
-                elapsedMs: Date.now() - startMs
-            });
-        } catch (_) {}
-
-        const replyMd = wantsVideo
-            ? `🎬 **Видео успешно сгенерировано** (модель \`${cleanModelId}\`, формат \`MP4 / H.264\`, ${mediaObj.width}×${mediaObj.height}, ${mediaObj.durationSec} сек, ${Math.round(mediaObj.sizeBytes / 1024)} КБ):\n\n` +
-              `- 📥 [Скачать видео ${mediaObj.fileName} на телефон](${mediaObj.mediaUrl}?download=1)\n` +
-              `- ▶️ [Открыть поток MP4 (${mediaObj.fileName})](${mediaObj.mediaUrl})`
-            : `🎨 **Изображение успешно сгенерировано** (модель \`${cleanModelId}\`, формат \`PNG\`, ${mediaObj.width}×${mediaObj.height}, ${Math.round(mediaObj.sizeBytes / 1024)} КБ):\n\n` +
-              `![${cleanUserPrompt.slice(0, 60)}](${mediaObj.mediaUrl})\n\n` +
-              `- 📥 [Скачать изображение ${mediaObj.fileName} на телефон](${mediaObj.mediaUrl}?download=1)`;
-
-        const totalMs = Math.max(220, Date.now() - startMs);
-        const outTokens = Math.max(64, Math.round(replyMd.length / 3.5));
-        const tokPerSec = Number((outTokens / Math.max(0.25, totalMs / 1000)).toFixed(1));
-        const donePayload = {
-            type: 'done',
-            ok: true,
-            turnId,
-            instanceName: INSTANCE_NAME,
-            conversationId: resolvedConvId,
-            model: cleanModelId,
-            thinking: `Пользователь запросил генерацию ${mediaKind} через стек OpenRouter (${cleanModelId}). Медиафайл создан и проверен.`,
-            thinkingDurationSec: 2,
-            reply: replyMd,
-            toolCalls: [toolEntry],
-            createdDiffs: [],
-            generatedMedia: [mediaObj],
-            phoneActions: [],
-            ttfbMs: Math.min(180, totalMs),
-            totalMs,
-            outputTokensCount: outTokens,
-            tokensPerSecond: tokPerSec
-        };
-        recordActiveTurnSnapshot(turnId, resolvedConvId, {
-            status: 'completed',
-            ...donePayload
-        });
-        try { onEvent(donePayload); } catch (_) {}
-        return donePayload;
-    }
-
+    const modelProfile = liveOpenRouterModelsMemoryCache.find(m => m.id === cleanModelId) ||
+        classifyOpenRouterModel({ id: cleanModelId, name: cleanModelId });
     // Если задан API-ключ OpenRouter — обращаемся напрямую к https://openrouter.ai/api/v1/chat/completions
     if (orConfig.apiKey && orConfig.apiKey.trim().length > 10) {
-        EmitThinking(`Отправляю запрос напрямую в облачный шлюз OpenRouter API (модель ${cleanModelId}) с контекстом диалога.`);
         try {
+            const sysContent = loadAgentSystemPrompt() +
+                `\n\nТы работаешь как модель ${modelProfile.name || cleanModelId} (${cleanModelId}) через OpenRouter. Адаптируй ответы под свой профиль (${modelProfile.primaryCategory || 'TEXT'}, модальность ${modelProfile.modality || 'text->text'}).`;
             const messagesPayload = [
-                { role: 'system', content: loadAgentSystemPrompt() }
+                { role: 'system', content: sysContent }
             ];
             if (Array.isArray(clientHistory)) {
-                for (const m of clientHistory.slice(-8)) {
+                for (const m of clientHistory) {
                     messagesPayload.push({
                         role: (m.role === 'USER' || m.role === 'user') ? 'user' : 'assistant',
                         content: String(m.content || '')
@@ -4203,6 +3554,8 @@ async function executeOpenRouterStreamingTurn(options, onEvent = () => {}) {
                     resp.on('end', () => resolve({ status: resp.statusCode, body: b }));
                 });
                 r.on('error', reject);
+                r.on('timeout', () => r.destroy(new Error('OpenRouter request timed out')));
+                turnCancellations.set(turnId, () => r.destroy(new Error('Generation cancelled')));
                 r.write(bodyStr);
                 r.end();
             });
@@ -4211,6 +3564,22 @@ async function executeOpenRouterStreamingTurn(options, onEvent = () => {}) {
             const choice = parsedOr.choices && parsedOr.choices[0] && parsedOr.choices[0].message;
             if (choice && choice.content) {
                 const extracted = extractThinkingAndCleanReply(choice.content, choice.reasoning || '');
+                const finalReplyText = extracted.reply || choice.content;
+                const totalMs = Math.max(200, Date.now() - startMs);
+                const outTokens = Number(parsedOr.usage && parsedOr.usage.completion_tokens) || 0;
+                const tokPerSec = Number((outTokens / Math.max(0.25, totalMs / 1000)).toFixed(1));
+                try {
+                    onEvent({
+                        type: 'text_delta',
+                        turnId,
+                        delta: finalReplyText,
+                        text: finalReplyText,
+                        fullText: finalReplyText,
+                        tokensPerSecond: tokPerSec,
+                        outputTokensCount: outTokens,
+                        elapsedMs: totalMs
+                    });
+                } catch (_) {}
                 const donePayload = {
                     type: 'done',
                     ok: true,
@@ -4218,29 +3587,34 @@ async function executeOpenRouterStreamingTurn(options, onEvent = () => {}) {
                     instanceName: INSTANCE_NAME,
                     conversationId: resolvedConvId,
                     model: cleanModelId,
-                    thinking: extracted.thinking || `Выполнен запрос к модели ${cleanModelId} через OpenRouter API.`,
-                    thinkingDurationSec: Math.max(1, Math.round((Date.now() - startMs) / 1000)),
-                    reply: extracted.reply || choice.content,
+                    thinking: extracted.thinking || '',
+                    thinkingDurationSec: Math.max(1, Math.round(totalMs / 1000)),
+                    reply: finalReplyText,
                     toolCalls: [],
                     createdDiffs: [],
-                    phoneActions: [],
-                    ttfbMs: Date.now() - startMs,
-                    totalMs: Date.now() - startMs
+                    generatedMedia: [],
+                    phoneActions: extractPhoneActionsFromText(finalReplyText),
+                    ttfbMs: totalMs,
+                    totalMs,
+                    outputTokensCount: outTokens,
+                    tokensPerSecond: tokPerSec
                 };
                 recordActiveTurnSnapshot(turnId, resolvedConvId, { status: 'completed', ...donePayload });
                 try { onEvent(donePayload); } catch (_) {}
+                turnCancellations.delete(turnId);
+                if (options.allowTranscriptWrite !== false) ensureTranscriptUpdated(resolvedConvId, cleanUserPrompt, finalReplyText, Math.round(totalMs / 1000), extracted.thinking || "");
                 return donePayload;
             }
         } catch (_) {}
     }
 
-    // Если API-ключ OpenRouter не указан — бесшовно маршрутизируем через локальный воркер Gemini 4 Argon с указанием выбранного профиля OpenRouter
-    return executeAgyTurnStreaming({
-        ...options,
-        turnId,
-        provider: 'AGY_FALLBACK',
-        model: 'gemini-4-argon-high'
-    }, onEvent);
+    turnCancellations.delete(turnId);
+    const error = orConfig.apiKey ? 'OpenRouter не вернул ответ выбранной модели. Повторите запрос.' : 'Для выбранной модели требуется ключ OpenRouter в настройках.';
+    const failure = { type: 'done', ok: false, turnId, conversationId: resolvedConvId,
+        model: cleanModelId, reply: error, error, thinking: '', toolCalls: [], createdDiffs: [], generatedMedia: [] };
+    recordActiveTurnSnapshot(turnId, resolvedConvId, { status: 'failed', ...failure });
+    onEvent(failure);
+    return failure;
 }
 
 // ----------------------------------------------------------------------------
@@ -4287,138 +3661,517 @@ function saveAiPermissionsConfig(patch) {
 }
 
 // ----------------------------------------------------------------------------
-// Многоагентный рой (Multi-Agent Swarm) с пометкой 👑 ЛИДЕР
+// Синхронизация представления чатов и библиотеки ответов (телефон ⇄ ПК).
+// Названия, закрепления, архив и сохранённые ответы переживают переустановку
+// телефона и доступны ПК-клиенту. На запись побеждает более новый `updatedAtMs`;
+// удаления передаются надгробиями `deletedIds[id] = deletedAtMs`.
 // ----------------------------------------------------------------------------
-function loadMultiAgentSwarmState() {
+function loadSyncState() {
     try {
-        if (fs.existsSync(SWARM_STATE_FILE)) {
-            return JSON.parse(fs.readFileSync(SWARM_STATE_FILE, 'utf8'));
+        if (fs.existsSync(SYNC_STATE_FILE)) {
+            const parsed = JSON.parse(fs.readFileSync(SYNC_STATE_FILE, 'utf8'));
+            return {
+                chatPrefs: parsed.chatPrefs && typeof parsed.chatPrefs === 'object' && !Array.isArray(parsed.chatPrefs) ? parsed.chatPrefs : {},
+                savedArtifacts: Array.isArray(parsed.savedArtifacts) ? parsed.savedArtifacts : [],
+                projectWorkspaces: Array.isArray(parsed.projectWorkspaces) ? parsed.projectWorkspaces : [],
+                deletedIds: parsed.deletedIds && typeof parsed.deletedIds === 'object' && !Array.isArray(parsed.deletedIds) ? parsed.deletedIds : {}
+            };
         }
     } catch (_) {}
-    return {
-        swarmActive: true,
-        strategy: 'HIERARCHICAL_LEADER',
-        updatedAt: new Date().toISOString(),
-        agents: [
-            {
-                id: 'lead-orchestrator',
-                mention: '@lead-orchestrator',
-                name: 'Главный Оркестратор Antigravity',
-                role: '👑 ЛИДЕР • Главный оркестратор и архитектор',
-                isLeader: true,
-                model: 'gemini-4-argon-high',
-                status: 'ACTIVE',
-                currentStep: 'Координация воркеров, контроль инвариантов rigorous-programming-reasoner и приёмка кода',
-                completedTasks: 14,
-                logs: [
-                    'Проведена декомпозиция задачи по этапам A–I (ПОЙМИ → ИССЛЕДУЙ → СПЛАНИРУЙ → СДЕЛАЙ → ПРОВЕРЬ → ИСПРАВЬ)',
-                    'Распределены подзадачи между инженером кода, инженером Android CLI и QA-ревизором',
-                    'Контроль контекстного окна и синхронизации с OpenRouter API активен'
-                ]
+    return { chatPrefs: {}, savedArtifacts: [], projectWorkspaces: [], deletedIds: {} };
+}
+
+function saveSyncState(state) {
+    const temporary = `${SYNC_STATE_FILE}.tmp`;
+    try {
+        fs.writeFileSync(temporary, JSON.stringify(state, null, 2), 'utf8');
+        fs.renameSync(temporary, SYNC_STATE_FILE);
+    } catch (error) {
+        try { fs.unlinkSync(temporary); } catch (_) {}
+        throw error;
+    }
+    return state;
+}
+
+function mergeSyncState(stored, incoming) {
+    const chatPrefs = Object.assign({}, (stored && stored.chatPrefs) || {});
+    const savedArtifacts = ((stored && stored.savedArtifacts) || []).slice();
+    const projectWorkspaces = ((stored && stored.projectWorkspaces) || []).slice();
+    const deletedIds = Object.assign({}, (stored && stored.deletedIds) || {});
+
+    const incomingPrefs = (incoming && incoming.chatPrefs) || {};
+    for (const [id, entry] of Object.entries(incomingPrefs)) {
+        if (!entry || typeof entry !== 'object') continue;
+        const at = Number(entry.updatedAtMs) || 0;
+        if (Object.prototype.hasOwnProperty.call(deletedIds, id) && at <= (Number(deletedIds[id]) || 0)) continue; // запись старее удаления
+        const existing = chatPrefs[id];
+        if (existing && (Number(existing.updatedAtMs) || 0) > at) continue; // хранящаяся новее
+        chatPrefs[id] = entry;
+        delete deletedIds[id];
+    }
+
+    const upsertById = (list, entry) => {
+        if (!entry || typeof entry !== 'object') return;
+        const id = String(entry.id || '');
+        if (!id) return;
+        const at = Number(entry.updatedAtMs) || 0;
+        if (Object.prototype.hasOwnProperty.call(deletedIds, id) && at <= (Number(deletedIds[id]) || 0)) return;
+        const index = list.findIndex(a => String(a && a.id) === id);
+        const existing = index >= 0 ? list[index] : null;
+        if (existing && (Number(existing.updatedAtMs) || 0) > at) return;
+        if (index >= 0) list[index] = entry; else list.push(entry);
+        delete deletedIds[id];
+    };
+
+    const incomingArtifacts = (incoming && Array.isArray(incoming.savedArtifacts)) ? incoming.savedArtifacts : [];
+    for (const entry of incomingArtifacts) upsertById(savedArtifacts, entry);
+
+    const incomingWorkspaces = (incoming && Array.isArray(incoming.projectWorkspaces)) ? incoming.projectWorkspaces : [];
+    for (const entry of incomingWorkspaces) upsertById(projectWorkspaces, entry);
+
+    const incomingDeleted = (incoming && incoming.deletedIds) || {};
+    for (const [id, deletedAtMs] of Object.entries(incomingDeleted)) {
+        const at = Number(deletedAtMs) || 0;
+        const prefAt = Number((chatPrefs[id] && chatPrefs[id].updatedAtMs)) || 0;
+        const findIn = (list) => {
+            const index = list.findIndex(a => String(a && a.id) === id);
+            return { index, at: index >= 0 ? (Number(list[index].updatedAtMs) || 0) : 0 };
+        };
+        const artifact = findIn(savedArtifacts);
+        const workspace = findIn(projectWorkspaces);
+        if (at < Math.max(prefAt, artifact.at, workspace.at)) continue; // удаление старее записи
+        delete chatPrefs[id];
+        if (artifact.index >= 0) savedArtifacts.splice(artifact.index, 1);
+        if (workspace.index >= 0) projectWorkspaces.splice(workspace.index, 1);
+        deletedIds[id] = Math.max(at, Number(deletedIds[id]) || 0);
+    }
+
+    savedArtifacts.sort((a, b) => (Number(b && b.updatedAtMs) || 0) - (Number(a && a.updatedAtMs) || 0));
+    projectWorkspaces.sort((a, b) => (Number(b && b.updatedAtMs) || 0) - (Number(a && a.updatedAtMs) || 0));
+    return { chatPrefs, savedArtifacts, projectWorkspaces, deletedIds };
+}
+
+// ----------------------------------------------------------------------------
+// Настоящие серверные функции: генерация медиа, сжатие контекста, Google Drive.
+// Искусственные заглушки отключены: каждая функция либо работает с реальным
+// внешним API, либо честно сообщает о недоступности.
+// ----------------------------------------------------------------------------
+const GENERATED_MEDIA_DIR = path.join(DEFAULT_WORKSPACE, 'pc-bridge', 'generated_media');
+const GDRIVE_OAUTH_FILE = path.join(DEFAULT_WORKSPACE, 'pc-bridge', 'gdrive_oauth.json');
+fs.mkdirSync(GENERATED_MEDIA_DIR, { recursive: true });
+
+/** Promise-обёртка HTTPS/HTTP JSON-запроса к внешнему API. */
+function httpsJsonRequest(urlStr, { method = 'GET', headers = {}, body = null, timeoutMs = 60000 } = {}) {
+    return new Promise((resolve, reject) => {
+        let parsed;
+        try { parsed = new URL(urlStr); } catch (error) { reject(error); return; }
+        const transport = parsed.protocol === 'http:' ? http : https;
+        const payload = body == null
+            ? null
+            : (Buffer.isBuffer(body) ? body : (typeof body === 'string' ? body : JSON.stringify(body)));
+        const request = transport.request(parsed, {
+            method,
+            headers: {
+                'Content-Type': 'application/json; charset=utf-8',
+                ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}),
+                ...headers
             },
-            {
-                id: 'self',
-                mention: '@self',
-                name: 'Старший инженер кода (Coding Worker)',
-                role: '🛠️ Реализация архитектуры Kotlin Compose и PC Bridge',
-                isLeader: false,
-                model: 'gemini-4-argon-high',
-                status: 'READY',
-                currentStep: 'Ожидание делегирования патчей и генерация ReferenceDiffCard (+added / -removed)',
-                completedTasks: 19,
-                logs: [
-                    'Модули MainScreen.kt, MarkdownRenderer.kt и server.js синхронизированы',
-                    'Проверка отсутствия TODO и заглушек пройдена'
-                ]
-            },
-            {
-                id: 'phone-cli',
-                mention: '@phone-cli',
-                name: 'Инженер Android CLI и Песочницы',
-                role: '📱 Исполнение команд Android Shell и PhoneVirtualSandbox',
-                isLeader: false,
-                model: 'gemini-3.8-flash-high',
-                status: 'READY',
-                currentStep: 'Контроль изолированной среды virtual_sandboxes/default и HTML5/JS превью',
-                completedTasks: 8,
-                logs: [
-                    'Виртуальная песочница инициализирована (workspace/, bin/, tmp/, snapshots/)',
-                    'Мост команд sh -c / getprop / df -h / logcat готов'
-                ]
-            },
-            {
-                id: 'research',
-                mention: '@research',
-                name: 'Исследователь и контекст-аналитик',
-                role: '🔍 Поиск по коду, аудит скиллов и синхронизация OpenRouter',
-                isLeader: false,
-                model: 'gemini-4-argon-medium',
-                status: 'READY',
-                currentStep: 'Индексация 300+ живых моделей OpenRouter API и проверка ссылок в чате',
-                completedTasks: 11,
-                logs: [
-                    'Загружен актуальный каталог моделей с https://openrouter.ai/api/v1/models',
-                    'Проверены встроенные скиллы antigravity_guide, agy-customizations и plugin'
-                ]
-            },
-            {
-                id: 'image-generator',
-                mention: '@image-generator',
-                name: 'Генератор медиа и QA-ревизор UI',
-                role: '🎨 Генерация фото/MP4-видео и враждебное ревью (Этапы G–I)',
-                isLeader: false,
-                model: 'gemini-3.8-flash-high',
-                status: 'READY',
-                currentStep: 'Синтез PNG/MP4 медиафайлов и пиксельное сравнение с ChatGPT 1.2026.293',
-                completedTasks: 9,
-                logs: [
-                    'Пайплайн генерации MP4 (H.264 avc1) и PNG готов к скачиванию на смартфон',
-                    'Шлюз качества 8/8 PASS активен'
-                ]
+            timeout: timeoutMs
+        }, (response) => {
+            const chunks = [];
+            response.on('data', (c) => chunks.push(c));
+            response.on('end', () => {
+                const raw = Buffer.concat(chunks).toString('utf8');
+                let json = null;
+                try { json = JSON.parse(raw); } catch (_) {}
+                resolve({ status: response.statusCode || 0, raw, json });
+            });
+        });
+        request.on('timeout', () => request.destroy(new Error('Внешний API не ответил вовремя')));
+        request.on('error', reject);
+        if (payload) request.write(payload);
+        request.end();
+    });
+}
+
+// --- Генерация изображений через реальный OpenRouter API ---------------------
+function extractOpenRouterImageBase64(json) {
+    const choices = json && Array.isArray(json.choices) ? json.choices : [];
+    for (const choice of choices) {
+        const message = choice && choice.message;
+        const images = message && Array.isArray(message.images) ? message.images : [];
+        for (const image of images) {
+            const url = image && image.image_url && image.image_url.url;
+            if (typeof url === 'string' && url.startsWith('data:')) {
+                const comma = url.indexOf(',');
+                if (comma > 0) return url.slice(comma + 1);
             }
-        ]
+            if (image && typeof image.b64_json === 'string') return image.b64_json;
+        }
+        const content = message && Array.isArray(message.content) ? message.content : [];
+        for (const part of content) {
+            if (part && typeof part.image_url === 'string' && part.image_url.startsWith('data:')) {
+                const comma = part.image_url.indexOf(',');
+                if (comma > 0) return part.image_url.slice(comma + 1);
+            }
+            if (part && typeof part.b64_json === 'string') return part.b64_json;
+        }
+    }
+    return null;
+}
+
+/** Реальные размеры PNG из IHDR; null, если буфер не PNG. */
+function parsePngDimensions(buf) {
+    if (!buf || buf.length < 24) return null;
+    if (buf[0] !== 0x89 || buf[1] !== 0x50 || buf[2] !== 0x4E || buf[3] !== 0x47) return null;
+    return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+}
+
+function loadOpenRouterApiKey(payloadApiKey) {
+    const fromPayload = String(payloadApiKey || '').trim();
+    if (fromPayload) return fromPayload;
+    try {
+        return String(loadOpenRouterConfig().apiKey || '').trim();
+    } catch (_) { return ''; }
+}
+
+async function handleOpenRouterImageGeneration(payload) {
+    const apiKey = loadOpenRouterApiKey(payload.apiKey);
+    if (!apiKey) {
+        return { status: 400, body: { ok: false, error: 'Нет API-ключа OpenRouter: добавьте ключ в настройках OpenRouter на телефоне. Генерация выполняется реальным API, заглушки отключены.' } };
+    }
+    const prompt = String(payload.prompt || '').trim();
+    if (!prompt) return { status: 400, body: { ok: false, error: 'Не задан промпт для генерации изображения' } };
+    const model = String(payload.model || '').includes('image') ? String(payload.model) : 'google/gemini-2.5-flash-image-preview';
+    try {
+        const response = await httpsJsonRequest('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${apiKey}` },
+            body: {
+                model,
+                modalities: ['image', 'text'],
+                messages: [{ role: 'user', content: prompt }]
+            },
+            timeoutMs: 120000
+        });
+        if (response.status !== 200 || !response.json) {
+            const apiError = response.json && response.json.error && response.json.error.message;
+            return { status: 502, body: { ok: false, error: `OpenRouter вернул ошибку${response.status ? ` (${response.status})` : ''}: ${apiError || 'изображение не сгенерировано'}` } };
+        }
+        const b64 = extractOpenRouterImageBase64(response.json);
+        if (!b64) {
+            return { status: 502, body: { ok: false, error: 'Модель не вернула изображение в ответе OpenRouter' } };
+        }
+        const bytes = Buffer.from(b64, 'base64');
+        const dims = parsePngDimensions(bytes);
+        const fileName = `openrouter_image_${Date.now().toString(36)}.png`;
+        const fullPath = path.join(GENERATED_MEDIA_DIR, fileName);
+        fs.writeFileSync(fullPath, bytes);
+        const width = dims ? dims.width : 0;
+        const height = dims ? dims.height : 0;
+        return {
+            status: 200,
+            body: {
+                ok: true,
+                model,
+                media: {
+                    fileName,
+                    mimeType: 'image/png',
+                    mediaUrl: `/download/media/${encodeURIComponent(fileName)}`,
+                    sizeBytes: bytes.length,
+                    width,
+                    height,
+                    resolution: width && height ? `${width}x${height}` : ''
+                }
+            }
+        };
+    } catch (error) {
+        return { status: 502, body: { ok: false, error: `Ошибка обращения к OpenRouter: ${error.message}` } };
+    }
+}
+
+// --- Сжатие контекста реальной моделью --------------------------------------
+function buildCompactionPrompt(messages) {
+    const transcript = messages.map((m) => {
+        const role = m && m.role === 'USER' ? 'Пользователь' : 'Ассистент';
+        return `${role}: ${String((m && m.content) || '').trim()}`;
+    }).join('\n\n');
+    return 'Сожми историю переписки ниже в компактную сводку для продолжения разговора. ' +
+        'Сохрани факты, решения, имена файлов и незавершённые задачи. Не добавляй вопросов. ' +
+        'Ответь только сводкой на языке переписки.\n\n--- ИСТОРИЯ ---\n' + transcript;
+}
+
+/** Разрешена ли запись транскрипта сессии: временный чат и телефонные режимы не сохраняются. */
+function transcriptWriteAllowed(mode, transient) {
+    return mode !== 'PHONE_ON_DEVICE' && mode !== 'PHONE_LOCAL_RESOURCES' && !transient;
+}
+
+async function handleContextCompaction(payload) {
+    const messages = (Array.isArray(payload.messages) ? payload.messages : [])
+        .filter((m) => m && typeof m === 'object' && String(m.content || '').trim());
+    if (messages.length === 0) {
+        return { status: 400, body: { ok: false, error: 'Нет сообщений для сжатия' } };
+    }
+    const prompt = buildCompactionPrompt(messages);
+    const result = await executeAgyTurnStreaming({
+        turnId: `compact_${Date.now()}`,
+        provider: String(payload.provider || ''),
+        rawUserPrompt: prompt,
+        cleanUserPrompt: prompt,
+        model: String(payload.model || 'gemini-4-argon-high'),
+        mode: 'PC_REMOTE',
+        conversationId: '',
+        workspacePath: DEFAULT_WORKSPACE,
+        allowTranscriptWrite: false,
+        clientHistory: [],
+        phoneContext: '',
+        phoneToolObservation: '',
+        phoneStepIndex: 0,
+        voiceMode: false,
+        attachments: []
+    });
+    const summary = String((result && result.reply) || '').trim();
+    if (!result || !result.ok || !summary) {
+        return { status: 502, body: { ok: false, error: 'Модель не вернула сводку — история сохранена без изменений' } };
+    }
+    return {
+        status: 200,
+        body: {
+            ok: true,
+            summary,
+            model: result.model || '',
+            originalMessages: messages.length,
+            originalChars: messages.reduce((acc, m) => acc + String(m.content || '').length, 0),
+            summaryChars: summary.length
+        }
     };
 }
 
-function updateMultiAgentSwarmState(payload) {
-    const state = loadMultiAgentSwarmState();
-    const action = String(payload.action || '').toLowerCase();
-
-    if (action === 'set_leader' && payload.agentId) {
-        state.agents = state.agents.map(ag => {
-            const isTarget = ag.id === payload.agentId;
-            const cleanRole = ag.role.replace(/^👑\s*ЛИДЕР\s*•\s*/i, '');
-            return {
-                ...ag,
-                isLeader: isTarget,
-                status: isTarget ? 'ACTIVE' : ag.status,
-                role: isTarget ? `👑 ЛИДЕР • ${cleanRole}` : cleanRole,
-                logs: isTarget
-                    ? [`[${new Date().toLocaleTimeString('ru-RU')}] Назначен главным ЛИДЕРОМ многоагентного роя`, ...(ag.logs || []).slice(0, 5)]
-                    : ag.logs
-            };
-        });
-    } else if (action === 'Update_model' && payload.agentId && payload.model) {
-        state.agents = state.agents.map(ag => ag.id === payload.agentId ? { ...ag, model: payload.model } : ag);
-    } else if (action === 'dispatch_task' && payload.task) {
-        const taskText = String(payload.task).trim();
-        const nowStr = new Date().toLocaleTimeString('ru-RU');
-        state.agents = state.agents.map(ag => ({
-            ...ag,
-            status: ag.isLeader ? 'ACTIVE' : 'RUNNING',
-            currentStep: ag.isLeader
-                ? `Оркестрация задачи: «${taskText.slice(0, 70)}»`
-                : `Выполнение подзадачи от Лидера: «${taskText.slice(0, 60)}»`,
-            completedTasks: (ag.completedTasks || 0) + 1,
-            logs: [`[${nowStr}] Принята задача роя: ${taskText.slice(0, 90)}`, ...(ag.logs || []).slice(0, 5)]
-        }));
-    }
-
-    state.updatedAt = new Date().toISOString();
+// --- Google Drive REST API с реальным OAuth ---------------------------------
+function loadGDriveOAuthConfig() {
     try {
-        fs.writeFileSync(SWARM_STATE_FILE, JSON.stringify(state, null, 2), 'utf8');
+        if (fs.existsSync(GDRIVE_OAUTH_FILE)) {
+            const parsed = JSON.parse(fs.readFileSync(GDRIVE_OAUTH_FILE, 'utf8'));
+            return {
+                accessToken: String(parsed.accessToken || ''),
+                refreshToken: String(parsed.refreshToken || ''),
+                clientId: String(parsed.clientId || ''),
+                clientSecret: String(parsed.clientSecret || ''),
+                accountEmail: String(parsed.accountEmail || '')
+            };
+        }
     } catch (_) {}
-    return state;
+    return { accessToken: '', refreshToken: '', clientId: '', clientSecret: '', accountEmail: '' };
+}
+
+function saveGDriveOAuthConfig(config) {
+    try {
+        fs.writeFileSync(GDRIVE_OAUTH_FILE, JSON.stringify(config, null, 2), 'utf8');
+    } catch (_) {}
+    return config;
+}
+
+async function refreshGDriveAccessToken(config) {
+    if (!config.refreshToken || !config.clientId || !config.clientSecret) return null;
+    const response = await httpsJsonRequest('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        body: {
+            grant_type: 'refresh_token',
+            refresh_token: config.refreshToken,
+            client_id: config.clientId,
+            client_secret: config.clientSecret
+        }
+    });
+    const json = response.json;
+    if (!json || !json.access_token) return null;
+    return saveGDriveOAuthConfig({ ...config, accessToken: json.access_token });
+}
+
+/** Возвращает рабочий access-трокен или null; при возможности обновляет его. */
+async function resolveGDriveAccessToken() {
+    let config = loadGDriveOAuthConfig();
+    if (!config.accessToken && config.refreshToken) {
+        config = (await refreshGDriveAccessToken(config)) || config;
+    }
+    return config.accessToken ? config : null;
+}
+
+async function driveApiRequest(pathname, { method = 'GET', headers = {}, body = null, raw = false } = {}) {
+    let config = await resolveGDriveAccessToken();
+    if (!config) return { status: 401, json: { error: { message: 'Google Drive не подключён: нет OAuth-токена' } }, raw: '' };
+    let response = await httpsJsonRequest(`https://www.googleapis.com${pathname}`, {
+        method,
+        headers: { Authorization: `Bearer ${config.accessToken}`, ...headers },
+        body
+    });
+    if (response.status === 401 && config.refreshToken) {
+        const refreshed = await refreshGDriveAccessToken(config);
+        if (refreshed) {
+            config = refreshed;
+            response = await httpsJsonRequest(`https://www.googleapis.com${pathname}`, {
+                method,
+                headers: { Authorization: `Bearer ${config.accessToken}`, ...headers },
+                body
+            });
+        }
+    }
+    return response;
+}
+
+function mapDriveFileToClient(file, snippet = '') {
+    return {
+        id: file.id,
+        name: file.name,
+        folder: '/GoogleDrive',
+        engine: 'Drive',
+        modelId: '',
+        mimeType: file.mimeType || 'application/octet-stream',
+        sizeBytes: Number(file.size || 0),
+        updatedAt: file.modifiedTime || '',
+        webViewLink: file.webViewLink || '',
+        downloadUrl: `/download/gdrive_id/${encodeURIComponent(file.id)}`,
+        localUri: '',
+        previewSnippet: snippet
+    };
+}
+
+async function listGoogleDriveRealFiles(query = '') {
+    const q = String(query || '').trim();
+    const driveQuery = q
+        ? `trashed = false and name contains '${q.replace(/'/g, "\\'")}'`
+        : 'trashed = false';
+    const response = await driveApiRequest(
+        `/drive/v3/files?q=${encodeURIComponent(driveQuery)}&fields=files(id,name,mimeType,size,modifiedTime,webViewLink)&pageSize=100&orderBy=modifiedTime desc`
+    );
+    if (response.status !== 200 || !response.json) {
+        return { ok: false, error: (response.json && response.json.error && response.json.error.message) || `Ошибка Google Drive API (${response.status})` };
+    }
+    return { ok: true, files: (response.json.files || []).map((f) => mapDriveFileToClient(f)) };
+}
+
+async function readGoogleDriveRealFile(fileId) {
+    const meta = await driveApiRequest(`/drive/v3/files/${encodeURIComponent(fileId)}?fields=id,name,mimeType,size,modifiedTime,webViewLink`);
+    if (meta.status !== 200 || !meta.json) {
+        return { ok: false, error: (meta.json && meta.json.error && meta.json.error.message) || `Файл не найден (${meta.status})` };
+    }
+    const content = await driveApiRequest(`/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`, { raw: true });
+    if (content.status !== 200) {
+        return { ok: false, error: `Не удалось прочитать файл (${content.status})` };
+    }
+    return {
+        ok: true,
+        id: meta.json.id,
+        name: meta.json.name,
+        folder: '/GoogleDrive',
+        engine: 'Drive',
+        modelId: '',
+        mimeType: meta.json.mimeType || 'text/plain',
+        content: content.raw,
+        sizeBytes: Number(meta.json.size || Buffer.byteLength(content.raw, 'utf8')),
+        updatedAt: meta.json.modifiedTime || '',
+        webViewLink: meta.json.webViewLink || '',
+        downloadUrl: `/download/gdrive_id/${encodeURIComponent(meta.json.id)}`
+    };
+}
+
+async function createOrUpdateGoogleDriveRealFile(payload) {
+    const name = String(payload.name || payload.fileName || `antigravity_doc_${Date.now()}.md`).trim();
+    const content = String(payload.content == null ? '' : payload.content);
+    const mimeType = String(payload.mimeType || (name.endsWith('.json') ? 'application/json' : 'text/markdown'));
+    const boundary = `antigravity_${Date().toString(36)}`;
+    const multipart = Buffer.concat([
+        Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name })}\r\n--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`),
+        Buffer.from(content, 'utf8'),
+        Buffer.from(`\r\n--${boundary}--\r\n`)
+    ]);
+    let response;
+    if (payload.id) {
+        response = await driveApiRequest(`/upload/drive/v3/files/${encodeURIComponent(payload.id)}?uploadType=multipart&fields=id,name,mimeType,size,modifiedTime,webViewLink`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+            body: multipart
+        });
+    } else {
+        response = await driveApiRequest('/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,size,modifiedTime,webViewLink', {
+            method: 'POST',
+            headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+            body: multipart
+        });
+    }
+    if ((response.status !== 200 && response.status !== 201) || !response.json) {
+        return { ok: false, error: (response.json && response.json.error && response.json.error.message) || `Ошибка записи в Google Drive (${response.status})` };
+    }
+    return {
+        ok: true,
+        action: payload.id ? 'updated' : 'created',
+        file: mapDriveFileToClient(response.json)
+    };
+}
+
+async function deleteGoogleDriveRealFile(fileId) {
+    const response = await driveApiRequest(`/drive/v3/files/${encodeURIComponent(fileId)}`, { method: 'DELETE' });
+    if (response.status !== 204 && response.status !== 200) {
+        return { ok: false, error: (response.json && response.json.error && response.json.error.message) || `Ошибка удаления (${response.status})` };
+    }
+    return { ok: true, deleted: fileId };
+}
+
+async function googleDriveStatus() {
+    const config = await resolveGDriveAccessToken();
+    if (!config) {
+        return { ok: true, connected: false, accountEmail: '', folderPath: '/AntigravityCloud', mirrorDir: GDRIVE_WORKSPACE_DIR, engines: ['Drive'] };
+    }
+    const about = await driveApiRequest('/drive/v3/about?fields=user(emailAddress,displayName),storageQuota');
+    const user = about.json && about.json.user;
+    const quota = about.json && about.json.storageQuota;
+    return {
+        ok: true,
+        connected: about.status === 200,
+        accountEmail: (user && user.emailAddress) || config.accountEmail || '',
+        folderPath: '/GoogleDrive',
+        mirrorDir: GDRIVE_WORKSPACE_DIR,
+        usedBytes: Number(quota && quota.usage || 0),
+        quotaBytes: Number(quota && quota.limit || 0),
+        engines: ['Drive']
+    };
+}
+
+// ----------------------------------------------------------------------------
+// Многоагентный рой (Multi-Agent Swarm) с пометкой 👑 ЛИДЕР
+// ----------------------------------------------------------------------------
+const { SubagentRuntime } = require('./lib/subagent-runtime');
+const { AgentWorkspace } = require('./lib/agent-workspace');
+const { createSubagentRunner } = require('./lib/subagent-cli');
+const agentWorkspaces = new AgentWorkspace(DEFAULT_WORKSPACE, path.join(SCRATCH_DIR, 'agent-workspaces'));
+const subagentRuntime = new SubagentRuntime({
+    run: createSubagentRunner({ executable: AGY_BIN, repository: DEFAULT_WORKSPACE, workspaces: agentWorkspaces }),
+    onChange: state => {
+        const temporary = SWARM_STATE_FILE + '.tmp';
+        try { fs.writeFileSync(temporary, JSON.stringify(state), 'utf8'); fs.renameSync(temporary, SWARM_STATE_FILE); }
+        catch (error) { console.error('[subagents] Cannot persist task state:', error.message); }
+    }
+});
+
+function loadMultiAgentSwarmState(requestId = '') {
+    if (requestId && subagentRuntime.requestIds.has(requestId)) return subagentRuntime.snapshotFor(requestId);
+    if (!requestId && subagentRuntime.jobs.length) return subagentRuntime.snapshot();
+    try {
+        const previous = JSON.parse(fs.readFileSync(SWARM_STATE_FILE, 'utf8'));
+        if (previous.strategy === 'PARALLEL_ANALYSIS' && (!requestId || previous.batchId === requestId)) return { ...previous, swarmActive: false,
+            agents: (previous.agents || []).map(agent => ['queued', 'running'].includes(agent.status)
+                ? { ...agent, settling: false, status: 'failed', logs: ['Мост перезапущен. Запустите анализ заново.'] } : { ...agent, settling: false }) };
+    } catch (_) {}
+    return { swarmActive: false, strategy: 'PARALLEL_ANALYSIS', agents: [] };
+}
+
+function updateMultiAgentSwarmState(payload) {
+    const action = String(payload.action || '').toLowerCase();
+    if (action === 'cancel_task') return subagentRuntime.cancel(payload.requestId || '');
+    if (!['dispatch_task', 'dispatch_code_task'].includes(action)) throw new Error('Для субагентов анализа доступны запуск и отмена задачи');
+    if (!fs.existsSync(AGY_BIN)) throw new Error('CLI Antigravity (agy) не доступен на ПК: невозможно запустить субагентов');
+    const model = String(payload.model || 'gemini-4-argon-high');
+    if (!cachedAgyModels.some(entry => entry.id === model)) throw new Error('Выбранная модель CLI недоступна');
+    return subagentRuntime.dispatch({ task: payload.task, model, requestId: payload.requestId, mode: action === 'dispatch_code_task' ? 'code' : 'analysis' });
 }
 
 // ----------------------------------------------------------------------------
@@ -4575,7 +4328,7 @@ const server = http.createServer(async (req, res) => {
         if (!snap) {
             return sendJson(res, 200, { ok: false, status: 'not_found' });
         }
-        return sendJson(res, 200, { ok: true, ...snap });
+        return sendJson(res, 200, { ok: true, found: true, ...snap });
     }
 
     if (req.method === 'GET' && urlObj.pathname === '/api/chat/active') {
@@ -4631,27 +4384,48 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && urlObj.pathname === '/api/gdrive/status') {
+        // Настоящий Google Drive при наличии OAuth-токена; иначе — локальное зеркало
+        // с честным connected: false (имитация облачного аккаунта удалена).
+        const oauth = loadGDriveOAuthConfig();
+        if (oauth.accessToken || oauth.refreshToken) {
+            const status = await googleDriveStatus();
+            return sendJson(res, 200, status);
+        }
         const files = listGoogleDriveFiles();
         const usedBytes = files.reduce((acc, f) => acc + (f.sizeBytes || 0), 0);
         return sendJson(res, 200, {
             ok: true,
-            connected: true,
-            accountEmail: 'antigravity.cloud.sync@gmail.com',
+            connected: false,
+            accountEmail: '',
             folderPath: '/AntigravityCloud',
             mirrorDir: GDRIVE_WORKSPACE_DIR,
             filesCount: files.length,
             usedBytes,
-            quotaBytes: 15 * 1024 * 1024 * 1024,
+            quotaBytes: 0,
             engines: ['Gemini', 'OpenRouter']
         });
     }
 
     if (req.method === 'GET' && urlObj.pathname === '/api/gdrive/files') {
         const q = urlObj.searchParams.get('q') || '';
+        const oauth = loadGDriveOAuthConfig();
+        if (oauth.accessToken || oauth.refreshToken) {
+            const real = await listGoogleDriveRealFiles(q);
+            if (real.ok) {
+                return sendJson(res, 200, {
+                    ok: true,
+                    connected: true,
+                    folderPath: '/GoogleDrive',
+                    total: real.files.length,
+                    files: real.files
+                });
+            }
+            return sendJson(res, 502, { ok: false, connected: false, error: real.error, total: 0, files: [] });
+        }
         const files = listGoogleDriveFiles(q);
         return sendJson(res, 200, {
             ok: true,
-            connected: true,
+            connected: false,
             folderPath: '/AntigravityCloud',
             total: files.length,
             files
@@ -4659,9 +4433,102 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && urlObj.pathname === '/api/gdrive/read') {
+        const id = urlObj.searchParams.get('id') || '';
+        const oauth = loadGDriveOAuthConfig();
+        if (id && (oauth.accessToken || oauth.refreshToken)) {
+            const real = await readGoogleDriveRealFile(id);
+            return sendJson(res, real.ok ? 200 : (real.error && real.error.includes('не подключён') ? 401 : 404), real);
+        }
         const name = urlObj.searchParams.get('name') || '';
         const resObj = readGoogleDriveFile(name);
         return sendJson(res, resObj.ok ? 200 : 404, resObj);
+    }
+
+    if ((req.method === 'GET' || req.method === 'HEAD') && urlObj.pathname.startsWith('/download/gdrive_id/')) {
+        // Прокси скачивания реального файла Drive по ID (токен остаётся на ПК).
+        const fileId = decodeURIComponent(urlObj.pathname.slice('/download/gdrive_id/'.length));
+        const content = await driveApiRequest(`/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`, { raw: true });
+        if (content.status !== 200) {
+            return sendJson(res, 404, { ok: false, error: 'Google Drive file not found' });
+        }
+        res.writeHead(200, {
+            'Content-Type': 'text/plain; charset=utf-8',
+            'Access-Control-Allow-Origin': '*'
+        });
+        if (req.method === 'HEAD') res.end();
+        else res.end(content.raw);
+        return;
+    }
+
+    if ((req.method === 'GET' || req.method === 'HEAD') && urlObj.pathname.startsWith('/download/media/')) {
+        const rawFile = path.basename(decodeURIComponent(urlObj.pathname.slice('/download/media/'.length)));
+        const fullPath = path.join(GENERATED_MEDIA_DIR, rawFile);
+        if (fs.existsSync(fullPath)) {
+            const stat = fs.statSync(fullPath);
+            res.writeHead(200, {
+                'Content-Type': rawFile.endsWith('.png') ? 'image/png' : 'application/octet-stream',
+                'Content-Disposition': `inline; filename="${rawFile}"`,
+                'Content-Length': stat.size,
+                'Access-Control-Allow-Origin': '*'
+            });
+            if (req.method === 'HEAD') res.end();
+            else fs.createReadStream(fullPath).pipe(res);
+            return;
+        }
+        return sendJson(res, 404, { ok: false, error: 'Media file not found' });
+    }
+
+    if (req.method === 'GET' && urlObj.pathname === '/api/gdrive/oauth/start') {
+        // Начало реального OAuth-потока Google: пользователь открывает ссылку в браузере.
+        const config = loadGDriveOAuthConfig();
+        if (!config.clientId) {
+            return sendJson(res, 400, { ok: false, error: 'Сначала сохраните Client ID/Secret через POST /api/gdrive/config (Google Cloud Console → OAuth client).' });
+        }
+        const redirectUri = `http://${req.headers.host || '127.0.0.1:8787'}/api/gdrive/oauth/callback`;
+        const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' + new URLSearchParams({
+            client_id: config.clientId,
+            redirect_uri: redirectUri,
+            response_type: 'code',
+            scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.email',
+            access_type: 'offline',
+            prompt: 'consent'
+        }).toString();
+        return sendJson(res, 200, { ok: true, authUrl, redirectUri });
+    }
+
+    if (req.method === 'GET' && urlObj.pathname === '/api/gdrive/oauth/callback') {
+        const code = urlObj.searchParams.get('code') || '';
+        const config = loadGDriveOAuthConfig();
+        if (!code || !config.clientId || !config.clientSecret) {
+            res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+            res.end('OAuth: нет кода авторизации или не настроен Client ID/Secret.');
+            return;
+        }
+        const redirectUri = `http://${req.headers.host || '127.0.0.1:8787'}/api/gdrive/oauth/callback`;
+        const tokenResponse = await httpsJsonRequest('https://oauth2.googleapis.com/token', {
+            method: 'POST',
+            body: {
+                code,
+                client_id: config.clientId,
+                client_secret: config.clientSecret,
+                redirect_uri: redirectUri,
+                grant_type: 'authorization_code'
+            }
+        });
+        const tokens = tokenResponse.json;
+        if (!tokens || !tokens.access_token) {
+            res.writeHead(502, { 'Content-Type': 'text/plain; charset=utf-8' });
+            res.end('OAuth: не удалось обменять код на токен. Проверьте Client ID/Secret и redirect URI.');
+            return;
+        }
+        saveGDriveOAuthConfig({
+            ...config,
+            accessToken: tokens.access_token,
+            refreshToken: tokens.refresh_token || config.refreshToken
+        });
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end('<html><body><h3>Google Drive подключён к Antigravity</h3><p>Можно закрыть вкладку и вернуться в приложение.</p></body></html>');
+        return;
     }
 
     if ((req.method === 'GET' || req.method === 'HEAD') && urlObj.pathname.startsWith('/download/gdrive/')) {
@@ -4689,10 +4556,14 @@ const server = http.createServer(async (req, res) => {
         });
     }
 
+    if (req.method === 'GET' && urlObj.pathname === '/api/sync/state') {
+        return sendJson(res, 200, Object.assign({ ok: true }, loadSyncState()));
+    }
+
     if (req.method === 'GET' && urlObj.pathname === '/api/agents/swarm') {
         return sendJson(res, 200, {
             ok: true,
-            swarm: loadMultiAgentSwarmState()
+            swarm: loadMultiAgentSwarmState(urlObj.searchParams.get('requestId') || '')
         });
     }
 
@@ -4872,12 +4743,15 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST') {
-        let rawBody = '';
-        req.on('data', (chunk) => { rawBody += chunk.toString('utf8'); });
-        req.on('end', async () => {
-            let payload = {};
-            try { payload = JSON.parse((rawBody || '{}').replace(/^\uFEFF/, '')); } catch (_) {}
-
+        let payload;
+        try { payload = await readJsonBody(req); }
+        catch (error) { return sendJson(res, error.statusCode || 400, { ok: false, error: error.message }); }
+        try {
+            if (urlObj.pathname === '/api/chat/cancel') {
+                const cancel = turnCancellations.get(String(payload.turnId || ''));
+                if (cancel) cancel();
+                return sendJson(res, 200, { ok: true, cancelled: Boolean(cancel) });
+            }
             if (urlObj.pathname === '/api/tts') {
                 const text = payload.text || '';
                 const voice = payload.voice || 'Aoede';
@@ -4912,24 +4786,14 @@ const server = http.createServer(async (req, res) => {
             }
 
             if (urlObj.pathname === '/api/openrouter/generate-image') {
-                const promptText = payload.prompt || 'Футуристическая орбитальная станция Antigravity';
-                const modelId = payload.model || 'black-forest-labs/flux.2-pro';
-                const media = synthesizeHighResPngImage(promptText, modelId);
-                return sendJson(res, 200, {
-                    ok: true,
-                    media,
-                    markdown: `🎨 **Изображение сгенерировано** (\`${modelId}\`, ${media.width}×${media.height}):\n\n![${promptText.slice(0, 50)}](${media.mediaUrl})\n\n- 📥 [Скачать изображение ${media.fileName} на телефон](${media.mediaUrl}?download=1)`
-                });
+                const generated = await handleOpenRouterImageGeneration(payload);
+                return sendJson(res, generated.status, generated.body);
             }
 
             if (urlObj.pathname === '/api/openrouter/generate-video') {
-                const promptText = payload.prompt || 'Орбитальная сфера ИИ Antigravity в движении';
-                const modelId = payload.model || 'wan-ai/wan-2.1-t2v-14b';
-                const media = synthesizePlayableMp4Video(promptText, modelId);
-                return sendJson(res, 200, {
-                    ok: true,
-                    media,
-                    markdown: `🎬 **MP4-видео сгенерировано** (\`${modelId}\`, H.264 ${media.width}×${media.height}, ${media.durationSec} с, ${Math.round(media.sizeBytes / 1024)} КБ):\n\n- 📥 [Скачать видео ${media.fileName} на телефон](${media.mediaUrl}?download=1)\n- ▶️ [Открыть поток MP4 (${media.fileName})](${media.mediaUrl})`
+                return sendJson(res, 501, {
+                    ok: false,
+                    error: 'Генерация видео не подключена: через OpenRouter нет доступных видео-моделей. Заглушки отключены — используйте генерацию изображений.'
                 });
             }
 
@@ -4939,6 +4803,12 @@ const server = http.createServer(async (req, res) => {
                     ok: true,
                     permissions: updated
                 });
+            }
+
+            if (urlObj.pathname === '/api/sync/state') {
+                const merged = mergeSyncState(loadSyncState(), payload);
+                saveSyncState(merged);
+                return sendJson(res, 200, Object.assign({ ok: true }, merged));
             }
 
             if (urlObj.pathname === '/api/agents/swarm') {
@@ -4957,21 +4827,30 @@ const server = http.createServer(async (req, res) => {
             }
 
             if (urlObj.pathname === '/api/context/compact') {
-                const cid = payload.conversationId || '';
-                const model = payload.model || 'gemini-4-argon-high';
-                const before = computeSessionContextWindowStatus(cid, model);
-                const compactedHistoryTokens = Math.round(before.historyTokens * 0.15);
-                return sendJson(res, 200, {
-                    ...before,
-                    historyTokens: compactedHistoryTokens,
-                    toolOutputTokens: 0,
-                    usedContextTokens: before.systemPromptTokens + compactedHistoryTokens,
-                    usagePercent: Number((((before.systemPromptTokens + compactedHistoryTokens) / before.maxContextTokens) * 100).toFixed(2)),
-                    message: 'Контекстное окно сжато (/compact): удалены старые дампы инструментов, история сведена в краткую сводку.'
+                const compacted = await handleContextCompaction(payload);
+                return sendJson(res, compacted.status, compacted.body);
+            }
+
+            if (urlObj.pathname === '/api/gdrive/config') {
+                // Сохранение реальных OAuth-данных Google (Client ID/Secret, токены).
+                const current = loadGDriveOAuthConfig();
+                const updated = saveGDriveOAuthConfig({
+                    accessToken: String(payload.accessToken || current.accessToken || ''),
+                    refreshToken: String(payload.refreshToken || current.refreshToken || ''),
+                    clientId: String(payload.clientId || current.clientId || ''),
+                    clientSecret: String(payload.clientSecret || current.clientSecret || ''),
+                    accountEmail: String(payload.accountEmail || current.accountEmail || '')
                 });
+                const status = await googleDriveStatus();
+                return sendJson(res, 200, { ok: true, ...status, hasRefreshToken: Boolean(updated.refreshToken) });
             }
 
             if (urlObj.pathname === '/api/gdrive/create' || urlObj.pathname === '/api/gdrive/update') {
+                const oauth = loadGDriveOAuthConfig();
+                if (oauth.accessToken || oauth.refreshToken) {
+                    const gdRes = await createOrUpdateGoogleDriveRealFile(payload);
+                    return sendJson(res, gdRes.ok ? 200 : 502, gdRes);
+                }
                 const gdRes = createOrUpdateGoogleDriveFile(payload);
                 return sendJson(res, 200, {
                     ...gdRes,
@@ -4980,6 +4859,11 @@ const server = http.createServer(async (req, res) => {
             }
 
             if (urlObj.pathname === '/api/gdrive/delete') {
+                const oauth = loadGDriveOAuthConfig();
+                if (oauth.accessToken || oauth.refreshToken) {
+                    const delRes = await deleteGoogleDriveRealFile(String(payload.id || ''));
+                    return sendJson(res, delRes.ok ? 200 : 502, delRes);
+                }
                 const delRes = deleteGoogleDriveFile(payload.name || payload.fileName || '');
                 return sendJson(res, 200, {
                     ...delRes,
@@ -5012,7 +4896,7 @@ const server = http.createServer(async (req, res) => {
             if (urlObj.pathname === '/api/chat' || urlObj.pathname === '/api/chat/stream' || urlObj.pathname === '/api/openrouter/chat') {
                 const turnId = payload.turnId || `turn_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
                 const rawPromptField = payload.prompt || payload.message || '';
-                const cleanUserPrompt = extractCleanUserMessage(rawPromptField) || rawPromptField.trim();
+                const cleanUserPrompt = String(rawPromptField).trim();
                 const model = payload.model || 'gemini-4-argon-high';
                 const mode = payload.mode || 'PC_REMOTE';
                 const provider = urlObj.pathname === '/api/openrouter/chat' ? 'OPENROUTER' : (payload.provider || '');
@@ -5029,68 +4913,6 @@ const server = http.createServer(async (req, res) => {
                     (req.headers.accept || '').includes('text/event-stream') ||
                     (req.headers.accept || '').includes('application/x-ndjson');
 
-                const lowerClean = cleanUserPrompt.toLowerCase();
-                if ((lowerClean.includes('гугл диск') || lowerClean.includes('google диск') || lowerClean.includes('google drive') || lowerClean.startsWith('/gdrive')) &&
-                    (lowerClean.includes('создай') || lowerClean.includes('сохрани') || lowerClean.includes('запиши') || lowerClean.includes('файл') || lowerClean.startsWith('/gdrive'))) {
-                    const isOr = provider === 'OPENROUTER' || String(model).startsWith('openrouter/') || String(model).includes('/');
-                    const engineLabel = isOr ? 'OpenRouter' : 'Gemini';
-                    const nameMatch = cleanUserPrompt.match(/([a-zA-Z0-9_\-]+\.(?:md|txt|json|py|kt|html|csv))/i);
-                    const targetFileName = nameMatch ? nameMatch[1] : `gdrive_${engineLabel.toLowerCase()}_${Date.now()}.md`;
-                    const gdResult = createOrUpdateGoogleDriveFile({
-                        name: targetFileName,
-                        engine: engineLabel,
-                        modelId: String(model).replace(/^openrouter\//i, ''),
-                        folder: '/AntigravityCloud',
-                        prompt: cleanUserPrompt
-                    });
-                    const toolEntry = {
-                        id: `tool_gdrive_${Date.now()}`,
-                        name: 'gdrive_create_file',
-                        summary: `☁️ Google Диск (${engineLabel}): ${gdResult.file.folder}/${gdResult.file.name}`,
-                        status: 'COMPLETED',
-                        output: `Создан файл на Google Диске (${engineLabel}): ${gdResult.file.webViewLink}`
-                    };
-                    const replyMd = `☁️ **Файл создан и синхронизирован на Google Диске** (ИИ-движок: **${engineLabel}** \`${model}\`):\n\n` +
-                        `- 📄 **Путь в облаке**: \`${gdResult.file.folder}/${gdResult.file.name}\` (${gdResult.file.sizeBytes} байт)\n` +
-                        `- 🔗 [Открыть на Google Диске (${gdResult.file.name})](${gdResult.file.webViewLink})\n` +
-                        `- 📥 [Скачать с Google Диска](${gdResult.file.downloadUrl})\n` +
-                        `- 📂 Локальное зеркало: [${gdResult.file.name}](${gdResult.file.localUri})`;
-                    const outTokens = Math.max(52, Math.round(replyMd.length / 3.5));
-                    const donePayload = {
-                        type: 'done',
-                        ok: true,
-                        turnId,
-                        instanceName: INSTANCE_NAME,
-                        conversationId: conversationId || require('crypto').randomUUID(),
-                        model,
-                        thinking: `Вызван инструмент gdrive_create_file для создания файла ${gdResult.file.name} в папке /AntigravityCloud на Google Диске через движок ${engineLabel} (${model}).`,
-                        thinkingDurationSec: 1,
-                        reply: replyMd,
-                        toolCalls: [toolEntry],
-                        createdDiffs: [gdResult.diff],
-                        generatedMedia: [],
-                        phoneActions: [],
-                        ttfbMs: 140,
-                        totalMs: 420,
-                        outputTokensCount: outTokens,
-                        tokensPerSecond: Number((outTokens / 0.42).toFixed(1))
-                    };
-                    recordActiveTurnSnapshot(turnId, donePayload.conversationId, { status: 'completed', ...donePayload });
-                    if (wantsStream) {
-                        res.writeHead(200, {
-                            'Content-Type': 'application/x-ndjson; charset=utf-8',
-                            'Cache-Control': 'no-cache, no-transform',
-                            'Connection': 'keep-alive',
-                            'Access-Control-Allow-Origin': '*'
-                        });
-                        res.write(JSON.stringify({ type: 'tool', turnId, id: toolEntry.id, toolName: toolEntry.name, summary: toolEntry.summary, details: toolEntry.output, status: 'COMPLETED', tool: toolEntry }) + '\n');
-                        res.write(JSON.stringify(donePayload) + '\n');
-                        res.end();
-                        return;
-                    }
-                    return sendJson(res, 200, donePayload);
-                }
-
                 const turnOptions = {
                     turnId,
                     provider,
@@ -5100,7 +4922,7 @@ const server = http.createServer(async (req, res) => {
                     mode,
                     conversationId,
                     workspacePath,
-                    allowTranscriptWrite: mode !== 'PHONE_ON_DEVICE' && mode !== 'PHONE_LOCAL_RESOURCES',
+                    allowTranscriptWrite: transcriptWriteAllowed(mode, Boolean(payload.transient)),
                     clientHistory,
                     phoneContext,
                     phoneToolObservation,
@@ -5169,7 +4991,13 @@ const server = http.createServer(async (req, res) => {
             }
 
             return sendJson(res, 404, { ok: false, error: 'Unknown route' });
-        });
+            } catch (error) {
+                console.error('[bridge] Request failed:', error.message);
+                if (!res.headersSent) return sendJson(res, 500, { ok: false, error: 'Bridge request failed' });
+                if (!res.writableEnded && !res.destroyed) {
+                    res.end(JSON.stringify({ type: 'done', ok: false, reply: 'Запрос завершился с ошибкой. Повторите попытку.' }) + '\n');
+                }
+            }
         return;
     }
 

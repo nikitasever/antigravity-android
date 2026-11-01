@@ -43,6 +43,9 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material3.Button
+import androidx.compose.material3.Surface
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -56,8 +59,11 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -430,7 +436,7 @@ fun ReferenceDiffCard(
                             .border(1.dp, Color(0xFF2563EB), RoundedCornerShape(7.dp))
                             .clickable {
                                 onSaveToGoogleDrive(shortName, diff.diffPatch)
-                                Toast.makeText(context, "Сохранено в Google Диск (/AntigravityCloud)", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Запрос на сохранение отправлен", Toast.LENGTH_SHORT).show()
                             }
                             .padding(vertical = 6.dp, horizontal = 4.dp),
                         contentAlignment = Alignment.Center
@@ -816,12 +822,25 @@ fun ContextWindowSheet(
     status: ContextWindowStatus,
     onDismiss: () -> Unit,
     onResetKeepMessages: () -> Unit,
-    onResetClearMessages: () -> Unit,
+    @Suppress("UNUSED_PARAMETER") onResetClearMessages: () -> Unit,
     onCompactContext: () -> Unit,
-    onClearToolOutputs: () -> Unit,
+    @Suppress("UNUSED_PARAMETER") onClearToolOutputs: () -> Unit,
     lastCompactedSummary: String = ""
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val usedCompact = if (status.usedTokens >= 1000) {
+        String.format(Locale.US, "%.1fK", status.usedTokens / 1000.0)
+    } else {
+        "${status.usedTokens}"
+    }
+    val maxCompact = if (status.maxTokens >= 1_000_000) {
+        String.format(Locale.US, "%.0fM", status.maxTokens / 1_000_000.0)
+    } else {
+        "${status.maxTokens / 1000}K"
+    }
+    val pctInt = status.usagePercent.toInt().coerceIn(0, 100)
+    val progress = (status.usedTokens.toFloat() / status.maxTokens.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -831,137 +850,59 @@ fun ContextWindowSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 18.dp, vertical = 8.dp)
-                .padding(bottom = 28.dp)
+                .padding(horizontal = 16.dp, vertical = 4.dp)
+                .padding(bottom = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Контекстное окно",
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "Ваш контекст",
-                        color = Color.White,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "${status.usedTokens} из ${status.maxTokens} токенов (${String.format(Locale.US, "%.2f", status.usagePercent)}%) • Модель: ${status.model}",
+                        text = "$usedCompact из $maxCompact токенов ($pctInt%)",
                         color = Color(0xFF9CA3AF),
                         fontSize = 12.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        fontFamily = FontFamily.Monospace
                     )
-                }
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = Color(0xFF9CA3AF))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "Закрыть",
+                            tint = Color(0xFF9CA3AF),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            val progress = (status.usedTokens.toFloat() / status.maxTokens.coerceAtLeast(1).toFloat()).coerceIn(0.01f, 1f)
             LinearProgressIndicator(
                 progress = { progress },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(8.dp)
-                    .clip(RoundedCornerShape(4.dp)),
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp)),
                 color = Color(0xFF3B82F6),
-                trackColor = Color(0xFF242834)
+                trackColor = Color(0xFF262626)
             )
-            Spacer(modifier = Modifier.height(6.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+
+            if (lastCompactedSummary.isNotBlank()) {
                 Text(
-                    text = "${status.usedTokens} из ${status.maxTokens} токенов",
-                    color = Color(0xFF93C5FD),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = "Сообщений: ${status.messageCount}",
-                    color = Color(0xFF9CA3AF),
-                    fontSize = 12.sp
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Official Claude Android 1.261029.20 ContextUsagePayload 4-category breakdown
-            val subagentTok = (status.usedTokens * 0.18f).toInt().coerceAtLeast(380)
-            val mcpTok = status.toolOutputTokens.coerceAtLeast(420)
-            val memDriveTok = (status.usedTokens * 0.12f).toInt().coerceAtLeast(240)
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF1C1C1C))
-                    .border(1.dp, Color(0xFF2A2A2A), RoundedCornerShape(12.dp))
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(7.dp)
-            ) {
-                ContextStatRow("Category • Системный промпт и диалог", "${status.systemPromptTokens + status.historyTokens} ток.", Color(0xFF60A5FA))
-                ContextStatRow("ContextUsageReplyAgent • Субагенты (17)", "$subagentTok ток.", Color(0xFF34D399))
-                ContextStatRow("ContextUsageReplyMcpTool • Инструменты MCP", "$mcpTok ток.", Color(0xFFFBBF24))
-                ContextStatRow("ContextUsageReplyMemoryFile • Память & Google Диск", "$memDriveTok ток.", Color(0xFFA78BFA))
-                if (status.lastResetAt.isNotBlank()) {
-                    ContextStatRow("Последний сброс контекста", status.lastResetAt, Color(0xFF93C5FD))
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Official config.ru /compact token savings banner
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(9.dp))
-                    .background(Color(0xFF18221D))
-                    .border(1.dp, Color(0xFF224232), RoundedCornerShape(9.dp))
-                    .padding(horizontal = 12.dp, vertical = 7.dp)
-            ) {
-                Text(
-                    text = "/compact: ${lastCompactedSummary.ifBlank { "было токенов: 3200 • сэкономлено 1180 токенов" }}",
-                    color = Color(0xFF4ADE80),
+                    text = "Чат сжат • $lastCompactedSummary",
+                    color = Color(0xFF34D399),
                     fontSize = 11.5.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Primary Reset Button
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF2563EB))
-                    .clickable {
-                        onResetKeepMessages()
-                        onDismiss()
-                    }
-                    .padding(vertical = 13.dp, horizontal = 14.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Сбросить контекстное окно (Чистый контекст)",
-                    color = Color.White,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -970,72 +911,45 @@ fun ContextWindowSheet(
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xFF1F2430))
-                        .border(1.dp, Color(0xFF32394A), RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFF222222))
+                        .border(1.dp, Color(0xFF333333), RoundedCornerShape(8.dp))
                         .clickable {
                             onCompactContext()
                             onDismiss()
                         }
-                        .padding(vertical = 11.dp, horizontal = 10.dp),
+                        .padding(vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Сжать (/compact)",
-                        color = Color(0xFF93C5FD),
-                        fontSize = 12.5.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        text = "Сжать чат",
+                        color = Color(0xFFE5E7EB),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1
                     )
                 }
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xFF1F2430))
-                        .border(1.dp, Color(0xFF32394A), RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFF222222))
+                        .border(1.dp, Color(0xFF333333), RoundedCornerShape(8.dp))
                         .clickable {
-                            onClearToolOutputs()
+                            onResetKeepMessages()
                             onDismiss()
                         }
-                        .padding(vertical = 11.dp, horizontal = 10.dp),
+                        .padding(vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Очистить логи",
-                        color = Color(0xFFFBBF24),
-                        fontSize = 12.5.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        text = "Очистить контекст",
+                        color = Color(0xFFE5E7EB),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1
                     )
                 }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Color(0xFF28161B))
-                    .border(1.dp, Color(0xFF4C222C), RoundedCornerShape(10.dp))
-                    .clickable {
-                        onResetClearMessages()
-                        onDismiss()
-                    }
-                    .padding(vertical = 10.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Полный сброс контекста с очисткой чата",
-                    color = Color(0xFFF87171),
-                    fontSize = 12.5.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
             }
         }
     }
@@ -1088,7 +1002,7 @@ fun OpenRouterHubSheet(
     onSelectModel: (OpenRouterModelItem) -> Unit,
     onSelectCustomModel: (String) -> Unit,
     onGenerateMedia: (prompt: String, modelId: String, isVideo: Boolean) -> Unit,
-    cacheStatusText: String = "⚡ Кэш: 452 модели (0 мс) • openrouter_models_cache.json"
+    cacheStatusText: String = "Кэш синхронизирован • openrouter_models_cache.json"
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var selectedCategory by remember { mutableStateOf(OpenRouterCategory.ALL) }
@@ -1291,108 +1205,6 @@ fun OpenRouterHubSheet(
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // Compact 1-Tap Photo (PNG) & Video (MP4) Studio Card (Zero truncation + Editable Prompt)
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF171A24))
-                    .border(1.dp, Color(0xFF2B3245), RoundedCornerShape(12.dp))
-                    .padding(horizontal = 10.dp, vertical = 7.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                val activeImageModel = models.firstOrNull {
-                    it.categories.contains(OpenRouterCategory.IMAGE_GEN) &&
-                        (it.id.contains("flux") || it.id.contains("imagen") || it.id.contains("seedream"))
-                }?.id ?: "black-forest-labs/flux.2-pro"
-                val activeVideoModel = models.firstOrNull {
-                    it.categories.contains(OpenRouterCategory.VIDEO_GEN) &&
-                        (it.id.contains("veo") || it.id.contains("sora") || it.id.contains("wan") || it.id.contains("luma"))
-                }?.id ?: "google/veo-3.1-video"
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFF0E1118))
-                        .border(1.dp, Color(0xFF252B3B), RoundedCornerShape(8.dp))
-                        .padding(horizontal = 8.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Промпт:",
-                        color = Color(0xFF93C5FD),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        softWrap = false
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    BasicTextField(
-                        value = mediaPromptDraft,
-                        onValueChange = { mediaPromptDraft = it },
-                        singleLine = true,
-                        textStyle = TextStyle(
-                            color = Color(0xFFE5E7EB),
-                            fontSize = 11.5.sp
-                        ),
-                        cursorBrush = SolidColor(Color(0xFF60A5FA)),
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0xFF0D9488))
-                            .clickable(enabled = !isGeneratingMedia) {
-                                onGenerateMedia(mediaPromptDraft, activeImageModel, false)
-                                onDismiss()
-                            }
-                            .padding(vertical = 7.dp, horizontal = 8.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Создать Фото (PNG)",
-                            color = Color.White,
-                            fontSize = 11.8.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            softWrap = false
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0xFF7C3AED))
-                            .clickable(enabled = !isGeneratingMedia) {
-                                onGenerateMedia(mediaPromptDraft, activeVideoModel, true)
-                                onDismiss()
-                            }
-                            .padding(vertical = 7.dp, horizontal = 8.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Создать Видео (MP4)",
-                            color = Color.White,
-                            fontSize = 11.8.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            softWrap = false
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
             // Category Filter Chips (clean text without icons or numbers)
             val categories = listOf(
                 OpenRouterCategory.ALL to "Новейшие",
@@ -1445,7 +1257,7 @@ fun OpenRouterHubSheet(
                 },
                 placeholder = {
                     Text(
-                        "Поиск среди ${models.size} live-моделей (gpt-6, particle, flux, veo, qwen)…",
+                        "Поиск моделей Openrouter (gpt-6, claude, gemini, flux, veo)…",
                         fontSize = 12.5.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -1610,26 +1422,6 @@ fun OpenRouterHubSheet(
                                     }
                                 }
                             }
-                            if (isImg || isVid) {
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(7.dp))
-                                        .background(if (isVid) Color(0xFF7C3AED) else Color(0xFF0D9488))
-                                        .clickable {
-                                            onGenerateMedia(mediaPromptDraft, item.id, isVid)
-                                            onDismiss()
-                                        }
-                                        .padding(horizontal = 9.dp, vertical = 4.dp)
-                                ) {
-                                    Text(
-                                        text = if (isVid) "Видео MP4" else "Фото PNG",
-                                        color = Color.White,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(6.dp))
-                            }
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(7.dp))
@@ -1656,10 +1448,12 @@ fun OpenRouterHubSheet(
 }
 
 // ---------------------------------------------------------------------------
-// Sections 11.2, 11.6 & 11.7: Decompiled Claude Android 1.261029.20
-// `CodeBackgroundTasksEntryPoint` & `BackgroundTasksDetail` (`SdkWorkflowPhase`,
-// `SdkWorkflowAgent`, `BackgroundShellOutput`, `CollapsedToolsSheetDestination`)
-// 1:1 with `media_1793512755266_4ba56ebc.jpg` and `config.ru-26102920.apk`
+// Панель фоновых задач и субагентов. Названия и общий вид навеяны
+// Claude Android 1.261029.20 (`SdkWorkflowPhase`, `SdkWorkflowAgent`,
+// `BackgroundShellOutput`, `CollapsedToolsSheetDestination`), но форма
+// ручного запуска и фиксированная пара «Исследователь/Рецензент» — это наша
+// реализация, а не воспроизведение подтверждённого сценария оригиналов.
+// См. SUBAGENTS_RECHECK_AND_FIX.md: исходный сценарий Claude ещё не установлен.
 // ---------------------------------------------------------------------------
 
 private data class SdkWorkflowAgentRow(
@@ -1716,19 +1510,44 @@ fun PhaseStatusPixelGrid(
 
 /**
  * Компактная плашка `CodeBackgroundTasksEntryPoint` прямо над капсулой ввода текста в правом углу.
- * При нажатии плавно раскрывает `BackgroundTasksDetail` прямо над полем ввода (или открывает полное окно).
+ * Отображает только реальные фоновые задачи и субагентов Antigravity без хардкода чужих скриншотов.
  */
 @Composable
 fun CodeBackgroundTasksEntryPoint(
     agents: List<SwarmAgentNode>,
     onOpenFullSheet: () -> Unit,
-    onSetLeader: (String) -> Unit,
     onDispatchSwarmTask: (String) -> Unit,
+    onCancelTask: () -> Unit = {},
+    onDispatchCodeTask: (String) -> Unit = {},
     onInsertMention: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isStreaming: Boolean = false,
+    isSwarmTaskActive: Boolean = false,
+    activeSessionTitle: String = "",
+    forceExpandedInline: Boolean = false
 ) {
-    var expandedInline by remember { mutableStateOf(false) }
-    val leader = agents.firstOrNull { it.isLeader } ?: agents.firstOrNull()
+    var expandedInline by remember { mutableStateOf(forceExpandedInline) }
+    LaunchedEffect(forceExpandedInline) {
+        expandedInline = forceExpandedInline
+    }
+    val realPixelStatuses = remember(agents, isStreaming, isSwarmTaskActive) {
+        if (agents.isEmpty()) {
+            listOf(if (isStreaming && isSwarmTaskActive) 1 else 0)
+        } else {
+            agents.map { ag ->
+                when {
+                    ag.status.contains("error", ignoreCase = true) -> 2
+                    isStreaming && isSwarmTaskActive && ag.isLeader -> 1
+                    ag.status.equals("active", ignoreCase = true) || ag.status.equals("working", ignoreCase = true) || ag.status.equals("running", ignoreCase = true) -> 1
+                    else -> 0
+                }
+            }
+        }
+    }
+    val activeCount = realPixelStatuses.count { it == 1 }
+    if (!forceExpandedInline && !isSwarmTaskActive && activeCount == 0) {
+        return
+    }
 
     Column(
         modifier = modifier
@@ -1742,7 +1561,7 @@ fun CodeBackgroundTasksEntryPoint(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 6.dp)
-                    .heightIn(max = 430.dp)
+                    .heightIn(max = 420.dp)
                     .clip(RoundedCornerShape(16.dp))
                     .background(Color(0xFF141414))
                     .border(1.dp, Color(0xFF2A2A2A), RoundedCornerShape(16.dp))
@@ -1750,13 +1569,16 @@ fun CodeBackgroundTasksEntryPoint(
             ) {
                 BackgroundTasksDetailContent(
                     agents = agents,
+                    isStreaming = isStreaming,
+                    activeSessionTitle = activeSessionTitle,
                     onClose = { expandedInline = false },
                     onExpandModal = {
                         expandedInline = false
                         onOpenFullSheet()
                     },
-                    onSetLeader = onSetLeader,
                     onDispatchSwarmTask = onDispatchSwarmTask,
+                    onCancelTask = onCancelTask,
+                    onDispatchCodeTask = onDispatchCodeTask,
                     onInsertMention = onInsertMention,
                     isCompactInline = true
                 )
@@ -1764,50 +1586,45 @@ fun CodeBackgroundTasksEntryPoint(
         }
 
         // Compact dark-monochrome pill in the bottom-right corner above ChatGptBottomInputPill
-        Row(
-            modifier = Modifier
-                .clip(RoundedCornerShape(50))
-                .background(Color(0xFF181818))
-                .border(1.dp, Color(0xFF2E2E2E), RoundedCornerShape(50))
-                .clickable { expandedInline = !expandedInline }
-                .padding(horizontal = 11.dp, vertical = 5.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
+        if (!expandedInline) {
+            Row(
                 modifier = Modifier
-                    .size(7.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF34D399))
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            PhaseStatusPixelGrid(statuses = listOf(0, 0, 1, 2, 0, 1))
-            Spacer(modifier = Modifier.width(7.dp))
-            Text(
-                text = "2 задачи выполняются • 17 агентов",
-                color = Color(0xFFE5E7EB),
-                fontSize = 11.5.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                softWrap = false
-            )
-            if (leader != null) {
+                    .clip(RoundedCornerShape(50))
+                    .background(Color(0xFF181818))
+                    .border(1.dp, Color(0xFF2E2E2E), RoundedCornerShape(50))
+                    .clickable { expandedInline = true }
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(7.dp)
+                        .clip(CircleShape)
+                        .background(if (activeCount > 0) Color(0xFF34D399) else Color(0xFF6B7280))
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                PhaseStatusPixelGrid(statuses = realPixelStatuses)
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "★ ${leader.handle}",
-                    color = Color(0xFF9CA3AF),
+                    text = if (activeCount > 0) {
+                        "$activeCount задача выполняется • ${agents.size} агентов"
+                    } else {
+                        "Фоновые задачи • ${agents.size} агентов"
+                    },
+                    color = Color(0xFFE5E7EB),
                     fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     softWrap = false
                 )
+                Spacer(modifier = Modifier.width(4.dp))
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowUp,
+                    contentDescription = "Фоновые задачи",
+                    tint = Color(0xFF9CA3AF),
+                    modifier = Modifier.size(15.dp)
+                )
             }
-            Spacer(modifier = Modifier.width(5.dp))
-            Icon(
-                imageVector = if (expandedInline) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowUp,
-                contentDescription = "Фоновые задачи",
-                tint = Color(0xFF9CA3AF),
-                modifier = Modifier.size(15.dp)
-            )
         }
     }
 }
@@ -1815,603 +1632,54 @@ fun CodeBackgroundTasksEntryPoint(
 @Composable
 private fun BackgroundTasksDetailContent(
     agents: List<SwarmAgentNode>,
+    isStreaming: Boolean = false,
+    activeSessionTitle: String = "",
     onClose: () -> Unit,
     onExpandModal: (() -> Unit)? = null,
-    onSetLeader: (String) -> Unit,
     onDispatchSwarmTask: (String) -> Unit,
+    onCancelTask: () -> Unit = {},
+    onDispatchCodeTask: (String) -> Unit = {},
     onInsertMention: (String) -> Unit,
     isCompactInline: Boolean = false
 ) {
-    val leader = agents.firstOrNull { it.isLeader } ?: agents.firstOrNull()
-    var workflowRunning by remember { mutableStateOf(true) }
-    var expandedPhaseIds by remember { mutableStateOf(setOf("phase_threat_model")) }
-    var selectedAgentRowId by remember { mutableStateOf<String?>(null) }
-    var swarmTaskInput by remember { mutableStateOf("") }
-
-    val phases = remember(agents, leader) {
-        val dynamicRows = agents.mapIndexed { idx, ag ->
-            SdkWorkflowAgentRow(
-                id = ag.id,
-                name = if (ag.isLeader) "${ag.handle.removePrefix("@")} ★" else ag.handle.removePrefix("@"),
-                tokens = "${38 + idx * 14}.${idx + 2}k",
-                tools = "${8 + idx * 5}",
-                time = "${1 + idx}m ${12 + idx * 7}s",
-                isError = false,
-                isRunning = ag.isLeader || idx == 1,
-                isLeader = ag.isLeader,
-                toolCallsLog = ag.stepLogs.ifEmpty {
-                    listOf("view_file(MainScreen.kt)", "grep_search(BackgroundTasksDetail)", "run_command(testDebugUnitTest)")
-                },
-                shellOutput = "$ ./gradlew testDebugUnitTest -> BUILD SUCCESSFUL (18 tests passed)"
-            )
+    val running = agents.any { it.isInProgress }
+    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("Фоновые задачи", color = Color.White, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            TextButton(onClick = onClose) { Text("Закрыть") }
         }
-        val threatModelRows = listOf(
-            SdkWorkflowAgentRow(
-                id = leader?.id ?: "lead-orchestrator",
-                name = "lead:orchestrator ★",
-                tokens = "184.2k",
-                tools = "28",
-                time = "12m 10s",
-                isLeader = true,
-                isRunning = true,
-                toolCallsLog = leader?.stepLogs ?: listOf(
-                    "Инициализация протокола rigorous-programming-reasoner (Stages A–I)",
-                    "Координация 17 субагентов и проверка инвариантов"
-                ),
-                shellOutput = "[WakeLock] AntigravityAgentSessionService: PARTIAL_WAKE_LOCK active"
-            ),
-            SdkWorkflowAgentRow(
-                id = "inventory",
-                name = "inventory",
-                tokens = "54.0k",
-                tools = "8",
-                time = "2m 15s",
-                toolCallsLog = listOf("find_by_name(app/src/main)", "list_dir(pc-bridge)"),
-                shellOutput = "Indexed 42 source files and 452 OpenRouter cached models"
-            ),
-            SdkWorkflowAgentRow(
-                id = "web-client",
-                name = "model:web-client",
-                tokens = "44.9k",
-                tools = "9",
-                time = "1m 59s",
-                toolCallsLog = listOf("view_file(AntigravityBackendClient.kt)", "verify_sse_recovery(/api/chat/turn-status)"),
-                shellOutput = "SSE mid-turn disconnect recovery verified (0 lost turns)"
-            ),
-            SdkWorkflowAgentRow(
-                id = "web-templates",
-                name = "model:web-templates",
-                tokens = "55.6k",
-                tools = "13",
-                time = "2m 56s",
-                toolCallsLog = listOf("view_file(Round5PanelsAndSheets.kt)", "check_layout_bounds()"),
-                shellOutput = "UI bounds verified: 0 overlaps across all sheets"
-            ),
-            SdkWorkflowAgentRow(
-                id = "static-client-assets",
-                name = "model:static-client-assets",
-                tokens = "43.2k",
-                tools = "7",
-                time = "2m 18s",
-                toolCallsLog = listOf("read_cache(openrouter_models_cache.json)", "verify_0ms_startup()"),
-                shellOutput = "Loaded 452 models from openrouter_models_cache.json in 0 ms"
-            ),
-            SdkWorkflowAgentRow(
-                id = "dns-relay-server",
-                name = "model:dns-relay-server",
-                tokens = "66.8k",
-                tools = "14",
-                time = "2m 45s",
-                toolCallsLog = listOf("check_gdrive_sync(/api/gdrive/files)", "gdrive_create_file()"),
-                shellOutput = "Synced /AntigravityCloud for Gemini & OpenRouter"
-            ),
-            SdkWorkflowAgentRow(
-                id = "transport-layer",
-                name = "model:transport-layer",
-                tokens = "Error",
-                tools = "—",
-                time = "—",
-                isError = true,
-                toolCallsLog = listOf("probe_legacy_endpoint() -> HTTP 502 Bad Gateway (auto-recovered via fallback)"),
-                shellOutput = "Fallback route switched to active tunnel"
-            ),
-            SdkWorkflowAgentRow(
-                id = "protocol-codec",
-                name = "model:protocol-codec",
-                tokens = "38.6k",
-                tools = "6",
-                time = "1m 23s",
-                toolCallsLog = listOf("encode_h264_mp4(avc1.42E01E)", "verify_png_header()"),
-                shellOutput = "MP4 H.264 Baseline container verified"
-            ),
-            SdkWorkflowAgentRow(
-                id = "crypto-utils",
-                name = "model:crypto-utils",
-                tokens = "34.1k",
-                tools = "4",
-                time = "1m 13s",
-                toolCallsLog = listOf("verify_permissions(AiPermissionsConfig)"),
-                shellOutput = "Sandbox permissions enforced"
-            )
-        )
-        listOf(
-            SdkWorkflowPhaseItem(
-                id = "phase_inventory",
-                title = "Inventory",
-                summaryRight = "1 agent • 54.0k tokens",
-                pixelStatuses = listOf(0),
-                agents = dynamicRows.take(2)
-            ),
-            SdkWorkflowPhaseItem(
-                id = "phase_threat_model",
-                title = "Threat model",
-                summaryRight = "11 agents • ",
-                errorBadge = "3 errors",
-                pixelStatuses = listOf(0, 0, 0, 2, 0, 0, 2, 2, 0, 0, 0),
-                agents = threatModelRows
-            ),
-            SdkWorkflowPhaseItem(
-                id = "phase_research",
-                title = "Research",
-                summaryRight = "5 agents • 2.4M tokens",
-                pixelStatuses = listOf(0, 0, 1, 1, 0),
-                agents = dynamicRows
-            )
-        )
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        // Header: Background tasks (Фоновые задачи)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Background tasks",
-                    color = Color.White,
-                    fontSize = if (isCompactInline) 16.sp else 18.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "Фоновые задачи • Работа продолжается в фоновом режиме, даже когда вы закрываете приложение.",
-                    color = Color(0xFF9CA3AF),
-                    fontSize = 11.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            if (onExpandModal != null) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFF222222))
-                        .border(1.dp, Color(0xFF333333), RoundedCornerShape(8.dp))
-                        .clickable { onExpandModal() }
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Text(
-                        text = "⤢ Окно",
-                        color = Color(0xFFD1D5DB),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-                Spacer(modifier = Modifier.width(6.dp))
-            }
-            IconButton(onClick = onClose, modifier = Modifier.size(28.dp)) {
-                Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = Color(0xFF9CA3AF))
-            }
-        }
-
-        // Section: Running (Выполняющиеся)
-        Text(
-            text = if (workflowRunning) "Running (Выполняющиеся)" else "Completed (Завершённые)",
-            color = Color(0xFF9CA3AF),
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium
-        )
-
-        // Active Workflow Card (1:1 with media_1793512755266_4ba56ebc.jpg)
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xFF1C1C1C))
-                .border(1.dp, Color(0xFF2A2A2A), RoundedCornerShape(12.dp))
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "claude-security:scan",
-                    color = Color.White,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                // Red/Dark square stop button [⏹]
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .clip(RoundedCornerShape(7.dp))
-                        .background(Color(0xFF3A1D22))
-                        .border(1.dp, Color(0xFF6E2C35), RoundedCornerShape(7.dp))
-                        .clickable { workflowRunning = !workflowRunning },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(Color(0xFFE05263))
-                    )
-                }
-            }
-            Text(
-                text = "Workflow 1h 17m 47s (Рабочий процесс 40m 32s)",
-                color = Color(0xFF9CA3AF),
-                fontSize = 12.sp
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "17 agents   2.8M tokens",
-                    color = Color(0xFF9CA3AF),
-                    fontSize = 12.sp,
-                    fontFamily = FontFamily.Monospace
-                )
-                Text(
-                    text = "Leader: ${leader?.handle ?: "@lead-orchestrator"} ★",
-                    color = Color(0xFFD1D5DB),
-                    fontSize = 11.5.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-        }
-
-        // Section: Phases (Этапы)
-        Text(
-            text = "Phases (Этапы)",
-            color = Color(0xFF9CA3AF),
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium
-        )
-
-        phases.forEach { phase ->
-            val isPhaseExpanded = expandedPhaseIds.contains(phase.id)
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF1C1C1C))
-                    .border(1.dp, Color(0xFF2A2A2A), RoundedCornerShape(12.dp))
-                    .padding(12.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            expandedPhaseIds = if (isPhaseExpanded) {
-                                expandedPhaseIds - phase.id
-                            } else {
-                                expandedPhaseIds + phase.id
-                            }
-                        },
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = phase.title,
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = if (isPhaseExpanded) "⌄" else "›",
-                                color = Color(0xFF9CA3AF),
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+        Text("Задачи текущего разговора. Исполнитель получает отдельное задание от ведущей модели; результаты возвращаются в переписку.",
+            color = Color(0xFF9E9E9E), fontSize = 13.sp)
+        if (agents.isEmpty()) Text("Задачи ещё не запускались", color = Color.Gray)
+        agents.forEach { agent ->
+            var expanded by remember(agent.id) { mutableStateOf(false) }
+            Surface(color = Color(0xFF222222), shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(agent.name, color = Color.White, fontWeight = FontWeight.SemiBold)
+                    Text(if (agent.isSettling && agent.status in setOf("failed", "cancelled")) "Завершение работы и сбор изменений"
+                        else when (agent.status) {
+                        "queued" -> "В очереди"; "running" -> "Выполняется"; "completed" -> "Завершено"
+                        "failed" -> "Ошибка"; "cancelled" -> "Отменено"; else -> agent.status
+                    } + " • " + agent.model, color = Color(0xFF9E9E9E), fontSize = 12.sp)
+                    Text(agent.currentTask, color = Color(0xFFD0D0D0), maxLines = 3, overflow = TextOverflow.Ellipsis)
+                    if (agent.changeReview.isNotBlank()) {
+                        var showChanges by remember(agent.id) { mutableStateOf(false) }
+                        TextButton(onClick = { showChanges = !showChanges }) {
+                            Text(if (showChanges) "Скрыть изменения" else "Просмотреть изменения")
                         }
-                        // 2D mini-square pixel grid right under phase title (1:1 with media_1793512755266_4ba56ebc.jpg)
-                        PhaseStatusPixelGrid(statuses = phase.pixelStatuses)
+                        if (showChanges) CodeArtifactViewer(
+                            code = agent.changeReview, language = "Изменения · ${agent.name}",
+                            fileName = "changes.txt", onDismiss = { showChanges = false }, onSave = null)
                     }
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = phase.summaryRight,
-                            color = Color(0xFF9CA3AF),
-                            fontSize = 12.sp
-                        )
-                        if (phase.errorBadge.isNotBlank()) {
-                            Text(
-                                text = phase.errorBadge,
-                                color = Color(0xFFE05263),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                text = " • 350.8k tokens",
-                                color = Color(0xFF9CA3AF),
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
-                }
-
-                AnimatedVisibility(visible = isPhaseExpanded) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        // 4-Column Table Header: Agent | Tokens | Tools | Time
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Agent",
-                                color = Color(0xFF9CA3AF),
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.weight(1.9f)
-                            )
-                            Text(
-                                text = "Tokens",
-                                color = Color(0xFF9CA3AF),
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.weight(0.85f)
-                            )
-                            Text(
-                                text = "Tools",
-                                color = Color(0xFF9CA3AF),
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.weight(0.65f)
-                            )
-                            Text(
-                                text = "Time",
-                                color = Color(0xFF9CA3AF),
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.weight(0.85f)
-                            )
-                        }
-
-                        HorizontalDivider(color = Color(0xFF2A2A2A))
-
-                        phase.agents.forEach { row ->
-                            val isRowSelected = selectedAgentRowId == "${phase.id}_${row.id}"
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(if (isRowSelected) Color(0xFF242424) else Color.Transparent)
-                                    .clickable {
-                                        selectedAgentRowId = if (isRowSelected) null else "${phase.id}_${row.id}"
-                                    }
-                                    .padding(vertical = 4.dp, horizontal = 2.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = row.name,
-                                        color = if (row.isLeader) Color.White else Color(0xFFD1D5DB),
-                                        fontSize = 12.2.sp,
-                                        fontWeight = if (row.isLeader) FontWeight.Bold else FontWeight.Normal,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.weight(1.9f)
-                                    )
-                                    Text(
-                                        text = row.tokens,
-                                        color = if (row.isError) Color(0xFFE05263) else Color(0xFFD1D5DB),
-                                        fontSize = 12.sp,
-                                        fontFamily = FontFamily.Monospace,
-                                        fontWeight = if (row.isError) FontWeight.Bold else FontWeight.Normal,
-                                        maxLines = 1,
-                                        modifier = Modifier.weight(0.85f)
-                                    )
-                                    Text(
-                                        text = row.tools,
-                                        color = Color(0xFF9CA3AF),
-                                        fontSize = 12.sp,
-                                        fontFamily = FontFamily.Monospace,
-                                        maxLines = 1,
-                                        modifier = Modifier.weight(0.65f)
-                                    )
-                                    Text(
-                                        text = row.time,
-                                        color = Color(0xFF9CA3AF),
-                                        fontSize = 12.sp,
-                                        fontFamily = FontFamily.Monospace,
-                                        maxLines = 1,
-                                        modifier = Modifier.weight(0.85f)
-                                    )
-                                }
-
-                                // Expandable CollapsedToolsSheetDestination & BackgroundShellOutput on row tap
-                                AnimatedVisibility(visible = isRowSelected) {
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(top = 6.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(Color(0xFF141414))
-                                            .border(1.dp, Color(0xFF2E2E2E), RoundedCornerShape(8.dp))
-                                            .padding(8.dp),
-                                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        Text(
-                                            text = "Вызовы инструментов (${row.toolCallsLog.size}):",
-                                            color = Color(0xFF9CA3AF),
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                        row.toolCallsLog.forEach { callLine ->
-                                            Text(
-                                                text = "› $callLine",
-                                                color = Color(0xFFD1D5DB),
-                                                fontSize = 11.sp,
-                                                fontFamily = FontFamily.Monospace
-                                            )
-                                        }
-                                        if (row.shellOutput.isNotBlank()) {
-                                            Text(
-                                                text = "Фоновая оболочка: ${row.shellOutput}",
-                                                color = Color(0xFF34D399),
-                                                fontSize = 10.5.sp,
-                                                fontFamily = FontFamily.Monospace
-                                            )
-                                        }
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(top = 4.dp),
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                        ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(6.dp))
-                                                    .background(Color(0xFF262626))
-                                                    .border(1.dp, Color(0xFF3A3A3A), RoundedCornerShape(6.dp))
-                                                    .clickable { onSetLeader(row.id) }
-                                                    .padding(horizontal = 8.dp, vertical = 4.dp)
-                                            ) {
-                                                Text(
-                                                    text = "★ Назначить лидером",
-                                                    color = Color.White,
-                                                    fontSize = 10.5.sp,
-                                                    fontWeight = FontWeight.SemiBold
-                                                )
-                                            }
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(6.dp))
-                                                    .background(Color(0xFF262626))
-                                                    .clickable {
-                                                        onInsertMention("@${row.name.substringBefore(" ")} ")
-                                                        onClose()
-                                                    }
-                                                    .padding(horizontal = 8.dp, vertical = 4.dp)
-                                            ) {
-                                                Text(
-                                                    text = "@ Упомянуть в чате",
-                                                    color = Color(0xFF93C5FD),
-                                                    fontSize = 10.5.sp,
-                                                    fontWeight = FontWeight.SemiBold
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                    if (agent.stepLogs.isNotEmpty()) {
+                        TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Скрыть результат" else "Показать результат") }
+                        if (expanded) ChatGptMarkdownText(agent.stepLogs.joinToString("\n"))
                     }
                 }
             }
         }
+        if (running) Button(onClick = onCancelTask) { Text("Остановить работу") }
 
-        // Active Background Shells (`BackgroundShellOutput` / `Фоновая оболочка`)
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xFF1C1C1C))
-                .border(1.dp, Color(0xFF2A2A2A), RoundedCornerShape(12.dp))
-                .padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Text(
-                text = "Фоновая оболочка (BackgroundShellOutput • 2 процесса)",
-                color = Color(0xFF9CA3AF),
-                fontSize = 11.5.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                text = "● AntigravityAgentSessionService (PARTIAL_WAKE_LOCK) — Running",
-                color = Color(0xFF34D399),
-                fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace
-            )
-            Text(
-                text = "● PC Bridge SSE + Google Drive & OpenRouter Cache (452) — Running",
-                color = Color(0xFFD1D5DB),
-                fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace
-            )
-        }
-
-        if (!isCompactInline) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedTextField(
-                    value = swarmTaskInput,
-                    onValueChange = { swarmTaskInput = it },
-                    placeholder = {
-                        Text(
-                            "Поручить фоновую задачу рою (@lead-orchestrator)…",
-                            fontSize = 12.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = Color(0xFF52525B),
-                        unfocusedBorderColor = Color(0xFF2A2A2A)
-                    ),
-                    modifier = Modifier.weight(1f)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xFF262626))
-                        .border(1.dp, Color(0xFF3F3F46), RoundedCornerShape(10.dp))
-                        .clickable {
-                            if (swarmTaskInput.isNotBlank()) {
-                                onDispatchSwarmTask(swarmTaskInput)
-                                onClose()
-                            }
-                        }
-                        .padding(horizontal = 14.dp, vertical = 14.dp)
-                ) {
-                    Icon(Icons.Default.Send, contentDescription = "Отправить", tint = Color.White, modifier = Modifier.size(18.dp))
-                }
-            }
-        }
     }
 }
 
@@ -2420,8 +1688,9 @@ private fun BackgroundTasksDetailContent(
 fun MultiAgentSwarmSheet(
     agents: List<SwarmAgentNode>,
     onDismiss: () -> Unit,
-    onSetLeader: (String) -> Unit,
     onDispatchSwarmTask: (String) -> Unit,
+    onCancelTask: () -> Unit = {},
+    onDispatchCodeTask: (String) -> Unit = {},
     onInsertMention: (String) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -2442,8 +1711,9 @@ fun MultiAgentSwarmSheet(
                 agents = agents,
                 onClose = onDismiss,
                 onExpandModal = null,
-                onSetLeader = onSetLeader,
                 onDispatchSwarmTask = onDispatchSwarmTask,
+                onCancelTask = onCancelTask,
+                    onDispatchCodeTask = onDispatchCodeTask,
                 onInsertMention = onInsertMention,
                 isCompactInline = false
             )
@@ -2476,7 +1746,6 @@ fun GoogleDriveSheet(
     var fileContentDraft by remember {
         mutableStateOf("# Архитектура Antigravity 2026 (Google Drive Cloud)\n- Двусторонняя синхронизация для Gemini 3.1/4 и всех 452 моделей OpenRouter.\n- Автоматическое сохранение артефактов и кода в /AntigravityCloud.")
     }
-    var driveFolderLinkDraft by remember { mutableStateOf("https://drive.google.com/drive/folders/antigravity-cloud-2026") }
     var expandedFileId by remember { mutableStateOf<String?>(files.firstOrNull()?.id) }
 
     ModalBottomSheet(
@@ -2499,7 +1768,7 @@ fun GoogleDriveSheet(
                 Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "Google Диск",
+                            text = "Файлы рабочего пространства",
                             color = Color.White,
                             fontSize = 16.5.sp,
                             fontWeight = FontWeight.Bold,
@@ -2508,7 +1777,7 @@ fun GoogleDriveSheet(
                         )
                     }
                     Text(
-                        text = "Выполнен поиск в Google Drive • Папка ${status.rootFolder} (${files.size} файлов)",
+                        text = "Локальное хранилище • ${files.size} файлов • Google Диск не подключён",
                         color = Color(0xFF34D399),
                         fontSize = 11.2.sp,
                         maxLines = 1,
@@ -2529,56 +1798,11 @@ fun GoogleDriveSheet(
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // Official Claude ProjectFormPage$ProjectDriveLink folder binding row
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Color(0xFF181B24))
-                    .border(1.dp, Color(0xFF282E3D), RoundedCornerShape(10.dp))
-                    .padding(horizontal = 10.dp, vertical = 7.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Скопируйте ссылку на папку в Google Диске и вставьте ее сюда.",
-                        color = Color(0xFF9CA3AF),
-                        fontSize = 10.5.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    BasicTextField(
-                        value = driveFolderLinkDraft,
-                        onValueChange = { driveFolderLinkDraft = it },
-                        singleLine = true,
-                        textStyle = TextStyle(color = Color(0xFF93C5FD), fontSize = 11.5.sp, fontFamily = FontFamily.Monospace),
-                        cursorBrush = SolidColor(Color(0xFF60A5FA)),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(7.dp))
-                        .background(Color(0xFF26191E))
-                        .border(1.dp, Color(0xFF4C252E), RoundedCornerShape(7.dp))
-                        .clickable {
-                            driveFolderLinkDraft = "https://drive.google.com/drive/folders/antigravity-cloud-2026"
-                            Toast.makeText(context, "Привязка папки Google Диска обновлена", Toast.LENGTH_SHORT).show()
-                        }
-                        .padding(horizontal = 8.dp, vertical = 5.dp)
-                ) {
-                    Text(
-                        text = "Убрать папку Google Диска",
-                        color = Color(0xFFF87171),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        softWrap = false
-                    )
-                }
-            }
-
+            Text(
+                text = "Файлы сохраняются в рабочем пространстве. Подключение Google Диска не настроено.",
+                color = Color(0xFF9CA3AF),
+                fontSize = 12.sp
+            )
             Spacer(modifier = Modifier.height(8.dp))
 
             // Create / Edit File on Google Drive via Gemini OR OpenRouter
@@ -2685,7 +1909,7 @@ fun GoogleDriveSheet(
                             .background(Color(0xFF2563EB))
                             .clickable {
                                 onCreateFile(fileNameDraft, fileContentDraft, "", selectedEngine)
-                                Toast.makeText(context, "Файл сохранён на Google Диск (/AntigravityCloud)", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Запрос на сохранение отправлен", Toast.LENGTH_SHORT).show()
                             }
                             .padding(horizontal = 12.dp, vertical = 8.dp)
                     ) {
@@ -2704,7 +1928,7 @@ fun GoogleDriveSheet(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Облачные файлы в Google Диске (/AntigravityCloud):",
+                text = "Файлы рабочего пространства (/AntigravityCloud):",
                 color = Color(0xFF9CA3AF),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold
@@ -3268,16 +2492,16 @@ fun AndroidCliAndSandboxSheet(
 
                 2 -> {
                     // Tab 2: RUNTIME SANDBOX PREVIEW (Skia-composited Orbital Physics Simulator + Self-Test Console)
-                    var orbitPhase by remember { mutableStateOf(0.85f) }
+                    var orbitPhase by remember { mutableFloatStateOf(0.85f) }
                     var boostLevel by remember { mutableIntStateOf(1) }
                     var sandboxLogs by remember {
                         mutableStateOf(
                             listOf(
                                 "[Sandbox] Инициализация виртуальной среды Antigravity WebView...",
-                                "[Sandbox] TEST PASS [math_integrity] — матрица орбиты (208)",
-                                "[Sandbox] TEST PASS [dom_canvas_2d] — 2D конвейер (true)",
-                                "[Sandbox] TEST PASS [sandbox_isolation] — изолированный контекст (true)",
-                                "[Sandbox] 3/3 проверок пройдено успешно (0 ошибок) • 60 FPS"
+                                "[Sandbox] Демонстрация анимации — результаты тестов здесь не измеряются",
+
+
+                                "[Sandbox] Для проверки проекта запустите тесты во вкладке CLI"
                             )
                         )
                     }
@@ -3427,7 +2651,7 @@ fun AndroidCliAndSandboxSheet(
                                     softWrap = false
                                 )
                                 Text(
-                                    text = "FPS: 60 • STATUS: PASS",
+                                    text = "Предпросмотр анимации",
                                     color = Color(0xFF4ADE80),
                                     fontSize = 10.sp,
                                     fontFamily = FontFamily.Monospace,

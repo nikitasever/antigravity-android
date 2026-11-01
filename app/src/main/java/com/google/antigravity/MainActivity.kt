@@ -16,6 +16,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
@@ -33,15 +36,15 @@ class MainActivity : ComponentActivity() {
     }
 
     private val viewModel: AntigravityViewModel by viewModels()
+    private var voiceLaunchRequest by mutableIntStateOf(0)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
         Thread { publishDynamicAppShortcuts() }.start()
+        if (isVoiceLaunchIntent(intent)) voiceLaunchRequest++
         handleIncomingIntent(intent, isInitialCreate = true)
-
-        val autoStartVoice = isVoiceLaunchIntent(intent)
 
         setContent {
             val colorScheme = darkColorScheme(
@@ -59,7 +62,9 @@ class MainActivity : ComponentActivity() {
             val permissionLauncher = rememberLauncherForActivityResult(
                 contract = ActivityResultContracts.RequestMultiplePermissions()
             ) { _ ->
-                viewModel.startLiveVoiceCall(expandOverlay = true)
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                    viewModel.startLiveVoiceCall(expandOverlay = true)
+                }
             }
 
             val requestVoiceAndStart: () -> Unit = {
@@ -87,8 +92,8 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            LaunchedEffect(autoStartVoice) {
-                if (autoStartVoice) {
+            LaunchedEffect(voiceLaunchRequest) {
+                if (voiceLaunchRequest > 0) {
                     requestVoiceAndStart()
                 }
             }
@@ -117,10 +122,8 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        if (isVoiceLaunchIntent(intent)) voiceLaunchRequest++
         handleIncomingIntent(intent, isInitialCreate = false)
-        if (isVoiceLaunchIntent(intent)) {
-            viewModel.startLiveVoiceCall(expandOverlay = true)
-        }
     }
 
     private fun isVoiceLaunchIntent(intent: Intent?): Boolean {
@@ -130,20 +133,31 @@ class MainActivity : ComponentActivity() {
             action == ACTION_SHORTCUT_VOICE
     }
 
+    /** Отчёт об использовании ярлыка (ранжирование ярлыков Android). */
+    private fun reportShortcutUsedIfAvailable(shortcutId: String) {
+        try {
+            getSystemService(ShortcutManager::class.java)?.reportShortcutUsed(shortcutId)
+        } catch (_: Throwable) {
+        }
+    }
+
     private fun handleIncomingIntent(intent: Intent?, @Suppress("UNUSED_PARAMETER") isInitialCreate: Boolean) {
         if (intent == null) return
         when (intent.action) {
             ACTION_SHORTCUT_NEW_CHAT -> {
                 intent.action = Intent.ACTION_MAIN
+                reportShortcutUsedIfAvailable("shortcut_new_chat")
                 viewModel.selectDrawerSection(DrawerSection.CHAT)
                 viewModel.createNewRemoteSessionOnPc()
             }
             ACTION_SHORTCUT_PHONE_SEARCH -> {
                 intent.action = Intent.ACTION_MAIN
+                reportShortcutUsedIfAvailable("shortcut_phone_search")
                 viewModel.selectDrawerSection(DrawerSection.PHONE_EXPLORER)
             }
             ACTION_SHORTCUT_VOICE -> {
                 intent.action = Intent.ACTION_MAIN
+                reportShortcutUsedIfAvailable("shortcut_voice_mode")
                 viewModel.selectDrawerSection(DrawerSection.CHAT)
             }
             Intent.ACTION_SEND -> {
@@ -187,6 +201,9 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        // Test-only controls must never be reachable through exported release intents.
+        if (!BuildConfig.DEBUG) return
+
         if (intent.hasExtra("auto_sign_in")) {
             val signIn = intent.getBooleanExtra("auto_sign_in", true)
             intent.removeExtra("auto_sign_in")
@@ -223,6 +240,12 @@ class MainActivity : ComponentActivity() {
             intent.removeExtra("select_drawer_section")
             runCatching { DrawerSection.valueOf(drawerSec.trim().uppercase()) }
                 .onSuccess { viewModel.selectDrawerSection(it) }
+        }
+
+        val openSheet = intent.getStringExtra("open_sheet")
+        if (!openSheet.isNullOrBlank()) {
+            intent.removeExtra("open_sheet")
+            viewModel.setDebugSheet(openSheet.trim())
         }
 
         val connectSessionId = intent.getStringExtra("connect_session_id")
@@ -318,7 +341,6 @@ class MainActivity : ComponentActivity() {
      * «Новый чат», «Голосовой режим», «Поиск по телефону».
      */
     private fun publishDynamicAppShortcuts() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N_MR1) return
         try {
             val shortcutManager = getSystemService(ShortcutManager::class.java) ?: return
             val icon = Icon.createWithResource(this, R.mipmap.ic_launcher)

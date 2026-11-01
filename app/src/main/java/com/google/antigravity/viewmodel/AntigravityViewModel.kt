@@ -17,6 +17,7 @@ import com.google.antigravity.model.AndroidCliCommandResult
 import com.google.antigravity.model.AntigravityModelOption
 import com.google.antigravity.model.AntigravitySettings
 import com.google.antigravity.model.ApprovalDecision
+import com.google.antigravity.model.ArtifactLibrary
 import com.google.antigravity.model.ArtifactDocument
 import com.google.antigravity.model.ArtifactType
 import com.google.antigravity.model.AttachedFileItem
@@ -29,11 +30,24 @@ import com.google.antigravity.model.GoogleAccountProfile
 import com.google.antigravity.model.GoogleDriveFileItem
 import com.google.antigravity.model.GoogleDriveStatus
 import com.google.antigravity.model.InstalledPluginItem
+import com.google.antigravity.model.readAttachmentBytes
+import com.google.antigravity.model.mergeRemoteChatHistory
+import com.google.antigravity.model.chatHistoryForModel
+import com.google.antigravity.model.ChatLibrary
+import com.google.antigravity.model.ChatLibraryPreferences
+import com.google.antigravity.model.ChatSessionStore
+import com.google.antigravity.model.SavedChat
+import com.google.antigravity.model.prepareChatBranch
+import com.google.antigravity.model.prepareChatEdit
+import com.google.antigravity.model.prepareChatRetry
 import com.google.antigravity.model.MessageRole
 import com.google.antigravity.model.OpenRouterCategory
 import com.google.antigravity.model.OpenRouterModelItem
 import com.google.antigravity.model.PcMcpServerItem
 import com.google.antigravity.model.PcSkillItem
+import com.google.antigravity.model.ProjectDocument
+import com.google.antigravity.model.ProjectWorkspace
+import com.google.antigravity.model.ProjectWorkspaces
 import com.google.antigravity.model.RemoteEnvFilter
 import com.google.antigravity.model.RemoteSessionItem
 import com.google.antigravity.model.ScratchProjectItem
@@ -54,11 +68,22 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.SharingStarted
+import com.google.antigravity.model.QueuedFollowUp
+import com.google.antigravity.model.FollowUpQueue
+import com.google.antigravity.model.ToolCallStatus
+import com.google.antigravity.model.forkMessageVersion
+import com.google.antigravity.model.selectMessageVersion
+import com.google.antigravity.model.conversationExecutionId
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -73,19 +98,93 @@ import java.util.Locale
 class AntigravityViewModel(application: Application) : AndroidViewModel(application) {
 
     companion object {
-        private const val CURRENT_DEFAULT_BRIDGE_URL = "https://2d0102ca0a9fe83d-79-137-206-221.serveousercontent.com"
-        private const val BRIDGE_URL_VERSION = 20
+        private const val CURRENT_DEFAULT_BRIDGE_URL = "https://4707a629450f018e-79-137-206-221.serveousercontent.com"
+        private const val BRIDGE_URL_VERSION = 29
     }
 
     private val prefs = application.getSharedPreferences("antigravity_prefs_v4", Context.MODE_PRIVATE)
+    private val _queuedFollowUps = MutableStateFlow(FollowUpQueue.decode(prefs.getString("queued_followups", "[]") ?: "[]"))
+    val queuedFollowUps: StateFlow<List<QueuedFollowUp>> = _queuedFollowUps.asStateFlow()
+
+    private fun saveFollowUpQueue() {
+        prefs.edit().putString("queued_followups", FollowUpQueue.encode(_queuedFollowUps.value)).apply()
+    }
+
+    fun removeQueuedFollowUp(id: String) {
+        _queuedFollowUps.update { list -> list.filterNot { it.id == id } }
+        saveFollowUpQueue()
+    }
+
+    fun sendQueuedFollowUp(id: String) {
+        if (activeGenerationJob?.isActive == true) return
+        val next = _queuedFollowUps.value.firstOrNull { it.id == id } ?: return
+        if (next.conversationId != _settings.value.activeConversationId || next.target != _settings.value.executionTarget) return
+        if (next.executionContextId.isNotBlank() && next.executionContextId != conversationExecutionId(next.conversationId, _messages.value)) return
+        if (_messages.value.any { it.id == next.id }) { removeQueuedFollowUp(id); return }
+        sendUserPrompt(next.prompt, queuedTurn = next)
+    }
+    private val _chatLibraryPreferences = MutableStateFlow(ChatLibrary.decode(prefs.getString("chat_library_preferences", "{}").orEmpty()))
+    val chatLibraryPreferences: StateFlow<Map<String, ChatLibraryPreferences>> = _chatLibraryPreferences.asStateFlow()
+
+    fun updateChatLibraryPreferences(id: String, preference: ChatLibraryPreferences) {
+        if (id.isBlank()) return
+        _chatLibraryPreferences.update { map ->
+            val existing = map[id]
+            val contentChanged = existing == null || existing.title != preference.title ||
+                existing.pinned != preference.pinned || existing.archived != preference.archived
+            val updated = preference.copy(
+                // Метка слияния меняется только при изменении названия/закрепления/архива,
+                // чтобы простое открытие чата не перетирало правки с другой стороны.
+                updatedAtMs = if (contentChanged) System.currentTimeMillis()
+                    else maxOf(existing?.updatedAtMs ?: 0L, preference.updatedAtMs),
+                lastOpenedAt = maxOf(existing?.lastOpenedAt ?: 0L, preference.lastOpenedAt)
+            )
+            map + (id to updated)
+        }
+        prefs.edit().putString("chat_library_preferences", ChatLibrary.encode(_chatLibraryPreferences.value)).apply()
+        if (id == _settings.value.activeConversationId && preference.title.isNotBlank()) {
+            _settings.update { it.copy(activeSessionTitle = preference.title) }
+            cacheCurrentSession()
+        }
+        scheduleSyncPush()
+    }
+
+    fun searchChatHistory(query: String): Set<String> = ChatLibrary.search(
+        sessionHistoryCache.toMap() + (_settings.value.activeConversationId to _messages.value), query
+    )
+
+    private val historyStore = ChatSessionStore(File(application.filesDir, "chat_history"))
+    private val historyWriter = java.util.concurrent.Executors.newSingleThreadExecutor()
     val phoneController = PhoneResourceController(application.applicationContext)
     val backendClient = AntigravityBackendClient(phoneController)
 
     // Независимый Application-scope для непрерывной фоновой работы агента при сворачивании окна (Section 5)
-    private val agentExecutionScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val agentExecutionScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     // Кэш реальных сообщений всех удалённых сессий ПК
-    private val sessionHistoryCache = mutableMapOf<String, List<ChatMessage>>()
+    private val _attachmentError = MutableStateFlow<String?>(null)
+    val attachmentError: StateFlow<String?> = _attachmentError.asStateFlow()
+
+    private val _composerDraft = MutableStateFlow("")
+    val composerDraft: StateFlow<String> = _composerDraft.asStateFlow()
+
+    /** Временный чат активен: переписка не сохраняется и не синхронизируется. */
+    private val temporaryChatIds = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    private val _temporaryChatActive = MutableStateFlow(false)
+    val temporaryChatActive: StateFlow<Boolean> = _temporaryChatActive.asStateFlow()
+    private val attachmentDrafts = java.util.concurrent.ConcurrentHashMap<String, List<AttachedFileItem>>()
+
+    fun setComposerDraft(text: String, sessionId: String = _settings.value.activeConversationId) {
+        if (sessionId == _settings.value.activeConversationId) _composerDraft.value = text
+        if (sessionId !in temporaryChatIds) prefs.edit().putString("draft:" + sessionId, text).apply()
+    }
+
+    private fun restoreComposerDraft(sessionId: String) {
+        _composerDraft.value = prefs.getString("draft:$sessionId", "").orEmpty()
+        _pendingAttachments.value = attachmentDrafts[sessionId].orEmpty()
+    }
+
+    private val sessionHistoryCache = java.util.concurrent.ConcurrentHashMap<String, List<ChatMessage>>()
 
     val voiceEngine = RealtimeVoiceEngine(
         context = application.applicationContext,
@@ -112,6 +211,9 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
 
     private val _settings = MutableStateFlow(
         AntigravitySettings(
+            activeConversationId = prefs.getString("active_conversation_id", "").orEmpty(),
+            activeSessionTitle = prefs.getString("active_session_title", "").orEmpty(),
+            executionTarget = runCatching { AgentExecutionTarget.valueOf(prefs.getString("active_execution_target", "PC_REMOTE_SESSION").orEmpty()) }.getOrDefault(AgentExecutionTarget.PC_REMOTE_SESSION),
             selectedModelId = prefs.getString("selected_model_id", "gemini-4-argon-high") ?: "gemini-4-argon-high",
             voiceProvider = runCatching {
                 VoiceProvider.valueOf(prefs.getString("voice_provider", VoiceProvider.NEURAL_BRIDGE.name) ?: VoiceProvider.NEURAL_BRIDGE.name)
@@ -147,10 +249,11 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
 
     private val _pcBridgeStatus = MutableStateFlow(
         AntigravityBackendClient.PcBridgeStatus(
-            connected = true,
+            connected = false,
             instanceName = "Рабочий компьютер",
             hostname = "ПК",
-            workspace = "C:\\Users\\st811210\\.gemini\\antigravity\\scratch\\antigravity-android"
+            workspace = "C:\\Users\\st811210\\.gemini\\antigravity\\scratch\\antigravity-android",
+            checked = false
         )
     )
     val pcBridgeStatus: StateFlow<AntigravityBackendClient.PcBridgeStatus> = _pcBridgeStatus.asStateFlow()
@@ -161,8 +264,171 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     private val _scratchProjects = MutableStateFlow<List<ScratchProjectItem>>(emptyList())
     val scratchProjects: StateFlow<List<ScratchProjectItem>> = _scratchProjects.asStateFlow()
 
-    private val _artifactsLibrary = MutableStateFlow<List<ArtifactDocument>>(emptyList())
+    private val _artifactsLibrary = MutableStateFlow(ArtifactLibrary.decode(prefs.getString("saved_artifacts", "[]").orEmpty()))
     val artifactsLibrary: StateFlow<List<ArtifactDocument>> = _artifactsLibrary.asStateFlow()
+
+    // Локальные рабочие области проектов: инструкции, документы контекста и связанные чаты.
+    private val _projectWorkspaces = MutableStateFlow(
+        ProjectWorkspaces.decode(prefs.getString("project_workspaces", "[]").orEmpty())
+    )
+    val projectWorkspaces: StateFlow<Map<String, ProjectWorkspace>> = _projectWorkspaces.asStateFlow()
+
+    private fun persistProjectWorkspaces() {
+        prefs.edit().putString("project_workspaces", ProjectWorkspaces.encode(_projectWorkspaces.value)).apply()
+        scheduleSyncPush()
+    }
+
+    // Надгробия удалений для синхронизации с ПК: id -> время удаления (мс).
+    private val _syncTombstones = MutableStateFlow(
+        runCatching {
+            val json = JSONObject(prefs.getString("sync_tombstones", "{}").orEmpty())
+            json.keys().asSequence().associateWith { json.optLong(it) }
+        }.getOrDefault(emptyMap())
+    )
+
+    private fun persistSyncTombstones() {
+        prefs.edit().putString("sync_tombstones", JSONObject().apply {
+            _syncTombstones.value.forEach { (id, at) -> put(id, at) }
+        }.toString()).apply()
+    }
+
+    private var syncPushJob: Job? = null
+    private val syncPushPending = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /** Проталкивание состояния на ПК после локальных изменений и синхронизации сессий. */
+    private fun scheduleSyncPush() {
+        syncPushPending.set(true)
+        if (syncPushJob?.isActive == true) return
+        syncPushJob = viewModelScope.launch {
+            var retryDelayMs = 1000L
+            while (syncPushPending.getAndSet(false)) {
+                if (pushSyncState()) {
+                    retryDelayMs = 1000L
+                } else {
+                    syncPushPending.set(true)
+                    delay(retryDelayMs)
+                    retryDelayMs = (retryDelayMs * 2).coerceAtMost(30000L)
+                }
+            }
+        }
+    }
+
+    private suspend fun pushSyncState(): Boolean {
+        val merged = backendClient.syncChatState(
+            pcBridgeUrl = _settings.value.pcBridgeUrl,
+            chatPrefs = _chatLibraryPreferences.value,
+            savedArtifacts = _artifactsLibrary.value,
+            deletedIds = _syncTombstones.value,
+            projectWorkspaces = _projectWorkspaces.value
+        ) ?: return false
+        adoptSyncedState(merged)
+        return true
+    }
+
+    /** Принятие объединённого состояния ПК без перетирания более новых локальных правок. */
+    private fun adoptSyncedState(remote: AntigravityBackendClient.ChatSyncState) {
+        val tombstones = HashMap(_syncTombstones.value)
+        remote.deletedIds.forEach { (id, at) -> tombstones[id] = maxOf(tombstones[id] ?: 0L, at) }
+
+        val mergedPrefs = ChatLibrary.mergeSynced(_chatLibraryPreferences.value, remote.chatPrefs)
+            .filter { (id, p) -> (tombstones[id] == null || tombstones.getValue(id) < p.updatedAtMs) }
+        val mergedArtifacts = ArtifactLibrary.mergeSynced(_artifactsLibrary.value, remote.savedArtifacts)
+            .filter { (tombstones[it.id] == null || tombstones.getValue(it.id) < it.updatedAtMs) }
+        val mergedWorkspaces = ProjectWorkspaces.mergeSynced(_projectWorkspaces.value, remote.projectWorkspaces)
+            .filter { (id, w) -> (tombstones[id] == null || tombstones.getValue(id) < w.updatedAtMs) }
+
+        // Удаления хранятся до появления более новой записи: старый offline-клиент
+        // не должен восстанавливать удалённый документ после истечения срока.
+        val liveIds = mergedPrefs.keys + mergedArtifacts.map { it.id } + mergedWorkspaces.keys
+        tombstones.entries.retainAll { (id, _) -> id !in liveIds }
+
+        _chatLibraryPreferences.value = mergedPrefs
+        _artifactsLibrary.value = mergedArtifacts
+        _projectWorkspaces.value = mergedWorkspaces
+        _syncTombstones.value = tombstones
+        prefs.edit()
+            .putString("chat_library_preferences", ChatLibrary.encode(mergedPrefs))
+            .putString("saved_artifacts", ArtifactLibrary.encode(mergedArtifacts))
+            .putString("project_workspaces", ProjectWorkspaces.encode(mergedWorkspaces))
+            .putString("sync_tombstones", JSONObject().apply { tombstones.forEach { (id, at) -> put(id, at) } }.toString())
+            .apply()
+    }
+
+    /** Рабочая область, к которой относится чат (пусто, если чат ни к чему не привязан). */
+    fun workspaceForChat(chatId: String): ProjectWorkspace? =
+        _projectWorkspaces.value.values.firstOrNull { chatId in it.linkedChatIds }
+
+    fun ensureProjectWorkspace(projectName: String): ProjectWorkspace {
+        val id = ProjectWorkspaces.idFor(projectName)
+        return _projectWorkspaces.value[id] ?: ProjectWorkspace(id = id, name = projectName).also {
+            _projectWorkspaces.update { map -> map + (id to it) }
+            persistProjectWorkspaces()
+        }
+    }
+
+    fun setProjectInstructions(projectName: String, text: String) {
+        val workspace = ensureProjectWorkspace(projectName)
+        _projectWorkspaces.update { it + (workspace.id to workspace.withInstructions(text)) }
+        persistProjectWorkspaces()
+    }
+
+    fun addProjectDocument(projectName: String, name: String, content: String) {
+        if (name.isBlank() && content.isBlank()) return
+        val workspace = ensureProjectWorkspace(projectName)
+        val document = ProjectDocument(
+            id = "doc_" + java.util.UUID.randomUUID().toString().take(12),
+            name = name.trim().ifBlank { "Документ" },
+            content = content,
+            addedAt = System.currentTimeMillis()
+        )
+        _projectWorkspaces.update { it + (workspace.id to workspace.withDocument(document)) }
+        persistProjectWorkspaces()
+    }
+
+    /** Добавить документ в контекст проекта из системного выбора файла. */
+    fun addProjectDocumentFromUri(projectName: String, uri: Uri) {
+        viewModelScope.launch {
+            val loaded = withContext(Dispatchers.IO) {
+                runCatching {
+                    val resolver = getApplication<Application>().contentResolver
+                    val displayName = resolver.query(uri, null, null, null, null)?.use { cursor ->
+                        val idx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        if (idx >= 0 && cursor.moveToFirst()) cursor.getString(idx) else null
+                    } ?: uri.lastPathSegment ?: "Документ"
+                    val bytes = resolver.openInputStream(uri)?.use { readAttachmentBytes(it) }
+                        ?: error("Файл недоступен")
+                    displayName to bytes.toString(Charsets.UTF_8)
+                }.getOrNull()
+            }
+            if (loaded != null) {
+                addProjectDocument(projectName, loaded.first, loaded.second)
+            } else {
+                android.widget.Toast.makeText(getApplication(), "Не удалось прочитать файл проекта", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    fun removeProjectDocument(projectName: String, documentId: String) {
+        val workspace = ensureProjectWorkspace(projectName)
+        _projectWorkspaces.update { it + (workspace.id to workspace.withoutDocument(documentId)) }
+        persistProjectWorkspaces()
+    }
+
+    fun linkChatToProject(projectName: String, chatId: String) {
+        val workspace = ensureProjectWorkspace(projectName)
+        _projectWorkspaces.update { map ->
+            // Чат принадлежит одному проекту: снимаем прежнюю привязку.
+            val cleaned = map.mapValues { (_, w) -> w.withoutLinkedChat(chatId) }
+            cleaned + (workspace.id to (cleaned[workspace.id] ?: workspace).withLinkedChat(chatId))
+        }
+        persistProjectWorkspaces()
+    }
+
+    fun unlinkChatFromProject(projectName: String, chatId: String) {
+        val workspace = ensureProjectWorkspace(projectName)
+        _projectWorkspaces.update { it + (workspace.id to workspace.withoutLinkedChat(chatId)) }
+        persistProjectWorkspaces()
+    }
 
     private val _pendingAttachments = MutableStateFlow<List<AttachedFileItem>>(emptyList())
     val pendingAttachments: StateFlow<List<AttachedFileItem>> = _pendingAttachments.asStateFlow()
@@ -263,6 +529,13 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     private val _liveTokensPerSecond = MutableStateFlow(56.8f)
     val liveTokensPerSecond: StateFlow<Float> = _liveTokensPerSecond.asStateFlow()
 
+    private val _activeDebugSheet = MutableStateFlow("")
+    val activeDebugSheet: StateFlow<String> = _activeDebugSheet.asStateFlow()
+
+    fun setDebugSheet(sheet: String) {
+        _activeDebugSheet.value = sheet
+    }
+
     private val _liveOutputTokens = MutableStateFlow(384)
     val liveOutputTokens: StateFlow<Int> = _liveOutputTokens.asStateFlow()
 
@@ -279,82 +552,23 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     private val _isSyncingGoogleDrive = MutableStateFlow(false)
     val isSyncingGoogleDrive: StateFlow<Boolean> = _isSyncingGoogleDrive.asStateFlow()
 
-    private val _swarmAgents = MutableStateFlow(
-        listOf(
-            SwarmAgentNode(
-                id = "lead-orchestrator",
-                handle = "@lead-orchestrator",
-                name = "Главный оркестратор",
-                roleBadge = "ЛИДЕР • Главный оркестратор",
-                isLeader = true,
-                model = "gemini-4-argon-high",
-                status = "active",
-                currentTask = "Координация мультиагентного роя, декомпозиция задач и верификация Stage A–I",
-                stepLogs = listOf(
-                    "Инициализация протокола rigorous-programming-reasoner (Stages A–I)",
-                    "Проверка активных скиллов (.agents/skills + builtin/skills)",
-                    "Распределение подзадач между @self, @phone-cli и @research"
-                )
-            ),
-            SwarmAgentNode(
-                id = "self",
-                handle = "@self",
-                name = "Агент-исполнитель (Код и Архитектура)",
-                roleBadge = "Кодер и архитектор",
-                isLeader = false,
-                model = "claude-opus-4-6-thinking",
-                status = "ready",
-                currentTask = "Реализация изменений в Kotlin/Compose и Node.js без заглушек",
-                stepLogs = listOf(
-                    "Анализ AST и графа вызовов проекта",
-                    "Проверка инвариантов и генерация патчей с +added/-removed диффами"
-                )
-            ),
-            SwarmAgentNode(
-                id = "phone-cli",
-                handle = "@phone-cli",
-                name = "Инженер Android CLI и Песочницы",
-                roleBadge = "Смартфон • CLI & Sandbox",
-                isLeader = false,
-                model = "gemini-4-argon-low",
-                status = "ready",
-                currentTask = "Выполнение sh-команд на телефоне и изолированных тестов в песочнице",
-                stepLogs = listOf(
-                    "Инициализация изолированной среды virtual_sandboxes/default",
-                    "Самотестирование проекта (12/12 инвариантов пройдено)"
-                )
-            ),
-            SwarmAgentNode(
-                id = "research",
-                handle = "@research",
-                name = "Аналитик и Веб-исследователь",
-                roleBadge = "Поиск • MCP & Документация",
-                isLeader = false,
-                model = "gpt-5.4",
-                status = "ready",
-                currentTask = "Живая синхронизация каталога OpenRouter API и проверка документации",
-                stepLogs = listOf(
-                    "Запрос к https://openrouter.ai/api/v1/models (452 модели синхронизировано)",
-                    "Сортировка моделей по полю created (новейшие 2026 сверху)"
-                )
-            ),
-            SwarmAgentNode(
-                id = "image-generator",
-                handle = "@image-generator",
-                name = "Студия генерации Фото и Видео",
-                roleBadge = "Медиа • Фото & MP4",
-                isLeader = false,
-                model = "black-forest-labs/flux.2-pro",
-                status = "ready",
-                currentTask = "Генерация изображений высокого разрешения и H.264 MP4 видеороликов",
-                stepLogs = listOf(
-                    "Подключён движок генерации PNG и H.264 Baseline (avc1) MP4",
-                    "Готов к прямой загрузке медиа в память смартфона Download/Antigravity"
-                )
-            )
-        )
-    )
-    val swarmAgents: StateFlow<List<SwarmAgentNode>> = _swarmAgents.asStateFlow()
+    private val _isSwarmTaskActive = MutableStateFlow(false)
+    val isSwarmTaskActive: StateFlow<Boolean> = _isSwarmTaskActive.asStateFlow()
+
+    private val _swarmAgents = MutableStateFlow<List<SwarmAgentNode>>(emptyList())
+    private var swarmPollingJob: Job? = null
+    private var subagentRequestId: String = ""
+    private val subagentSourceSession = MutableStateFlow("")
+    val swarmAgents: StateFlow<List<SwarmAgentNode>> = combine(
+        _swarmAgents, _messages, _settings, subagentSourceSession
+    ) { remote, messages, settings, remoteSession ->
+        val local = messages.flatMap { message -> message.toolCalls.filter { it.toolName == "delegate_task" }.map { tool ->
+            SwarmAgentNode(id = tool.id, name = tool.summary, model = message.modelBadge,
+                status = tool.status.name.lowercase(), currentTask = tool.summary,
+                stepLogs = listOfNotNull(tool.details.takeIf { it.isNotBlank() }))
+        } }
+        local + if (remoteSession.isNotBlank() && remoteSession == settings.activeConversationId) remote else emptyList()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _androidCliHistory = MutableStateFlow<List<AndroidCliCommandResult>>(emptyList())
     val androidCliHistory: StateFlow<List<AndroidCliCommandResult>> = _androidCliHistory.asStateFlow()
@@ -369,7 +583,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
             rootPath = "",
             status = "Готова • Изолированная среда Android",
             files = emptyList(),
-            lastTestSummary = "12/12 проверок пройдено",
+            lastTestSummary = "Проверки ещё не запускались",
             previewHtmlPath = ""
         )
     )
@@ -386,6 +600,8 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
 
     init {
         voiceEngine.onBargeInInterruptCallback = {
+            generationRevision++
+            backendClient.cancelActiveRemoteTurn()
             activeGenerationJob?.cancel()
             activeGenerationJob = null
             AntigravityAgentSessionService.stopAgentTurnForeground(getApplication())
@@ -417,7 +633,21 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
             val initialCli = phoneController.executeAndroidCliCommand("uname -a && getprop ro.product.model ro.build.version.release")
             _androidCliHistory.value = listOf(initialCli)
 
-            delay(150L)
+            val savedChats = historyStore.load()
+            val deliveredIds = savedChats.flatMap { it.messages }.map { it.id }.toSet()
+            _queuedFollowUps.update { queue -> queue.filterNot { it.id in deliveredIds } }
+            saveFollowUpQueue()
+            savedChats.forEach { sessionHistoryCache.putIfAbsent(it.id, it.messages) }
+            _remoteSessions.value = savedChats.map { chat -> RemoteSessionItem(
+                id = chat.id, title = chat.title, messageCount = chat.messages.size,
+                hostType = if (chat.target == AgentExecutionTarget.PHONE_LOCAL_RESOURCES) "PHONE" else "PC",
+                host = if (chat.target == AgentExecutionTarget.PHONE_LOCAL_RESOURCES) "Телефон" else "Компьютер"
+            ) }
+            val startupSettings = _settings.value
+            if (_messages.value.isEmpty() && activeGenerationJob?.isActive != true) {
+                _messages.value = sessionHistoryCache[startupSettings.activeConversationId].orEmpty()
+                _composerDraft.value = prefs.getString("draft:" + startupSettings.activeConversationId, "").orEmpty()
+            }
             loadEmbeddedPcSnapshot()
             refreshPhoneFiles()
             syncRemoteSessionsFromPc()
@@ -432,6 +662,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     private var activeGenerationJob: Job? = null
+    @Volatile private var generationRevision = 0L
 
     /**
      * Фоновая двусторонняя синхронизация активной удалённой сессии и списка чатов ПК:
@@ -452,24 +683,16 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                     !isCurrentlyStreaming &&
                     s.executionTarget == AgentExecutionTarget.PC_REMOTE_SESSION
                 ) {
+                    val syncRevision = generationRevision
                     val remoteMsgs = backendClient.fetchSessionMessages(s.pcBridgeUrl, convId)
+                    if (_settings.value.activeConversationId != convId || generationRevision != syncRevision || _messages.value.any { it.isStreaming }) continue
                     val curMsgs = _messages.value
                     if (remoteMsgs.isNotEmpty() &&
                         (remoteMsgs.size > curMsgs.size ||
                             (remoteMsgs.size == curMsgs.size &&
                                 remoteMsgs.lastOrNull()?.content != curMsgs.lastOrNull()?.content))
                     ) {
-                        val mergedMsgs = remoteMsgs.mapIndexed { idx, rMsg ->
-                            val existing = curMsgs.getOrNull(idx)
-                            if (existing != null && existing.role == rMsg.role) {
-                                rMsg.copy(
-                                    isThinkingExpanded = existing.isThinkingExpanded,
-                                    toolCalls = if (existing.toolCalls.size > rMsg.toolCalls.size) existing.toolCalls else rMsg.toolCalls
-                                )
-                            } else {
-                                rMsg
-                            }
-                        }
+                        val mergedMsgs = mergeRemoteChatHistory(curMsgs, remoteMsgs)
                         sessionHistoryCache[convId] = mergedMsgs
                         _messages.value = mergedMsgs
                     }
@@ -488,11 +711,11 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
             savedUrl.contains("offline", ignoreCase = true) ||
                 savedUrl.contains("invalid", ignoreCase = true)
             )
-        return if (savedVer < 25 || savedUrl.isNullOrBlank() || isStaleTestUrl) {
+        return if (savedUrl.isNullOrBlank() || isStaleTestUrl || (savedVer < BRIDGE_URL_VERSION && savedUrl == "https://cdd0a117b3ea350f-79-137-206-221.serveousercontent.com")) {
             prefs.edit()
                 .putString("pc_bridge_url", CURRENT_DEFAULT_BRIDGE_URL)
                 .putBoolean("force_public_tunnel_only", false)
-                .putInt("bridge_url_ver", 25)
+                .putInt("bridge_url_ver", BRIDGE_URL_VERSION)
                 .apply()
             CURRENT_DEFAULT_BRIDGE_URL
         } else {
@@ -538,8 +761,8 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                                 rawContent.trim()
                             }
                             if (cleanContent.isBlank()) continue
-                            val estTok = if (role == MessageRole.AGENT) (cleanContent.length / 3.6f).toInt().coerceAtLeast(32) else 0
-                            val estTps = if (role == MessageRole.AGENT) (54.2f + (mIdx % 6) * 2.4f) else 0f
+                            val estTok = mObj.optInt("outputTokensCount", 0)
+                            val estTps = mObj.optDouble("tokensPerSecond", 0.0).toFloat()
                             msgList.add(
                                 ChatMessage(
                                     id = "${sId}_msg_$mIdx",
@@ -556,7 +779,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                             )
                         }
                     }
-                    sessionHistoryCache[sId] = msgList
+                    sessionHistoryCache.putIfAbsent(sId, msgList)
 
                     val artArr = sObj.optJSONArray("artifacts")
                     if (artArr != null) {
@@ -602,8 +825,8 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                     messageCount = 1
                 )
             )
-            _remoteSessions.value = loadedSessions
-            _artifactsLibrary.value = loadedArtifacts
+            _remoteSessions.value = (_remoteSessions.value + loadedSessions).distinctBy { it.id }
+            _artifactsLibrary.update { current -> (current.filter { it.id.startsWith("saved_message_") } + loadedArtifacts).distinctBy { it.id } }
 
             val projArr = root.optJSONArray("projects")
             val loadedProjects = mutableListOf<ScratchProjectItem>()
@@ -659,6 +882,9 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
             _pcBridgeStatus.value = st
             if (isExplicitOfflineTest) return@launch
 
+            // Синхронизация названий, закреплений, архива и библиотеки ответов с ПК.
+            scheduleSyncPush()
+
             val models = backendClient.fetchAvailableModels(url)
             if (models.isNotEmpty()) {
                 _availableModels.value = models
@@ -685,16 +911,18 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                     hostType = "PHONE",
                     messageCount = 1
                 )
-                _remoteSessions.value = merged
+                _remoteSessions.value = (merged + _remoteSessions.value).distinctBy { it.id }
 
                 for (topSession in liveSessions.take(3)) {
                     val cached = sessionHistoryCache[topSession.id].orEmpty()
                     if (cached.isEmpty() || cached.size != topSession.messageCount) {
+                        val syncRevision = generationRevision
                         val msgs = backendClient.fetchSessionMessages(_settings.value.pcBridgeUrl, topSession.id)
-                        if (msgs.isNotEmpty()) {
-                            sessionHistoryCache[topSession.id] = msgs
+                        if (msgs.isNotEmpty() && msgs.size >= cached.size && generationRevision == syncRevision) {
+                            val mergedMessages = mergeRemoteChatHistory(cached, msgs)
+                            sessionHistoryCache[topSession.id] = mergedMessages
                             if (_settings.value.activeConversationId == topSession.id && _messages.value.none { it.isStreaming }) {
-                                _messages.value = msgs
+                                _messages.value = mergedMessages
                             }
                         }
                     }
@@ -704,6 +932,11 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun connectToExistingRemoteSession(session: RemoteSessionItem) {
+        val preference = _chatLibraryPreferences.value[session.id] ?: ChatLibraryPreferences()
+        updateChatLibraryPreferences(session.id, preference.copy(lastOpenedAt = System.currentTimeMillis()))
+        stopActiveGeneration()
+        cacheCurrentSession()
+        _temporaryChatActive.value = false
         val target = if (session.hostType == "PHONE" || session.id == "phone-local-storage") {
             AgentExecutionTarget.PHONE_LOCAL_RESOURCES
         } else {
@@ -717,12 +950,13 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                 activeSessionTitle = session.title
             )
         }
+        restoreComposerDraft(session.id)
         _topModeTab.value = TopModeTab.CHAT
         _drawerSection.value = DrawerSection.CHAT
 
         if (target == AgentExecutionTarget.PHONE_LOCAL_RESOURCES) {
             val telemetry = phoneController.getDeviceTelemetrySummary()
-            val phoneMsgs = listOf(
+            val phoneMsgs = sessionHistoryCache[session.id]?.takeIf { it.isNotEmpty() } ?: listOf(
                 ChatMessage(
                     role = MessageRole.AGENT,
                     timestamp = currentTimeFormatted(),
@@ -747,19 +981,80 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
             )
         }
 
+        val historyRevision = generationRevision
         viewModelScope.launch {
             val liveLoaded = backendClient.fetchSessionMessages(_settings.value.pcBridgeUrl, session.id)
-            if (liveLoaded.isNotEmpty()) {
-                sessionHistoryCache[session.id] = liveLoaded
-                if (_settings.value.activeConversationId == session.id) {
-                    _messages.value = liveLoaded
+            if (liveLoaded.isNotEmpty() && generationRevision == historyRevision) {
+                val mergedMessages = mergeRemoteChatHistory(sessionHistoryCache[session.id].orEmpty(), liveLoaded)
+                sessionHistoryCache[session.id] = mergedMessages
+                if (_settings.value.activeConversationId == session.id && generationRevision == historyRevision) {
+                    _messages.value = mergedMessages
                 }
             }
         }
     }
 
+    fun saveMessageToLibrary(message: ChatMessage) {
+        val document = ArtifactLibrary.savedMessage(message) ?: return
+        _artifactsLibrary.update { list ->
+            val existing = list.find { it.id == document.id }
+            val merged = if (existing != null) ArtifactLibrary.resaved(existing, document) else document
+            listOf(merged) + list.filterNot { it.id == document.id }
+        }
+        prefs.edit().putString("saved_artifacts", ArtifactLibrary.encode(_artifactsLibrary.value)).apply()
+        android.widget.Toast.makeText(getApplication(), "Ответ сохранён в библиотеку", android.widget.Toast.LENGTH_SHORT).show()
+        scheduleSyncPush()
+    }
+
+    fun removeSavedArtifact(id: String) {
+        if (!id.startsWith("saved_message_")) return
+        _artifactsLibrary.update { list -> list.filterNot { it.id == id } }
+        prefs.edit().putString("saved_artifacts", ArtifactLibrary.encode(_artifactsLibrary.value)).apply()
+        // Надгробие для синхронизации: удаление доезжает до ПК и других устройств.
+        _syncTombstones.update { it + (id to System.currentTimeMillis()) }
+        persistSyncTombstones()
+        scheduleSyncPush()
+    }
+
+    private fun updateSavedArtifact(id: String, transform: (ArtifactDocument) -> ArtifactDocument) {
+        if (!id.startsWith("saved_message_")) return
+        _artifactsLibrary.update { list ->
+            list.map { doc -> if (doc.id == id) transform(doc) else doc }
+        }
+        prefs.edit().putString("saved_artifacts", ArtifactLibrary.encode(_artifactsLibrary.value)).apply()
+        scheduleSyncPush()
+    }
+
+    /** Переименование локальной сохранённой копии. */
+    fun renameSavedArtifact(id: String, title: String) =
+        updateSavedArtifact(id) { ArtifactLibrary.renamed(it, title) }
+
+    /** Закрепление/открепление артефакта (отображается первым в библиотеке). */
+    fun toggleSavedArtifactPinned(id: String) =
+        updateSavedArtifact(id) { ArtifactLibrary.pinned(it, !it.pinned) }
+
+    /** Редактирование содержимого; прежний текст сохраняется как версия. */
+    fun editSavedArtifactContent(id: String, content: String) =
+        updateSavedArtifact(id) { ArtifactLibrary.edited(it, content) }
+
+    /** Восстановление версии (текущий текст предварительно уходит в историю). */
+    fun restoreSavedArtifactVersion(id: String, versionId: String) =
+        updateSavedArtifact(id) { ArtifactLibrary.restored(it, versionId) ?: it }
+
+    /** Открыть чат, связанный с проектом, из карточки рабочей области. */
+    fun openLinkedProjectChat(chatId: String, title: String) {
+        if (chatId.isBlank()) return
+        connectToExistingRemoteSession(RemoteSessionItem(id = chatId, title = title.ifBlank { "Чат проекта" }))
+    }
+
     fun openScratchProjectInChat(project: ScratchProjectItem) {
+        stopActiveGeneration()
+        cacheCurrentSession()
+        _temporaryChatActive.value = false
         val sessionId = "proj_${project.name}"
+        // Рабочая область проекта: инструкции, документы контекста и связанные чаты.
+        ensureProjectWorkspace(project.name)
+        linkChatToProject(project.name, sessionId)
         _settings.update {
             it.copy(
                 executionTarget = AgentExecutionTarget.PC_REMOTE_SESSION,
@@ -782,17 +1077,26 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                 "**Файлы проекта (${project.fileCount}):**\n$filesMarkdown\n\n" +
                 "Напишите поручение, прикрепите файл кнопкой `+` или запустите голосовой режим."
         )
-        sessionHistoryCache[sessionId] = listOf(projectIntro)
-        _messages.value = listOf(projectIntro)
+        val projectMessages = sessionHistoryCache[sessionId]?.takeIf { it.isNotEmpty() } ?: listOf(projectIntro)
+        sessionHistoryCache[sessionId] = projectMessages
+        _messages.value = projectMessages
+        restoreComposerDraft(sessionId)
+    }
+
+    private fun addAttachmentsToSession(sessionId: String, files: List<AttachedFileItem>) {
+        _attachmentError.value = null
+        if (_settings.value.activeConversationId == sessionId) _pendingAttachments.update { it + files }
+        else attachmentDrafts.compute(sessionId) { _, previous -> previous.orEmpty() + files }
     }
 
     fun attachFileFromUri(uri: Uri) {
+        val sessionId = _settings.value.activeConversationId
         viewModelScope.launch {
             val attached = withContext(Dispatchers.IO) {
                 readAttachedFileFromUri(uri)
             }
             if (attached != null) {
-                _pendingAttachments.update { it + attached }
+                addAttachmentsToSession(sessionId, listOf(attached))
             }
         }
     }
@@ -828,6 +1132,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun attachCameraBitmap(bitmap: Bitmap) {
+        val sessionId = _settings.value.activeConversationId
         viewModelScope.launch {
             val item = withContext(Dispatchers.IO) {
                 val bos = ByteArrayOutputStream()
@@ -841,19 +1146,21 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                     base64Data = b64
                 )
             }
-            _pendingAttachments.update { it + item }
+            addAttachmentsToSession(sessionId, listOf(item))
         }
     }
 
     fun attachPhoneFileEntry(entry: PhoneResourceController.PhoneFileEntry) {
+        val sessionId = _settings.value.activeConversationId
         if (entry.isDirectory) return
         viewModelScope.launch {
             val item = withContext(Dispatchers.IO) {
                 val f = File(entry.absolutePath)
                 val bytes = try {
-                    if (f.length() <= 384 * 1024) f.readBytes() else f.inputStream().use { it.readNBytes(64 * 1024) }
-                } catch (_: Throwable) {
-                    ByteArray(0)
+                    f.inputStream().use { readAttachmentBytes(it) }
+                } catch (e: Exception) {
+                    _attachmentError.value = e.message ?: "Не удалось прочитать файл"
+                    return@withContext null
                 }
                 val isText = isLikelyTextFile(f.name, "")
                 val preview = if (isText && bytes.isNotEmpty()) {
@@ -875,7 +1182,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                     base64Data = b64
                 )
             }
-            _pendingAttachments.update { it + item }
+            if (item != null) _pendingAttachments.update { it + item }
             _topModeTab.value = TopModeTab.CHAT
             _drawerSection.value = DrawerSection.CHAT
         }
@@ -909,19 +1216,9 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                 }
             }
 
-            val bytes = cr.openInputStream(uri)?.use { input ->
-                val maxRead = 384 * 1024
-                val buffer = ByteArrayOutputStream()
-                val chunk = ByteArray(8192)
-                var total = 0
-                while (total < maxRead) {
-                    val r = input.read(chunk, 0, minOf(chunk.size, maxRead - total))
-                    if (r <= 0) break
-                    buffer.write(chunk, 0, r)
-                    total += r
-                }
-                buffer.toByteArray()
-            } ?: ByteArray(0)
+            val bytes = cr.openInputStream(uri)?.use { readAttachmentBytes(it) }
+                ?: throw java.io.IOException("Не удалось открыть файл")
+            _attachmentError.value = null
 
             if (sizeBytes <= 0L) {
                 sizeBytes = bytes.size.toLong()
@@ -951,7 +1248,8 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                 textPreview = textPreview,
                 base64Data = b64
             )
-        } catch (_: Throwable) {
+        } catch (e: Exception) {
+            _attachmentError.value = e.message ?: "Не удалось прочитать файл"
             null
         }
     }
@@ -998,10 +1296,88 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    private var lastStreamingSaveAt = 0L
+    private fun persistStreamingChat() {
+        if (_temporaryChatActive.value) return // временный чат не сохраняется
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - lastStreamingSaveAt < 1000L) return
+        lastStreamingSaveAt = now
+        val settings = _settings.value
+        val snapshot = _messages.value
+        if (settings.activeConversationId.isNotBlank() && !historyWriter.isShutdown) historyWriter.execute {
+            runCatching { historyStore.save(SavedChat(settings.activeConversationId, settings.activeSessionTitle, settings.executionTarget, snapshot)) }
+                .onFailure { android.util.Log.e("ChatHistory", "Cannot save streaming conversation", it) }
+        }
+    }
+
+    private fun cacheCurrentSession() {
+        val id = _settings.value.activeConversationId
+        attachmentDrafts[id] = _pendingAttachments.value
+        if (id.isNotBlank()) {
+            val snapshot = _messages.value
+            val settings = _settings.value
+            sessionHistoryCache[id] = snapshot
+            if (_temporaryChatActive.value) return // временный чат: только кэш в памяти
+            if (snapshot.isNotEmpty()) {
+                val localItem = RemoteSessionItem(id = id, title = settings.activeSessionTitle.ifBlank { "Новый чат" },
+                    messageCount = snapshot.size,
+                    hostType = if (settings.executionTarget == AgentExecutionTarget.PHONE_LOCAL_RESOURCES) "PHONE" else "PC",
+                    host = if (settings.executionTarget == AgentExecutionTarget.PHONE_LOCAL_RESOURCES) "Телефон" else "Компьютер")
+                _remoteSessions.update { list -> listOf(localItem) + list.filterNot { it.id == id } }
+            }
+            prefs.edit().putString("active_conversation_id", id)
+                .putString("active_session_title", settings.activeSessionTitle)
+                .putString("active_execution_target", settings.executionTarget.name).apply()
+            if (!historyWriter.isShutdown) historyWriter.execute {
+                runCatching { historyStore.save(SavedChat(id, settings.activeSessionTitle, settings.executionTarget, snapshot)) }
+                    .onFailure { android.util.Log.e("ChatHistory", "Cannot save conversation", it) }
+            }
+        }
+    }
+
     fun startNewChat() {
+        stopActiveGeneration()
+        cacheCurrentSession()
+        _temporaryChatActive.value = false
         _settings.update { it.copy(activeConversationId = "", activeSessionTitle = "") }
+        prefs.edit().remove("active_conversation_id").remove("active_session_title").apply()
         _messages.value = emptyList()
+        setComposerDraft("")
         _pendingAttachments.value = emptyList()
+        if (_isSwarmTaskActive.value) cancelSubagentAnalysis()
+        _isSwarmTaskActive.value = false
+        _swarmAgents.update { list -> list.map { it.copy(status = "ready") } }
+        _topModeTab.value = TopModeTab.CHAT
+        _drawerSection.value = DrawerSection.CHAT
+    }
+
+    /**
+     * Временный чат (как «Временный чат» ChatGPT): переписка не сохраняется
+     * на телефоне и на ПК, инструкции проектов и память не используются.
+     */
+    fun startTemporaryChat() {
+        stopActiveGeneration()
+        cacheCurrentSession() // обычный чат перед уходом сохраняется
+        val temporaryId = java.util.UUID.randomUUID().toString()
+        temporaryChatIds.add(temporaryId)
+        _temporaryChatActive.value = true
+        _settings.update {
+            it.copy(
+                activeConversationId = temporaryId,
+                activeSessionTitle = "Временный чат"
+            )
+        }
+        _messages.value = listOf(
+            ChatMessage(
+                role = MessageRole.AGENT,
+                timestamp = currentTimeFormatted(),
+                content = "**Временный чат** — переписка не сохраняется на телефоне и на ПК, " +
+                    "контекст проектов и память не используются. Начните новый чат, чтобы стереть её."
+            )
+        )
+        setComposerDraft("")
+        _pendingAttachments.value = emptyList()
+        _isSwarmTaskActive.value = false
         _topModeTab.value = TopModeTab.CHAT
         _drawerSection.value = DrawerSection.CHAT
     }
@@ -1047,6 +1423,8 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun signOutGoogle() {
+        stopActiveGeneration()
+        stopLiveVoiceCall()
         prefs.edit()
             .putBoolean("is_signed_in", false)
             .putBoolean("is_signed_in_v2", false)
@@ -1341,7 +1719,17 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     private fun loadOpenRouterDiskCache(): List<OpenRouterModelItem> {
         return try {
             val file = getOpenRouterCacheFile()
-            if (!file.exists()) return emptyList()
+            if (!file.exists()) {
+                try {
+                    val assetText = getApplication<Application>().assets
+                        .open("openrouter_models_cache.json")
+                        .bufferedReader(Charsets.UTF_8)
+                        .use { it.readText() }
+                    file.writeText(assetText, Charsets.UTF_8)
+                } catch (_: Throwable) {
+                    return emptyList()
+                }
+            }
             val root = JSONObject(file.readText(Charsets.UTF_8))
             val arr = root.optJSONArray("models") ?: return emptyList()
             val out = mutableListOf<OpenRouterModelItem>()
@@ -1444,7 +1832,9 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                     _openRouterCacheStatusText.value = "Кэш синхронизирован (${elapsedDiskMs} мс) • openrouter_models_cache.json"
                 }
             }
-            _isSyncingOpenRouter.value = true
+            if (forceRefresh || _openRouterModels.value.isEmpty()) {
+                _isSyncingOpenRouter.value = true
+            }
             val res = backendClient.fetchLiveOpenRouterModels(_settings.value.pcBridgeUrl, forceRefresh)
             if (res.models.isNotEmpty()) {
                 val effectiveCount = maxOf(res.totalCount, res.models.size)
@@ -1506,16 +1896,19 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
             _googleDriveFiles.value = files
             _isSyncingGoogleDrive.value = false
 
+            android.widget.Toast.makeText(getApplication(),
+                if (created == null) "Не удалось сохранить файл. Проверьте подключение к мосту ПК." else "Файл сохранён в рабочем пространстве.",
+                android.widget.Toast.LENGTH_SHORT).show()
             if (created != null && insertIntoChat) {
                 val engineBadge = if (created.engine.equals("openrouter", ignoreCase = true)) "OpenRouter (${created.modelUsed})" else "Gemini (${created.modelUsed})"
                 val gdriveMsg = ChatMessage(
                     role = MessageRole.AGENT,
                     timestamp = currentTimeFormatted(),
                     content = buildString {
-                        appendLine("### Выполнен поиск в Google Drive • Создан файл `${created.name}`")
-                        appendLine("- **Папка Google Диска:** `/AntigravityCloud`")
+                        appendLine("### Создан файл в рабочем пространстве: `${created.name}`")
+                        appendLine("- **Рабочая папка:** `/AntigravityCloud`")
                         appendLine("- **Создано ИИ:** `$engineBadge`")
-                        appendLine("- **Облачная ссылка:** [Открыть в Google Drive](${created.webViewLink})")
+                        appendLine("- **Ссылка на файл:** [Открыть файл](${created.webViewLink})")
                         appendLine("- **Прямое скачивание:** [Скачать ${created.name}](${created.downloadUrl})")
                         if (created.localUri.isNotBlank()) {
                             appendLine("- **Локальное зеркало:** `${created.localUri}`")
@@ -1525,9 +1918,9 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                         appendLine(created.contentPreview.take(900))
                         appendLine("```")
                     }.trim(),
-                    tokensPerSecond = 61.4f,
+                    tokensPerSecond = 0f,
                     outputTokensCount = (created.contentPreview.length / 3.6f).toInt().coerceAtLeast(48),
-                    firstTokenLatencyMs = 290L,
+                    firstTokenLatencyMs = 0L,
                     modelBadge = created.modelUsed
                 )
                 _messages.update { it + gdriveMsg }
@@ -1581,12 +1974,15 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
             listOf(option) + filtered
         }
         setSelectedModel(model.id)
+        _topModeTab.value = TopModeTab.CHAT
+        _drawerSection.value = DrawerSection.CHAT
         viewModelScope.launch {
             backendClient.saveOpenRouterConfig(
                 pcBridgeUrl = _settings.value.pcBridgeUrl,
                 apiKey = _openRouterApiKey.value,
                 selectedModel = model.id
             )
+            refreshContextWindowStatus()
         }
     }
 
@@ -1607,12 +2003,15 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
             listOf(option) + list.filterNot { it.id == clean }
         }
         setSelectedModel(clean)
+        _topModeTab.value = TopModeTab.CHAT
+        _drawerSection.value = DrawerSection.CHAT
         viewModelScope.launch {
             backendClient.saveOpenRouterConfig(
                 pcBridgeUrl = _settings.value.pcBridgeUrl,
                 apiKey = _openRouterApiKey.value,
                 selectedModel = clean
             )
+            refreshContextWindowStatus()
         }
     }
 
@@ -1648,9 +2047,9 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
             id = genMsgId,
             role = MessageRole.AGENT,
             content = _mediaGenerationStatus.value,
-            thinking = "Запуск конвейера генерации медиа OpenRouter ($effectiveModel) для запроса: «$cleanPrompt»",
-            thinkingDurationSec = 1,
-            isThinkingExpanded = true,
+            thinking = null,
+            thinkingDurationSec = 0,
+            isThinkingExpanded = false,
             isStreaming = true,
             timestamp = currentTimeFormatted()
         )
@@ -1742,70 +2141,87 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun refreshSwarmAgents() {
+        if (_settings.value.executionTarget == AgentExecutionTarget.PHONE_LOCAL_RESOURCES || subagentRequestId.isBlank()) return
         viewModelScope.launch {
-            val remote = backendClient.fetchMultiAgentSwarm(_settings.value.pcBridgeUrl)
+            val remote = backendClient.fetchMultiAgentSwarm(_settings.value.pcBridgeUrl, subagentRequestId)
             if (remote.isNotEmpty()) {
                 _swarmAgents.value = remote
             }
         }
     }
 
-    fun setSwarmLeader(agentId: String) {
-        _swarmAgents.update { list ->
-            list.map { node ->
-                val isNewLeader = node.id == agentId
-                val cleanBaseRole = node.roleBadge
-                    .replace("👑 ЛИДЕР • ", "")
-                    .replace("ЛИДЕР • ", "")
-                    .trim()
-                node.copy(
-                    isLeader = isNewLeader,
-                    roleBadge = if (isNewLeader) "ЛИДЕР • $cleanBaseRole" else cleanBaseRole,
-                    status = if (isNewLeader) "active" else node.status
-                )
-            }
+    fun dispatchSwarmTask(taskPrompt: String, prepareChanges: Boolean = false) {
+        val clean = taskPrompt.trim()
+        if (clean.isEmpty() || _isSwarmTaskActive.value) return
+        if (_temporaryChatActive.value) {
+            android.widget.Toast.makeText(getApplication(), "Субагенты недоступны во временном чате: задания сохраняются на ПК.", android.widget.Toast.LENGTH_LONG).show()
+            return
         }
-        viewModelScope.launch {
-            val updated = backendClient.manageMultiAgentSwarm(
-                pcBridgeUrl = _settings.value.pcBridgeUrl,
-                action = "set_leader",
-                agentId = agentId
-            )
-            if (updated.isNotEmpty()) {
-                _swarmAgents.value = updated
-            }
+        if (_settings.value.activeConversationId.isBlank()) _settings.update { it.copy(
+            activeConversationId = java.util.UUID.randomUUID().toString(), activeSessionTitle = clean.take(48)) }
+        val sourceSettings = _settings.value
+        val sourceSession = sourceSettings.activeConversationId
+        subagentSourceSession.value = sourceSession
+        val requestId = java.util.UUID.randomUUID().toString()
+        subagentRequestId = requestId
+        _isSwarmTaskActive.value = true
+        swarmPollingJob = viewModelScope.launch {
+            try {
+                val accepted = backendClient.manageMultiAgentSwarm(
+                    pcBridgeUrl = _settings.value.pcBridgeUrl, action = if (prepareChanges) "dispatch_code_task" else "dispatch_task", task = clean,
+                    model = _settings.value.selectedModelId, requestId = requestId
+                )
+                if (accepted.isEmpty()) {
+                    android.widget.Toast.makeText(getApplication(), "Не удалось запустить субагентов. Проверьте мост и выбранную модель CLI.", android.widget.Toast.LENGTH_LONG).show()
+                    return@launch
+                }
+                _swarmAgents.value = accepted
+                val pollingStarted = android.os.SystemClock.elapsedRealtime()
+                while (_swarmAgents.value.any { it.isInProgress }) {
+                    if (android.os.SystemClock.elapsedRealtime() - pollingStarted > 360000L) {
+                        android.widget.Toast.makeText(getApplication(), "Нет связи с исполнителем. Результаты можно обновить в панели субагентов.", android.widget.Toast.LENGTH_LONG).show()
+                        return@launch
+                    }
+                    delay(1500)
+                    val fresh = backendClient.fetchMultiAgentSwarm(_settings.value.pcBridgeUrl, subagentRequestId)
+                    if (fresh.isNotEmpty()) _swarmAgents.value = fresh
+                }
+                val report = _swarmAgents.value.joinToString("\n\n") { agent ->
+                    "## ${agent.name} (${agent.status})\n" + agent.stepLogs.joinToString("\n") + if (agent.changeReview.isNotBlank()) "\n\n${agent.changeReview}" else ""
+                }
+                // Отменённый или пустой запуск не должен превращаться в отчёт в чате:
+                // вставляем сообщение только при наличии реального завершённого/ошибочного результата.
+                val terminalAgents = _swarmAgents.value
+                val cancelledRun = terminalAgents.isNotEmpty() && terminalAgents.all { it.status == "cancelled" }
+                val hasTerminalResult = terminalAgents.any { it.status == "completed" || it.status == "failed" }
+                if (!cancelledRun && hasTerminalResult && report.isNotBlank()) {
+                    val resultMessage = ChatMessage(role = MessageRole.AGENT, content = report, timestamp = currentTimeFormatted())
+                    if (_settings.value.activeConversationId == sourceSession) {
+                        _messages.update { it + resultMessage }
+                        cacheCurrentSession()
+                    } else {
+                        val history = sessionHistoryCache[sourceSession].orEmpty() + resultMessage
+                        sessionHistoryCache[sourceSession] = history
+                        if (!historyWriter.isShutdown) historyWriter.execute {
+                            runCatching { historyStore.save(SavedChat(sourceSession, sourceSettings.activeSessionTitle, sourceSettings.executionTarget, history)) }
+                        }
+                    }
+                } else if (cancelledRun) {
+                    android.widget.Toast.makeText(getApplication(), "Анализ остановлен. Результаты не добавлены в чат.", android.widget.Toast.LENGTH_LONG).show()
+                }
+            } finally { _isSwarmTaskActive.value = false }
         }
     }
 
-    fun dispatchSwarmTask(taskPrompt: String) {
-        val clean = taskPrompt.trim()
-        if (clean.isBlank()) return
-        val leader = _swarmAgents.value.firstOrNull { it.isLeader } ?: _swarmAgents.value.first()
-        _swarmAgents.update { list ->
-            list.map { node ->
-                if (node.id == leader.id) {
-                    node.copy(
-                        status = "active",
-                        currentTask = clean,
-                        stepLogs = (listOf("Принято поручение рою: «${clean.take(70)}»") + node.stepLogs).take(6)
-                    )
-                } else {
-                    node.copy(status = "working")
-                }
-            }
+    fun cancelSubagentAnalysis() {
+        if (_messages.value.any { msg -> msg.toolCalls.any { it.toolName == "delegate_task" && it.status == ToolCallStatus.RUNNING } }) {
+            stopActiveGeneration()
+            return
         }
         viewModelScope.launch {
-            val updated = backendClient.manageMultiAgentSwarm(
-                pcBridgeUrl = _settings.value.pcBridgeUrl,
-                action = "dispatch_task",
-                agentId = leader.id,
-                task = clean
-            )
-            if (updated.isNotEmpty()) {
-                _swarmAgents.value = updated
-            }
+            val state = backendClient.manageMultiAgentSwarm(_settings.value.pcBridgeUrl, "cancel_task", requestId = subagentRequestId)
+            if (state.isNotEmpty()) _swarmAgents.value = state
         }
-        sendUserPrompt("${leader.handle} $clean", viaVoice = false)
     }
 
     fun runAndroidCliCommand(command: String) {
@@ -1835,7 +2251,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
             _sandboxTestOutput.value = cmdRes.output
             val ok = cmdRes.exitCode == 0
             _virtualSandboxProject.value = updatedProj.copy(
-                lastTestSummary = if (ok) "12/12 PASS (${cmdRes.durationMs}ms)" else "EXIT ${cmdRes.exitCode}",
+                lastTestSummary = if (ok) "Проверки выполнены (${cmdRes.durationMs}ms)" else "EXIT ${cmdRes.exitCode}",
                 status = if (ok) "Готова • Самотестирование пройдено" else "Внимание • Есть предупреждения"
             )
         }
@@ -1869,6 +2285,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch {
             val remote = backendClient.fetchAiPermissions(_settings.value.pcBridgeUrl)
             _aiPermissions.value = remote
+            phoneController.aiPermissions = remote
         }
     }
 
@@ -1879,6 +2296,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch {
             val saved = backendClient.saveAiPermissions(_settings.value.pcBridgeUrl, next)
             _aiPermissions.value = saved
+            phoneController.aiPermissions = saved
         }
     }
 
@@ -2001,34 +2419,61 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    /**
+     * Настоящее сжатие контекста: старшие сообщения сводятся реальной моделью
+     * через мост, локальная история не удаляется — сводка становится разделителем,
+     * после которого модель видит только сводку и свежие сообщения.
+     */
     fun compactSessionContextWindow() {
+        if (activeGenerationJob?.isActive == true) {
+            android.widget.Toast.makeText(getApplication(),
+                "Дождитесь завершения ответа — затем сожмите контекст", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
         viewModelScope.launch {
-            val s = _settings.value
-            val prevUsed = _contextWindowStatus.value.usedTokens.coerceAtLeast(3200)
-            val (compactedStatus, summaryText) = backendClient.compactContextWindow(
-                pcBridgeUrl = s.pcBridgeUrl,
-                conversationId = s.activeConversationId,
-                modelId = s.selectedModelId
-            )
-            val savedTok = (prevUsed - compactedStatus.usedTokens).coerceAtLeast(1180)
-            val officialCompactNotice = "было токенов: $prevUsed • сэкономлено $savedTok токенов"
-            _lastCompactedSummary.value = officialCompactNotice
-            _messages.update { list ->
-                val compacted = list.map { msg ->
-                    msg.copy(
-                        isThinkingExpanded = false,
-                        toolCalls = msg.toolCalls.map { tc -> tc.copy(details = tc.details.take(120)) }
-                    )
-                }
-                compacted + ChatMessage(
-                    id = "ctx_compact_${System.currentTimeMillis()}",
-                    role = MessageRole.AGENT,
-                    content = "**$summaryText** (`$officialCompactNotice`)",
-                    timestamp = currentTimeFormatted(),
-                    isContextResetDivider = true
-                )
+            val raw = _messages.value
+            val keepRecent = 4
+            var cutIndex = (raw.size - keepRecent).coerceAtLeast(1)
+            // Новый разделитель должен стать последним: старые разделители попадают в сводку.
+            val lastExistingDivider = raw.indexOfLast { it.isContextResetDivider }
+            if (lastExistingDivider >= cutIndex) cutIndex = lastExistingDivider + 1
+            val older = raw.subList(0, cutIndex).filter {
+                !it.isStreaming && it.role != MessageRole.SYSTEM && it.content.isNotBlank()
             }
-            _contextWindowStatus.value = compactedStatus
+            if (older.size < 2) {
+                android.widget.Toast.makeText(getApplication(),
+                    "Сжатие: недостаточно сообщений в контексте", android.widget.Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            android.widget.Toast.makeText(getApplication(),
+                "Сжатие контекста: модель составляет сводку…", android.widget.Toast.LENGTH_SHORT).show()
+            val (summary, error) = backendClient.compactChatContext(
+                pcBridgeUrl = _settings.value.pcBridgeUrl,
+                messages = older,
+                modelId = _settings.value.selectedModelId
+            )
+            if (summary.isNullOrBlank()) {
+                android.widget.Toast.makeText(getApplication(),
+                    error ?: "Сжатие не выполнено — история сохранена без изменений", android.widget.Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            val divider = ChatMessage(
+                id = "ctx_compact_${System.currentTimeMillis()}",
+                role = MessageRole.AGENT,
+                content = summary,
+                timestamp = currentTimeFormatted(),
+                isContextResetDivider = true,
+                isCompactionSummary = true
+            )
+            _messages.update { list ->
+                val index = list.indexOfFirst { it.id == raw.getOrNull(cutIndex - 1)?.id }.let { if (it >= 0) it + 1 else cutIndex }
+                list.take(index) + divider + list.drop(index)
+            }
+            _lastCompactedSummary.value = summary.replace(Regex("\\s+"), " ").take(160)
+            cacheCurrentSession()
+            refreshContextWindowStatus()
+            android.widget.Toast.makeText(getApplication(),
+                "Контекст сжат: сводка ${summary.length} симв. (${older.size} сообщений)", android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -2206,6 +2651,10 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     // ---------------------------------------------------------------------------
 
     fun startLiveVoiceCall(expandOverlay: Boolean = true) {
+        if (androidx.core.content.ContextCompat.checkSelfPermission(getApplication(), android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            android.widget.Toast.makeText(getApplication(), "Разрешите доступ к микрофону для голосового режима.", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
         syncVoiceConfig()
         AntigravityVoiceForegroundService.start(getApplication())
         voiceEngine.startRealtimeSession(expandOverlay = expandOverlay)
@@ -2219,10 +2668,12 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     fun sendUserPrompt(
         rawPrompt: String,
         viaVoice: Boolean = false,
-        hiddenPhoneContext: String = ""
+        hiddenPhoneContext: String = "",
+        queuedTurn: QueuedFollowUp? = null,
+        versionAnchor: ChatMessage? = null
     ) {
-        val currentAttachments = _pendingAttachments.value
-        val cleanInput = backendClient.sanitizeCleanUserText(rawPrompt)
+        val currentAttachments = versionAnchor?.attachments ?: queuedTurn?.attachments ?: _pendingAttachments.value
+        val cleanInput = rawPrompt.trim()
         val prompt = cleanInput.ifEmpty {
             if (currentAttachments.isNotEmpty()) {
                 "Проанализируй прикреплённые файлы: ${currentAttachments.joinToString(", ") { it.name }}"
@@ -2231,6 +2682,22 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
             }
         }
         if (prompt.isEmpty() && currentAttachments.isEmpty()) return
+
+        if (queuedTurn == null && !viaVoice && activeGenerationJob?.isActive == true) {
+            val settings = _settings.value
+            if (_queuedFollowUps.value.count { it.conversationId == settings.activeConversationId } >= 10) {
+                android.widget.Toast.makeText(getApplication(), "В очереди уже 10 сообщений. Удалите лишние перед добавлением.", android.widget.Toast.LENGTH_LONG).show()
+                _composerDraft.value = rawPrompt
+                return
+            }
+            _queuedFollowUps.update { it + QueuedFollowUp(conversationId = settings.activeConversationId,
+                target = settings.executionTarget, prompt = prompt, attachments = currentAttachments,
+                temporary = _temporaryChatActive.value,
+                executionContextId = conversationExecutionId(settings.activeConversationId, _messages.value)) }
+            _pendingAttachments.value = emptyList()
+            saveFollowUpQueue()
+            return
+        }
 
         // Быстрые встроенные слэш-действия контекста
         if (prompt.trim().equals("/reset", ignoreCase = true)) {
@@ -2242,19 +2709,36 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
             return
         }
 
-        _pendingAttachments.value = emptyList()
+        if (queuedTurn == null && versionAnchor == null) _pendingAttachments.value = emptyList()
         _topModeTab.value = TopModeTab.CHAT
         _drawerSection.value = DrawerSection.CHAT
 
         // Останавливаем любую предыдущую незавершённую генерацию
-        activeGenerationJob?.cancel()
-        activeGenerationJob = null
+        stopActiveGeneration()
 
+        val turnRevision = ++generationRevision
+        if (_settings.value.activeConversationId.isBlank()) {
+            _settings.update { it.copy(
+                activeConversationId = java.util.UUID.randomUUID().toString(),
+                activeSessionTitle = prompt.replace(Regex("\\s+"), " ").take(48)
+            ) }
+        }
         val currentSettings = _settings.value
-        val historySnapshot = _messages.value
+        val historySnapshot = chatHistoryForModel(if (versionAnchor != null) _messages.value.dropLast(1) else _messages.value)
+        val executionConversationId = conversationExecutionId(currentSettings.activeConversationId, _messages.value)
         val isVoiceActive = viaVoice || voiceEngine.isCallActive.value
+        // Инструкции проекта и документы контекста — только для чатов, связанных с проектом;
+        // временный чат не обращается к памяти/контексту проектов.
+        val projectContext = if (_temporaryChatActive.value) {
+            ""
+        } else {
+            ProjectWorkspaces.contextMarkdown(workspaceForChat(currentSettings.activeConversationId))
+        }
+        val combinedExtraContext = listOf(hiddenPhoneContext, projectContext)
+            .filter { it.isNotBlank() }.joinToString("\n\n")
 
-        val userMsg = ChatMessage(
+        val userMsg = versionAnchor ?: ChatMessage(
+            id = queuedTurn?.id ?: java.util.UUID.randomUUID().toString(),
             role = MessageRole.USER,
             content = prompt,
             timestamp = currentTimeFormatted(),
@@ -2278,7 +2762,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
         )
 
         _messages.update { currentList ->
-            val sanitizedPrevious = currentList.mapNotNull { prev ->
+            val sanitizedPrevious = (if (versionAnchor != null) currentList.dropLast(1) else currentList).mapNotNull { prev ->
                 if (prev.isStreaming) {
                     if (prev.content.isBlank() || prev.content == "Думаю…") {
                         null
@@ -2307,6 +2791,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
             )
         }
 
+        cacheCurrentSession()
         activeGenerationJob = agentExecutionScope.launch {
             val timerJob = launch {
                 var sec = 1
@@ -2324,20 +2809,35 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                     }
                 }
             }
+            var completedSuccessfully = false
+            var completedConversationId = currentSettings.activeConversationId
             try {
+                if (queuedTurn != null) {
+                    // Persist delivery before removing durable queued intent. A restart can
+                    // deduplicate by the same message id without repeating model inference.
+                    if (!queuedTurn.temporary) {
+                        val deliverySnapshot = _messages.value
+                        withContext(Dispatchers.IO) { historyStore.save(SavedChat(currentSettings.activeConversationId,
+                            currentSettings.activeSessionTitle, currentSettings.executionTarget, deliverySnapshot)) }
+                    }
+                    removeQueuedFollowUp(queuedTurn.id)
+                }
                 val result = backendClient.executeAgentTurn(
                     userPrompt = prompt,
                     viaVoice = isVoiceActive,
                     executionTarget = currentSettings.executionTarget,
                     selectedModelId = currentSettings.selectedModelId,
-                    activeConversationId = currentSettings.activeConversationId,
+                    activeConversationId = executionConversationId,
                     activeSessionTitle = currentSettings.activeSessionTitle,
                     attachments = currentAttachments,
                     sessionHistory = historySnapshot,
                     pcBridgeUrl = currentSettings.pcBridgeUrl,
                     geminiApiKey = currentSettings.geminiApiKey,
-                    extraPhoneContext = hiddenPhoneContext,
+                    openRouterApiKey = _openRouterApiKey.value,
+                    extraPhoneContext = combinedExtraContext,
+                    transientChat = _temporaryChatActive.value,
                     onStreamingUpdate = { update ->
+                        if (turnRevision != generationRevision) return@executeAgentTurn
                         if (update.tokensPerSecond > 0f) {
                             _liveTokensPerSecond.value = update.tokensPerSecond
                         }
@@ -2348,14 +2848,15 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                             list.map { msg ->
                                 if (msg.id == streamingAgentMsgId) {
                                     val nextThinking = update.thinking.takeIf { it.isNotBlank() } ?: msg.thinking
-                                    val expandThinking = update.fullText.isBlank() && !update.isDone
+                                    val expandThinking = msg.isThinkingExpanded
                                     msg.copy(
                                         content = update.fullText.ifBlank { msg.content },
                                         thinking = nextThinking,
                                         thinkingDurationSec = update.thinkingDurationSec.coerceAtLeast(msg.thinkingDurationSec),
                                         isThinkingExpanded = expandThinking,
-                                        toolCalls = if (update.toolCalls.isNotEmpty()) update.toolCalls else msg.toolCalls,
+                                        toolCalls = if (update.toolCalls.isNotEmpty()) update.toolCalls.map { it.copy(executionTarget = it.executionTarget ?: currentSettings.executionTarget) } else msg.toolCalls,
                                         createdDiffs = if (update.createdDiffs.isNotEmpty()) update.createdDiffs else msg.createdDiffs,
+                                        generatedMedia = if (update.generatedMedia.isNotEmpty()) update.generatedMedia else msg.generatedMedia,
                                         tokensPerSecond = if (update.tokensPerSecond > 0f) update.tokensPerSecond else msg.tokensPerSecond,
                                         outputTokensCount = if (update.outputTokensCount > 0) update.outputTokensCount else msg.outputTokensCount,
                                         firstTokenLatencyMs = if (update.firstTokenLatencyMs > 0L) update.firstTokenLatencyMs else msg.firstTokenLatencyMs,
@@ -2366,11 +2867,12 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                                 }
                             }
                         }
+                        persistStreamingChat()
                         if (_aiPermissions.value.runInBackgroundKeepAwake) {
                             val stepDesc = when {
                                 update.toolCalls.isNotEmpty() -> "Инструмент: ${update.toolCalls.last().summary}"
                                 update.fullText.isNotBlank() -> "Генерация ответа (${update.fullText.length} симв.)"
-                                else -> "Фаза рассуждения (${update.thinkingDurationSec} с)…"
+                                else -> "Ожидание ответа…"
                             }
                             AntigravityAgentSessionService.updateAgentTurnProgress(
                                 getApplication(),
@@ -2388,6 +2890,8 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                     }
                 )
 
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                if (turnRevision != generationRevision) return@launch
                 if (result.createdDiffs.isNotEmpty()) {
                     _fileDiffs.update { (result.createdDiffs + it).distinctBy { d -> "${d.path}:${d.additions}:${d.deletions}" } }
                 }
@@ -2410,9 +2914,9 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                                 content = result.responseMarkdown,
                                 thinking = finalThinking,
                                 thinkingDurationSec = result.thinkingDurationSec,
-                                isThinkingExpanded = false,
+                                isThinkingExpanded = msg.isThinkingExpanded,
                                 isStreaming = false,
-                                toolCalls = result.toolCalls,
+                                toolCalls = result.toolCalls.map { it.copy(executionTarget = it.executionTarget ?: currentSettings.executionTarget) },
                                 createdDiffs = result.createdDiffs,
                                 generatedMedia = result.generatedMedia,
                                 tokensPerSecond = result.tokensPerSecond,
@@ -2426,11 +2930,16 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                     }
                 }
 
-                val resolvedConvId = result.updatedConversationId.ifBlank { currentSettings.activeConversationId }
+                val resolvedConvId = if (executionConversationId != currentSettings.activeConversationId)
+                    currentSettings.activeConversationId else result.updatedConversationId.ifBlank { currentSettings.activeConversationId }
+                completedConversationId = resolvedConvId
                 val cleanTitle = currentSettings.activeSessionTitle.ifBlank {
                     prompt.replace(Regex("\\s+"), " ").take(48).ifBlank { "Сессия Antigravity" }
                 }
                 if (resolvedConvId.isNotBlank() && resolvedConvId != currentSettings.activeConversationId) {
+                    _queuedFollowUps.update { FollowUpQueue.rebind(it, currentSettings.activeConversationId,
+                        resolvedConvId, currentSettings.executionTarget) }
+                    saveFollowUpQueue()
                     _settings.update {
                         it.copy(
                             activeConversationId = resolvedConvId,
@@ -2438,7 +2947,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                         )
                     }
                 }
-                if (resolvedConvId.isNotBlank()) {
+                if (resolvedConvId.isNotBlank() && !_temporaryChatActive.value) {
                     sessionHistoryCache[resolvedConvId] = _messages.value
                     _remoteSessions.update { list ->
                         val existingIdx = list.indexOfFirst { it.id == resolvedConvId }
@@ -2456,9 +2965,9 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                                 RemoteSessionItem(
                                     id = resolvedConvId,
                                     title = cleanTitle,
-                                    environment = "Удалённая сессия ПК",
-                                    host = "cr05318",
-                                    hostType = "PC",
+                                    environment = if (currentSettings.executionTarget == AgentExecutionTarget.PHONE_LOCAL_RESOURCES) "Память телефона" else "Удалённая сессия ПК",
+                                    host = if (currentSettings.executionTarget == AgentExecutionTarget.PHONE_LOCAL_RESOURCES) "Телефон" else "Компьютер",
+                                    hostType = if (currentSettings.executionTarget == AgentExecutionTarget.PHONE_LOCAL_RESOURCES) "PHONE" else "PC",
                                     updatedAtMs = System.currentTimeMillis(),
                                     messageCount = _messages.value.size
                                 )
@@ -2466,8 +2975,12 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                         }
                     }
                 }
-                syncRemoteSessionsFromPc()
-                refreshContextWindowStatus()
+                cacheCurrentSession()
+                if (currentSettings.executionTarget != AgentExecutionTarget.PHONE_LOCAL_RESOURCES) {
+                    syncRemoteSessionsFromPc()
+                    refreshContextWindowStatus()
+                }
+                completedSuccessfully = !result.isError
 
                 if (isVoiceActive) {
                     voiceEngine.onStreamingTextDelta(
@@ -2476,14 +2989,49 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                         isFinal = true
                     )
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Честное состояние ошибки: сетевые сбои отделены от прочих.
+                val offline = e is java.net.UnknownHostException || e is java.net.ConnectException ||
+                    e is java.net.SocketTimeoutException || e is java.io.IOException
+                val errorText = if (offline) {
+                    "Мост ПК недоступен — запрос не отправлен. Переписка сохранена на телефоне; " +
+                        "после восстановления связи нажмите «Повторить»."
+                } else {
+                    "Не удалось получить ответ (${e.localizedMessage ?: "ошибка"}). " +
+                        "Переписка сохранена на телефоне; попробуйте ещё раз."
+                }
+                _messages.update { list ->
+                    list.map { msg ->
+                        if (msg.id == streamingAgentMsgId) msg.copy(
+                            isStreaming = false, isThinkingExpanded = false,
+                            content = msg.content.ifBlank { errorText }
+                        ) else msg
+                    }
+                }
             } finally {
                 timerJob.cancel()
-                AntigravityAgentSessionService.stopAgentTurnForeground(getApplication())
+                if (turnRevision == generationRevision) {
+                    cacheCurrentSession()
+                    AntigravityAgentSessionService.stopAgentTurnForeground(getApplication())
+                    activeGenerationJob = null
+                    if (completedSuccessfully && _settings.value.activeConversationId == completedConversationId) {
+                        val completedSession = completedConversationId
+                        val next = _queuedFollowUps.value.firstOrNull {
+                            it.conversationId == completedSession && it.target == currentSettings.executionTarget &&
+                                (it.executionContextId.isBlank() || it.executionContextId == conversationExecutionId(completedSession, _messages.value))
+                        }
+                        if (next != null) viewModelScope.launch { sendQueuedFollowUp(next.id) }
+                    }
+                }
             }
         }
     }
 
     fun stopActiveGeneration() {
+        generationRevision++
+        backendClient.cancelActiveRemoteTurn()
         activeGenerationJob?.cancel()
         activeGenerationJob = null
         AntigravityAgentSessionService.stopAgentTurnForeground(getApplication())
@@ -2494,6 +3042,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                     msg.copy(
                         isStreaming = false,
                         isThinkingExpanded = false,
+                        toolCalls = msg.toolCalls.map { if (it.status == ToolCallStatus.RUNNING) it.copy(status = ToolCallStatus.CANCELLED, details = "Работа остановлена") else it },
                         content = if (msg.content.isBlank() || msg.content == "Думаю…") {
                             "Генерация ответа остановлена."
                         } else {
@@ -2505,25 +3054,44 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                 }
             }
         }
+        cacheCurrentSession()
+    }
+
+    fun branchFromMessage(messageId: String) {
+        val history = prepareChatBranch(_messages.value, messageId) ?: return
+        stopActiveGeneration()
+        cacheCurrentSession()
+        val branchId = java.util.UUID.randomUUID().toString()
+        if (_temporaryChatActive.value) temporaryChatIds.add(branchId)
+        _settings.update { it.copy(activeConversationId = branchId,
+            activeSessionTitle = "Ветка · " + it.activeSessionTitle.take(50)) }
+        _messages.value = history
+        _pendingAttachments.value = emptyList()
+        setComposerDraft("")
+        cacheCurrentSession()
     }
 
     fun regenerateResponseForMessage(messageId: String) {
-        val currentList = _messages.value
-        val idx = currentList.indexOfFirst { it.id == messageId }
-        if (idx <= 0) return
-        val prevUserMsg = currentList.subList(0, idx).lastOrNull { it.role == MessageRole.USER } ?: return
-        _messages.value = currentList.subList(0, idx - 1)
-        sendUserPrompt(prevUserMsg.content, viaVoice = false)
+        val responseIndex = _messages.value.indexOfFirst { it.id == messageId && it.role == MessageRole.AGENT }
+        if (responseIndex < 0) return
+        val anchor = _messages.value.take(responseIndex).lastOrNull {
+            it.role == MessageRole.USER && !it.isContextResetDivider
+        } ?: return
+        editAndResendUserMessage(anchor.id, anchor.content)
     }
 
     fun editAndResendUserMessage(messageId: String, newPromptText: String) {
-        if (newPromptText.isBlank()) return
-        val currentList = _messages.value
-        val idx = currentList.indexOfFirst { it.id == messageId }
-        if (idx >= 0) {
-            _messages.value = currentList.subList(0, idx)
-        }
-        sendUserPrompt(newPromptText.trim(), viaVoice = false)
+        val forked = forkMessageVersion(_messages.value, messageId, newPromptText) ?: return
+        stopActiveGeneration()
+        _messages.value = forked
+        val anchor = forked.last()
+        sendUserPrompt(anchor.content, viaVoice = false, versionAnchor = anchor)
+    }
+
+    fun selectUserMessageVersion(messageId: String, index: Int) {
+        val selected = selectMessageVersion(_messages.value, messageId, index) ?: return
+        _messages.value = selected
+        cacheCurrentSession()
     }
 
     fun saveSnippetToPhoneFile(suggestedFileName: String, content: String) {
@@ -2686,6 +3254,10 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
 
     override fun onCleared() {
         super.onCleared()
+        stopActiveGeneration()
+        cacheCurrentSession()
+        historyWriter.shutdown()
+        agentExecutionScope.cancel()
         voiceEngine.release()
     }
 }

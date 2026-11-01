@@ -235,6 +235,7 @@ fun OrbitVoiceOverlay(
                         VoiceSessionStatus.AI_SPEAKING -> "Нажмите на сферу или начните говорить, чтобы прервать"
                         VoiceSessionStatus.MUTED -> "Микрофон на паузе — нажмите внизу, чтобы продолжить"
                         VoiceSessionStatus.THINKING -> "Формирую голосовой ответ…"
+                        VoiceSessionStatus.RECONNECTING -> "Соединение восстанавливается автоматически"
                         else -> "Можно делать паузы на вдох — фраза отправится после 2.2 с тишины"
                     }
 
@@ -343,6 +344,7 @@ fun FloatingVoiceCallPill(
                             VoiceSessionStatus.AI_SPEAKING -> "Говорит"
                             VoiceSessionStatus.THINKING -> "Думает…"
                             VoiceSessionStatus.MUTED -> "Выкл. микр."
+                            VoiceSessionStatus.RECONNECTING -> "Переподключение…"
                             else -> "Слушает…"
                         }
                     }",

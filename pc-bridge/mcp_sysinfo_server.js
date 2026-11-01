@@ -25,10 +25,13 @@ rl.on('line', (line) => {
     try {
         req = JSON.parse(trimmed);
     } catch (_) {
-        return;
+        return sendError(null, -32700, 'Invalid JSON');
     }
-
+    if (!req || typeof req !== 'object' || Array.isArray(req) || typeof req.method !== 'string') {
+        return sendError(null, -32600, 'Invalid JSON-RPC request');
+    }
     const { id, method, params } = req;
+    if (id === undefined && !method.startsWith('notifications/')) return;
     if (method === 'initialize') {
         return sendResponse(id, {
             protocolVersion: (params && params.protocolVersion) || '2024-11-05',
@@ -94,6 +97,6 @@ rl.on('line', (line) => {
     }
 
     if (id !== undefined) {
-        sendResponse(id, {});
+        sendError(id, -32601, `Unknown method: ${method}`);
     }
 });

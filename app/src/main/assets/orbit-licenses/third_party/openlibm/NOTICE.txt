@@ -1,0 +1,20 @@
+Orbit GeometryMath.cpp adapts only the double-precision atan and atan2
+kernels from OpenLibm's src/s_atan.c and src/e_atan2.c, originally developed
+by Sun Microsystems as fdlibm. No complete math library is bundled.
+
+Pinned source and source checksums are recorded in source.lock.json.
+The original permission notices are preserved in LICENSE.txt and in the
+adapted source.
+
+Local changes:
+- Internal orbit::detail namespace; no replacement of process-wide libm.
+- C++ fixed-width types and memcpy bit access instead of C word macros.
+- Explicit const-volatile reads without casting away const.
+- Equivalent exponent-difference comparisons without signed right shifts.
+- No weak aliases, exported C math symbols, or platform header dependency.
+- Fixed polynomial operation order, no fast math or multiply-add contraction.
+
+Graphic-eye angle-weighted normals and crescent socket angles use these
+kernels. Float socket angles explicitly round the double result to float.
+The shared result is included in the geometry compiler and fit-profile
+identity.

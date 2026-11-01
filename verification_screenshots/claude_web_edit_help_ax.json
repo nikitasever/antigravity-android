@@ -1,0 +1,818 @@
+[
+  {
+    "role": "RootWebArea",
+    "name": "Проверка интерфейса - Claude"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "status",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "heading",
+    "name": "Claude"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "StaticText",
+    "name": "Claude"
+  },
+  {
+    "role": "complementary",
+    "name": "Sidebar"
+  },
+  {
+    "role": "main",
+    "name": ""
+  },
+  {
+    "role": "status",
+    "name": ""
+  },
+  {
+    "role": "region",
+    "name": "Notifications"
+  },
+  {
+    "role": "button",
+    "name": "Hide sidebar"
+  },
+  {
+    "role": "link",
+    "name": "Claude"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "separator",
+    "name": "Resize sidebar"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "StaticText",
+    "name": "Claude"
+  },
+  {
+    "role": "heading",
+    "name": "Navigation"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "StaticText",
+    "name": "Navigation"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "link",
+    "name": "New"
+  },
+  {
+    "role": "button",
+    "name": "Search"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "link",
+    "name": "Artifacts"
+  },
+  {
+    "role": "link",
+    "name": "Code Upgrade"
+  },
+  {
+    "role": "link",
+    "name": "Customize"
+  },
+  {
+    "role": "heading",
+    "name": "Chats and tasks"
+  },
+  {
+    "role": "button",
+    "name": "Group and sort"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "button",
+    "name": "View all"
+  },
+  {
+    "role": "status",
+    "name": ""
+  },
+  {
+    "role": "button",
+    "name": "Nikita Free"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "status",
+    "name": ""
+  },
+  {
+    "role": "status",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "StaticText",
+    "name": "New"
+  },
+  {
+    "role": "StaticText",
+    "name": "Search"
+  },
+  {
+    "role": "link",
+    "name": "Projects"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "StaticText",
+    "name": "Artifacts"
+  },
+  {
+    "role": "StaticText",
+    "name": "Code"
+  },
+  {
+    "role": "StaticText",
+    "name": "Upgrade"
+  },
+  {
+    "role": "StaticText",
+    "name": "Customize"
+  },
+  {
+    "role": "button",
+    "name": "Chats and tasks"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "StaticText",
+    "name": "View all"
+  },
+  {
+    "role": "StaticText",
+    "name": "Nikita"
+  },
+  {
+    "role": "StaticText",
+    "name": "Free"
+  },
+  {
+    "role": "link",
+    "name": "Get apps and extensions"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "StaticText",
+    "name": "Claude finished the response"
+  },
+  {
+    "role": "StaticText",
+    "name": "Projects"
+  },
+  {
+    "role": "StaticText",
+    "name": "Chats and tasks"
+  },
+  {
+    "role": "button",
+    "name": "Import memory Try"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "button",
+    "name": "Customize Claude for you Try"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "link",
+    "name": "Idle Проверка интерфейса"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "link",
+    "name": "Idle Знакомство с ассистентом"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "StaticText",
+    "name": "Import memory"
+  },
+  {
+    "role": "StaticText",
+    "name": "Try"
+  },
+  {
+    "role": "button",
+    "name": "Dismiss this suggestion"
+  },
+  {
+    "role": "StaticText",
+    "name": "Customize Claude for you"
+  },
+  {
+    "role": "StaticText",
+    "name": "Try"
+  },
+  {
+    "role": "button",
+    "name": "Dismiss this suggestion"
+  },
+  {
+    "role": "image",
+    "name": "Idle"
+  },
+  {
+    "role": "StaticText",
+    "name": "Проверка интерфейса"
+  },
+  {
+    "role": "button",
+    "name": "More options for Проверка интерфейса"
+  },
+  {
+    "role": "image",
+    "name": "Idle"
+  },
+  {
+    "role": "StaticText",
+    "name": "Знакомство с ассистентом"
+  },
+  {
+    "role": "button",
+    "name": "More options for Знакомство с ассистентом"
+  },
+  {
+    "role": "toolbar",
+    "name": "Page tools"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "heading",
+    "name": "Проверка интерфейса"
+  },
+  {
+    "role": "button",
+    "name": "More options for Проверка интерфейса"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "feed",
+    "name": "Chat messages"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "button",
+    "name": "Проверка интерфейса, rename chat"
+  },
+  {
+    "role": "StaticText",
+    "name": "Free plan"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "button",
+    "name": "Dismiss upgrade banner"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "status",
+    "name": ""
+  },
+  {
+    "role": "paragraph",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "status",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "group",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "link",
+    "name": "Upgrade"
+  },
+  {
+    "role": "button",
+    "name": "Share"
+  },
+  {
+    "role": "StaticText",
+    "name": "Use the up and down arrow keys to move between messages."
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "StaticText",
+    "name": "Проверка интерфейса"
+  },
+  {
+    "role": "StaticText",
+    "name": "Upgrade"
+  },
+  {
+    "role": "StaticText",
+    "name": "Share"
+  },
+  {
+    "role": "article",
+    "name": "Message 1 of 2"
+  },
+  {
+    "role": "article",
+    "name": "Message 2 of 2"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "heading",
+    "name": "You said: Проверка интерфейса."
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "button",
+    "name": "About saving"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "button",
+    "name": "Cancel"
+  },
+  {
+    "role": "button",
+    "name": "Save"
+  },
+  {
+    "role": "status",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "status",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "status",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "StaticText",
+    "name": "You said: Проверка интерфейса."
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "StaticText",
+    "name": "Cancel"
+  },
+  {
+    "role": "StaticText",
+    "name": "Save"
+  },
+  {
+    "role": "heading",
+    "name": "Claude responded: ПРОВЕРКА ГОТОВА"
+  },
+  {
+    "role": "paragraph",
+    "name": ""
+  },
+  {
+    "role": "toolbar",
+    "name": "Message actions"
+  },
+  {
+    "role": "status",
+    "name": ""
+  },
+  {
+    "role": "status",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "note",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "textbox",
+    "name": "Edit message"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "StaticText",
+    "name": "Claude responded: ПРОВЕРКА ГОТОВА"
+  },
+  {
+    "role": "StaticText",
+    "name": "ПРОВЕРКА ГОТОВА"
+  },
+  {
+    "role": "button",
+    "name": "Copy"
+  },
+  {
+    "role": "status",
+    "name": ""
+  },
+  {
+    "role": "button",
+    "name": "Read aloud"
+  },
+  {
+    "role": "button",
+    "name": "Good response"
+  },
+  {
+    "role": "button",
+    "name": "Bad response"
+  },
+  {
+    "role": "button",
+    "name": "Retry"
+  },
+  {
+    "role": "time",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "link",
+    "name": "Claude is AI and can make mistakes. Please double-check responses."
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "dialog",
+    "name": "About saving"
+  },
+  {
+    "role": "StaticText",
+    "name": "just now"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "button",
+    "name": "Use voice mode"
+  },
+  {
+    "role": "StaticText",
+    "name": "Claude is AI and can make mistakes."
+  },
+  {
+    "role": "StaticText",
+    "name": " "
+  },
+  {
+    "role": "StaticText",
+    "name": "Please double-check responses."
+  },
+  {
+    "role": "button",
+    "name": "Model: Haiku 5.5 Medium"
+  },
+  {
+    "role": "StaticText",
+    "name": "Проверка интерфейса. Ответь ровно: ПРОВЕРКА ГОТОВА"
+  },
+  {
+    "role": "generic",
+    "name": "Making changes creates a new branch in the conversation."
+  },
+  {
+    "role": "textbox",
+    "name": "Write your prompt to Claude"
+  },
+  {
+    "role": "status",
+    "name": ""
+  },
+  {
+    "role": "button",
+    "name": "Add files, connectors, and more"
+  },
+  {
+    "role": "generic",
+    "name": ""
+  },
+  {
+    "role": "StaticText",
+    "name": "Haiku 5.5"
+  },
+  {
+    "role": "StaticText",
+    "name": " "
+  },
+  {
+    "role": "StaticText",
+    "name": "Medium"
+  },
+  {
+    "role": "StaticText",
+    "name": "Making changes creates a new branch in the conversation."
+  },
+  {
+    "role": "paragraph",
+    "name": ""
+  },
+  {
+    "role": "group",
+    "name": "Dictate"
+  },
+  {
+    "role": "LineBreak",
+    "name": "\n"
+  },
+  {
+    "role": "button",
+    "name": "Dictate"
+  },
+  {
+    "role": "button",
+    "name": "Microphone"
+  }
+]

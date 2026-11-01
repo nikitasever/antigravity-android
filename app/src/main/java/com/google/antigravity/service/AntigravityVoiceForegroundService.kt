@@ -34,11 +34,7 @@ class AntigravityVoiceForegroundService : Service() {
                 action = ACTION_START
             }
             try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    context.startForegroundService(intent)
-                } else {
-                    context.startService(intent)
-                }
+                context.startForegroundService(intent)
             } catch (_: Throwable) {
             }
         }
@@ -76,25 +72,26 @@ class AntigravityVoiceForegroundService : Service() {
             } else {
                 startForeground(NOTIFICATION_ID, notification)
             }
-        } catch (_: Throwable) {
+        } catch (e: Exception) {
+            android.util.Log.e("VoiceForegroundService", "Cannot enter foreground", e)
+            stopSelf()
+            return START_NOT_STICKY
         }
 
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     private fun ensureChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                getString(R.string.voice_channel_name),
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Полнодуплексный голосовой канал Antigravity Live (Orbit + Bell Mode)"
-                setShowBadge(false)
-            }
-            nm.createNotificationChannel(channel)
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            getString(R.string.voice_channel_name),
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Полнодуплексный голосовой канал Antigravity Live (Orbit + Bell Mode)"
+            setShowBadge(false)
         }
+        nm.createNotificationChannel(channel)
     }
 
     private fun buildVoiceNotification(): Notification {
