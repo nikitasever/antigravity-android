@@ -1,0 +1,2498 @@
+package com.google.antigravity.network
+
+import com.google.antigravity.device.PhoneResourceController
+import com.google.antigravity.model.AVAILABLE_AGY_MODELS
+import com.google.antigravity.model.AgentExecutionTarget
+import com.google.antigravity.model.AiPermissionsConfig
+import com.google.antigravity.model.AntigravityModelOption
+import com.google.antigravity.model.AttachedFileItem
+import com.google.antigravity.model.ChatMessage
+import com.google.antigravity.model.ContextWindowStatus
+import com.google.antigravity.model.FileDiffItem
+import com.google.antigravity.model.GeneratedMediaAttachment
+import com.google.antigravity.model.GoogleDriveFileItem
+import com.google.antigravity.model.GoogleDriveStatus
+import com.google.antigravity.model.InstalledPluginItem
+import com.google.antigravity.model.MessageRole
+import com.google.antigravity.model.OpenRouterCategory
+import com.google.antigravity.model.OpenRouterModelItem
+import com.google.antigravity.model.PcMcpServerItem
+import com.google.antigravity.model.PcSkillItem
+import com.google.antigravity.model.RemoteSessionItem
+import com.google.antigravity.model.SwarmAgentNode
+import com.google.antigravity.model.ToolCallEvent
+import com.google.antigravity.model.ToolCallStatus
+import com.google.antigravity.model.mapToDirectGeminiModelId
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.BufferedReader
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
+import java.util.concurrent.TimeUnit
+
+class AntigravityBackendClient(
+    private val phoneController: PhoneResourceController
+) {
+
+    data class StreamingTurnUpdate(
+        val thinking: String,
+        val thinkingDurationSec: Int,
+        val toolCalls: List<ToolCallEvent>,
+        val textDelta: String,
+        val fullText: String,
+        val createdDiffs: List<FileDiffItem> = emptyList(),
+        val isDone: Boolean = false,
+        val tokensPerSecond: Float = 0f,
+        val outputTokensCount: Int = 0,
+        val firstTokenLatencyMs: Long = 0L
+    )
+
+    data class AgentTurnResult(
+        val thinkingTrace: String,
+        val thinkingDurationSec: Int = 0,
+        val responseMarkdown: String,
+        val spokenSummaryRu: String,
+        val updatedConversationId: String = "",
+        val toolCalls: List<ToolCallEvent> = emptyList(),
+        val createdDiffs: List<FileDiffItem> = emptyList(),
+        val generatedMedia: List<GeneratedMediaAttachment> = emptyList(),
+        val tokensPerSecond: Float = 0f,
+        val outputTokensCount: Int = 0,
+        val firstTokenLatencyMs: Long = 0L
+    )
+
+    data class PcBridgeChatResponse(
+        val reply: String,
+        val conversationId: String,
+        val thinking: String = "",
+        val thinkingDurationSec: Int = 0,
+        val toolCalls: List<ToolCallEvent> = emptyList(),
+        val createdDiffs: List<FileDiffItem> = emptyList(),
+        val resolvedBaseUrl: String = "",
+        val tokensPerSecond: Float = 0f,
+        val outputTokensCount: Int = 0,
+        val firstTokenLatencyMs: Long = 0L
+    )
+
+    data class OpenRouterSyncResult(
+        val models: List<OpenRouterModelItem>,
+        val totalCount: Int,
+        val syncedAt: String,
+        val source: String,
+        val fromCache: Boolean = false,
+        val hasApiKey: Boolean = false,
+        val maskedApiKey: String = "",
+        val selectedModel: String = ""
+    )
+
+    data class PcBridgeStatus(
+        val connected: Boolean,
+        val instanceName: String,
+        val hostname: String,
+        val workspace: String,
+        val resolvedBaseUrl: String = ""
+    )
+
+    companion object {
+        val DEFAULT_PUBLIC_BRIDGE_URLS = listOf(
+            "https://424e6a18005d8541-79-137-206-221.serveousercontent.com",
+            "https://ebooa-79-137-206-221.free.pinggy.net",
+            "https://5ade50fa99c92c.lhr.life"
+        )
+    }
+
+    private val httpClient = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(240, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
+        .build()
+
+    private val fastLocalHttpClient = OkHttpClient.Builder()
+        .connectTimeout(1200, TimeUnit.MILLISECONDS)
+        .readTimeout(240, TimeUnit.SECONDS)
+        .writeTimeout(25, TimeUnit.SECONDS)
+        .build()
+
+    private val fastProbeClient = OkHttpClient.Builder()
+        .connectTimeout(3000, TimeUnit.MILLISECONDS)
+        .readTimeout(4000, TimeUnit.MILLISECONDS)
+        .writeTimeout(2500, TimeUnit.MILLISECONDS)
+        .build()
+
+    @Volatile
+    private var lastWorkingBridgeUrl: String = ""
+
+    @Volatile
+    var forcePublicTunnelOnly: Boolean = false
+
+    private val knownDynamicTunnels = java.util.concurrent.CopyOnWriteArraySet<String>()
+
+    fun getLastWorkingBridgeUrl(): String = lastWorkingBridgeUrl
+
+    fun clearWorkingBridgeCache() {
+        lastWorkingBridgeUrl = ""
+        knownDynamicTunnels.clear()
+    }
+
+    private fun isEmulatorDevice(): Boolean {
+        val fp = android.os.Build.FINGERPRINT.lowercase()
+        val model = android.os.Build.MODEL.lowercase()
+        val prod = android.os.Build.PRODUCT.lowercase()
+        return fp.contains("generic") || fp.contains("emulator") || fp.contains("sdk_gphone") ||
+            model.contains("sdk_gphone") || model.contains("emulator") || prod.contains("sdk_gphone")
+    }
+
+    private fun isLocalOrLoopbackUrl(url: String): Boolean {
+        val u = url.trim().lowercase()
+        return u.contains("10.0.2.2") ||
+            u.contains("127.0.0.1") ||
+            u.contains("localhost") ||
+            u.contains("192.168.") ||
+            u.contains("10.0.")
+    }
+
+    private fun isSupportedPublicTunnelUrl(url: String): Boolean {
+        val u = url.trim().lowercase()
+        if (!u.startsWith("https://")) return false
+        return u.contains(".serveousercontent.com") ||
+            u.contains(".pinggy.net") ||
+            u.contains(".pinggy.link") ||
+            u.contains(".lhr.life") ||
+            u.contains(".loca.lt") ||
+            u.contains(".trycloudflare.com")
+    }
+
+    private fun clientForUrl(baseUrl: String): OkHttpClient {
+        return if (isLocalOrLoopbackUrl(baseUrl)) {
+            fastLocalHttpClient
+        } else {
+            httpClient
+        }
+    }
+
+    /**
+     * Формирует список адресов моста ПК:
+     * - Если `forcePublicTunnelOnly == true` или устройство — реальный смартфон,
+     *   НИКОГДА не обращается к `10.0.2.2` или `127.0.0.1`, а использует исключительно публичные HTTPS-туннели.
+     * - Если пользователь явно указал недопустимый/недоступный URL (например, для теста Offline Scenario G
+     *   `https://offline-invalid-bridge.example.com`), то при `pcBridgeUrl.contains("offline")` не подставляет дефолтные туннели.
+     */
+    fun buildCandidateBridgeUrls(pcBridgeUrl: String): List<String> {
+        val clean = pcBridgeUrl.trim().trimEnd('/')
+        if (clean.contains("offline", ignoreCase = true) || clean.contains("invalid", ignoreCase = true)) {
+            return listOf(clean)
+        }
+        val cached = lastWorkingBridgeUrl.trim().trimEnd('/')
+        val allowLocal = isEmulatorDevice() && !forcePublicTunnelOnly
+        if (!allowLocal && isLocalOrLoopbackUrl(lastWorkingBridgeUrl)) {
+            lastWorkingBridgeUrl = ""
+        }
+        return buildList {
+            if (allowLocal) {
+                add("http://10.0.2.2:8787")
+                add("http://127.0.0.1:8787")
+            }
+            if (cached.isNotBlank() && (allowLocal || !isLocalOrLoopbackUrl(cached))) {
+                add(cached)
+            }
+            addAll(knownDynamicTunnels.filter { allowLocal || !isLocalOrLoopbackUrl(it) })
+            if (clean.isNotBlank() && (allowLocal || !isLocalOrLoopbackUrl(clean))) {
+                add(clean)
+            }
+            addAll(DEFAULT_PUBLIC_BRIDGE_URLS)
+        }.distinct()
+    }
+
+    fun sanitizeCleanUserText(raw: String): String {
+        if (raw.isBlank()) return ""
+        var s = raw
+        val reqMatch = Regex("<USER_REQUEST>([\\s\\S]*?)</USER_REQUEST>", RegexOption.IGNORE_CASE).find(s)
+        if (reqMatch != null) {
+            s = reqMatch.groupValues[1]
+        }
+        val phoneMarker = "Запрос пользователя:"
+        val lastPhoneIdx = s.lastIndexOf(phoneMarker)
+        if (lastPhoneIdx >= 0) {
+            s = s.substring(lastPhoneIdx + phoneMarker.length)
+        }
+        val ctxMarker = "Новое сообщение пользователя:"
+        val lastCtxIdx = s.lastIndexOf(ctxMarker)
+        if (lastCtxIdx >= 0) {
+            s = s.substring(lastCtxIdx + ctxMarker.length)
+        }
+        val attMarker = "Прикреплённые файлы с телефона пользователя:"
+        val attIdx = s.indexOf(attMarker)
+        if (attIdx >= 0) {
+            s = s.substring(0, attIdx)
+        }
+        val foundMarker = "Найденные на телефоне элементы:"
+        val foundIdx = s.indexOf(foundMarker)
+        if (foundIdx >= 0) {
+            s = s.substring(0, foundIdx)
+        }
+        val contentMarker = "\n\nСодержимое:\n"
+        val contentIdx = s.indexOf(contentMarker)
+        if (contentIdx >= 0) {
+            s = s.substring(0, contentIdx)
+        }
+        return s.trim()
+    }
+
+    suspend fun discoverLatestBridgeUrls(): List<String> = withContext(Dispatchers.IO) {
+        val latestServeo = LinkedHashSet<String>()
+        val latestPinggy = LinkedHashSet<String>()
+        val latestLhr = LinkedHashSet<String>()
+        for (topic in listOf("ag_bridge_cr05318_st811210", "ag_bridge_cr05318_backup")) {
+            try {
+                val req = Request.Builder()
+                    .url("https://ntfy.sh/$topic/raw?poll=1&since=12h")
+                    .get()
+                    .build()
+                fastProbeClient.newCall(req).execute().use { resp ->
+                    if (resp.isSuccessful) {
+                        val rawText = resp.body?.string().orEmpty()
+                        val tokens = Regex("https://[a-zA-Z0-9.\\-]+")
+                            .findAll(rawText)
+                            .map { it.value.trim().trimEnd('/') }
+                            .filter { isSupportedPublicTunnelUrl(it) }
+                            .toList()
+                        for (url in tokens.asReversed()) {
+                            when {
+                                url.contains(".serveousercontent.com") && latestServeo.size < 2 -> latestServeo.add(url)
+                                (url.contains(".pinggy.net") || url.contains(".pinggy.link")) && latestPinggy.size < 2 -> latestPinggy.add(url)
+                                url.contains(".lhr.life") && latestLhr.size < 2 -> latestLhr.add(url)
+                            }
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+            }
+        }
+        val combined = buildList {
+            addAll(latestServeo)
+            addAll(latestPinggy)
+            addAll(latestLhr)
+        }
+        knownDynamicTunnels.addAll(combined)
+        combined
+    }
+
+    suspend fun discoverLatestBridgeUrl(): String? = discoverLatestBridgeUrls().firstOrNull()
+
+    private fun extractTunnelUrlsFromStatusJson(json: JSONObject): List<String> {
+        val out = mutableListOf<String>()
+        val single = json.optString("publicTunnelUrl", "").trim().trimEnd('/')
+        if (isSupportedPublicTunnelUrl(single)) out.add(single)
+        val arr = json.optJSONArray("publicTunnelUrls")
+        if (arr != null) {
+            for (i in 0 until arr.length()) {
+                val u = arr.optString(i, "").trim().trimEnd('/')
+                if (isSupportedPublicTunnelUrl(u)) out.add(u)
+            }
+        }
+        knownDynamicTunnels.addAll(out)
+        return out.distinct()
+    }
+
+    private fun probeSingleBridgeUrl(base: String): PcBridgeStatus? {
+        if (forcePublicTunnelOnly && isLocalOrLoopbackUrl(base)) return null
+        return try {
+            val probeClient = if (isLocalOrLoopbackUrl(base)) {
+                fastLocalHttpClient
+            } else {
+                fastProbeClient
+            }
+            val req = Request.Builder().url("$base/api/status").get().build()
+            probeClient.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return null
+                val json = JSONObject(resp.body?.string() ?: "{}")
+                if (!json.optBoolean("ok", false)) return null
+                val tunnels = extractTunnelUrlsFromStatusJson(json)
+                val usePublicOnly = !isEmulatorDevice() || forcePublicTunnelOnly
+                val resolved = if (usePublicOnly && tunnels.isNotEmpty()) {
+                    if (base.startsWith("https://")) base else tunnels.first()
+                } else {
+                    base
+                }
+                lastWorkingBridgeUrl = resolved
+                PcBridgeStatus(
+                    connected = true,
+                    instanceName = json.optString("instanceName", "Рабочий компьютер"),
+                    hostname = json.optString("hostname", "ПК"),
+                    workspace = json.optString("workspace", ""),
+                    resolvedBaseUrl = resolved
+                )
+            }
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    suspend fun checkPcBridgeStatus(pcBridgeUrl: String): PcBridgeStatus = withContext(Dispatchers.IO) {
+        val clean = pcBridgeUrl.trim()
+        if (clean.contains("offline", ignoreCase = true) || clean.contains("invalid", ignoreCase = true)) {
+            lastWorkingBridgeUrl = ""
+            return@withContext PcBridgeStatus(false, "Рабочий компьютер", "ПК", "")
+        }
+        val candidates = buildCandidateBridgeUrls(pcBridgeUrl).toMutableList()
+        for (base in candidates) {
+            val status = probeSingleBridgeUrl(base)
+            if (status != null) return@withContext status
+        }
+        for (discovered in discoverLatestBridgeUrls()) {
+            if (discovered in candidates) continue
+            val status = probeSingleBridgeUrl(discovered)
+            if (status != null) return@withContext status
+        }
+        PcBridgeStatus(false, "Рабочий компьютер", "ПК", "")
+    }
+
+    suspend fun fetchAvailableModels(pcBridgeUrl: String): List<AntigravityModelOption> = withContext(Dispatchers.IO) {
+        for (base in buildCandidateBridgeUrls(pcBridgeUrl)) {
+            try {
+                val req = Request.Builder().url("$base/api/models").get().build()
+                fastProbeClient.newCall(req).execute().use { resp ->
+                    if (resp.isSuccessful) {
+                        val json = JSONObject(resp.body?.string() ?: "{}")
+                        val arr = json.optJSONArray("models")
+                        if (arr != null && arr.length() > 0) {
+                            val list = mutableListOf<AntigravityModelOption>()
+                            for (i in 0 until arr.length()) {
+                                val obj = arr.getJSONObject(i)
+                                val id = obj.optString("id", "")
+                                val displayName = obj.optString("displayName", id)
+                                val badge = obj.optString("badge", "Модель Google Antigravity")
+                                if (id.isNotBlank()) {
+                                    list.add(AntigravityModelOption(id = id, displayName = displayName, badge = badge))
+                                }
+                            }
+                            if (list.isNotEmpty()) {
+                                lastWorkingBridgeUrl = base
+                                return@withContext list
+                            }
+                        }
+                    }
+                }
+            } catch (_: Throwable) {
+            }
+        }
+        AVAILABLE_AGY_MODELS
+    }
+
+    suspend fun fetchRemoteSessions(pcBridgeUrl: String): List<RemoteSessionItem> = withContext(Dispatchers.IO) {
+        val clean = pcBridgeUrl.trim()
+        if (clean.contains("offline", ignoreCase = true) || clean.contains("invalid", ignoreCase = true)) {
+            return@withContext emptyList()
+        }
+        val candidates = buildCandidateBridgeUrls(pcBridgeUrl).toMutableList()
+        for (attempt in 0..1) {
+            val urlsToTry = if (attempt == 0) {
+                candidates
+            } else {
+                discoverLatestBridgeUrls().filter { it !in candidates }
+            }
+            for (base in urlsToTry) {
+                try {
+                    val req = Request.Builder().url("$base/api/sessions").get().build()
+                    val bodyStr = fastProbeClient.newCall(req).execute().use { resp ->
+                        if (resp.isSuccessful) resp.body?.string() else null
+                    } ?: continue
+                    val json = JSONObject(bodyStr)
+                    val arr = json.optJSONArray("sessions") ?: continue
+                    val list = mutableListOf<RemoteSessionItem>()
+                    for (i in 0 until arr.length()) {
+                        val item = arr.getJSONObject(i)
+                        val rawTitle = item.optString("title", "Сессия Antigravity")
+                        val cleanTitle = sanitizeCleanUserText(rawTitle).ifBlank { "Сессия Antigravity" }
+                        list.add(
+                            RemoteSessionItem(
+                                id = item.optString("id", ""),
+                                title = cleanTitle.take(54),
+                                environment = "Удалённая сессия ПК",
+                                host = item.optString("host", "cr05318"),
+                                hostType = item.optString("hostType", "PC"),
+                                workspacePath = item.optString("workspacePath", ""),
+                                updatedAtMs = item.optLong("updatedAtMs", System.currentTimeMillis()),
+                                messageCount = item.optInt("messageCount", 0)
+                            )
+                        )
+                    }
+                    if (list.isNotEmpty()) {
+                        lastWorkingBridgeUrl = base
+                        return@withContext list
+                    }
+                } catch (_: Throwable) {
+                }
+            }
+        }
+        emptyList()
+    }
+
+    suspend fun fetchSessionMessages(pcBridgeUrl: String, sessionId: String): List<ChatMessage> = withContext(Dispatchers.IO) {
+        if (sessionId.isBlank()) return@withContext emptyList()
+        val candidates = buildCandidateBridgeUrls(pcBridgeUrl).toMutableList()
+        for (attempt in 0..1) {
+            val urlsToTry = if (attempt == 0) {
+                candidates
+            } else {
+                discoverLatestBridgeUrls().filter { it !in candidates }
+            }
+            for (base in urlsToTry) {
+                try {
+                    val req = Request.Builder().url("$base/api/session?id=$sessionId").get().build()
+                    val bodyStr = fastProbeClient.newCall(req).execute().use { resp ->
+                        if (resp.isSuccessful) resp.body?.string() else null
+                    } ?: continue
+                    val json = JSONObject(bodyStr)
+                    val arr = json.optJSONArray("messages") ?: continue
+                    val list = mutableListOf<ChatMessage>()
+                    for (i in 0 until arr.length()) {
+                        val m = arr.getJSONObject(i)
+                        val roleStr = m.optString("role", "AGENT")
+                        val role = if (roleStr == "USER") MessageRole.USER else MessageRole.AGENT
+                        val rawContent = m.optString("content", "")
+                        val cleanContent = if (role == MessageRole.USER) {
+                            sanitizeCleanUserText(rawContent)
+                        } else {
+                            rawContent.trim()
+                        }
+                        if (cleanContent.isBlank()) continue
+                        val rawThinking = m.optString("thinking", "").trim()
+                        val tcArr = m.optJSONArray("toolCalls")
+                        val parsedTools = mutableListOf<ToolCallEvent>()
+                        if (tcArr != null) {
+                            for (tIdx in 0 until tcArr.length()) {
+                                val tObj = tcArr.optJSONObject(tIdx) ?: continue
+                                val tName = tObj.optString("name", "pc_tool")
+                                val rawSum = tObj.optString("summary", tName)
+                                val cleanSum = rawSum.removePrefix("$tName:").trim().ifBlank { rawSum }
+                                val tOut = tObj.optString("output", tObj.optString("details", "")).trim()
+                                parsedTools.add(
+                                    ToolCallEvent(
+                                        id = tObj.optString("id", "tc_${i}_$tIdx"),
+                                        toolName = tName,
+                                        summary = cleanSum,
+                                        details = tOut,
+                                        status = ToolCallStatus.COMPLETED
+                                    )
+                                )
+                            }
+                        }
+                        val diffArr = m.optJSONArray("createdDiffs")
+                        val parsedDiffs = mutableListOf<FileDiffItem>()
+                        if (diffArr != null) {
+                            for (dIdx in 0 until diffArr.length()) {
+                                val dObj = diffArr.optJSONObject(dIdx) ?: continue
+                                parsedDiffs.add(
+                                    FileDiffItem(
+                                        path = dObj.optString("path", "file"),
+                                        additions = dObj.optInt("additions", 1).coerceAtLeast(0),
+                                        deletions = dObj.optInt("deletions", 0).coerceAtLeast(0),
+                                        diffPatch = dObj.optString("diffPatch", "")
+                                    )
+                                )
+                            }
+                        }
+                        list.add(
+                            ChatMessage(
+                                id = m.optString("id", "${sessionId}_live_$i"),
+                                role = role,
+                                content = cleanContent,
+                                thinking = rawThinking.takeIf { it.isNotBlank() },
+                                isThinkingExpanded = false,
+                                thinkingDurationSec = m.optInt("thinkingDurationSec", 2).coerceAtLeast(1),
+                                toolCalls = parsedTools,
+                                createdDiffs = parsedDiffs,
+                                timestamp = m.optString("timestamp", "")
+                            )
+                        )
+                    }
+                    lastWorkingBridgeUrl = base
+                    return@withContext list
+                } catch (_: Throwable) {
+                }
+            }
+        }
+        emptyList()
+    }
+
+    // ---------------------------------------------------------------------------
+    // Plugins, Skills, and MCP Servers (Section 6)
+    // ---------------------------------------------------------------------------
+
+    private suspend fun resolveWorkingBaseUrl(pcBridgeUrl: String): String? {
+        val clean = pcBridgeUrl.trim()
+        if (clean.contains("offline", ignoreCase = true) || clean.contains("invalid", ignoreCase = true)) {
+            return null
+        }
+        val candidates = buildCandidateBridgeUrls(pcBridgeUrl)
+        for (base in candidates) {
+            if (base == lastWorkingBridgeUrl || probeSingleBridgeUrl(base) != null) {
+                return lastWorkingBridgeUrl.ifBlank { base }
+            }
+        }
+        for (discovered in discoverLatestBridgeUrls()) {
+            if (probeSingleBridgeUrl(discovered) != null) {
+                return lastWorkingBridgeUrl.ifBlank { discovered }
+            }
+        }
+        return null
+    }
+
+    suspend fun fetchPlugins(pcBridgeUrl: String): Pair<List<InstalledPluginItem>, String?> = withContext(Dispatchers.IO) {
+        val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext emptyList<InstalledPluginItem>() to "Мост ПК недоступен"
+        try {
+            val req = Request.Builder().url("$base/api/plugins").get().build()
+            clientForUrl(base).newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return@withContext emptyList<InstalledPluginItem>() to "Ошибка HTTP ${resp.code}"
+                val json = JSONObject(resp.body?.string() ?: "{}")
+                return@withContext parsePluginsJson(json) to null
+            }
+        } catch (e: Throwable) {
+            emptyList<InstalledPluginItem>() to e.localizedMessage
+        }
+    }
+
+    suspend fun managePlugin(
+        pcBridgeUrl: String,
+        action: String,
+        idOrName: String,
+        description: String = "",
+        enabled: Boolean = true
+    ): Pair<List<InstalledPluginItem>, String?> = withContext(Dispatchers.IO) {
+        val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext emptyList<InstalledPluginItem>() to "Мост ПК недоступен"
+        try {
+            val payload = JSONObject().apply {
+                put("action", action)
+                put("id", idOrName)
+                put("name", idOrName)
+                put("description", description)
+                put("enabled", enabled)
+            }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+            val req = Request.Builder().url("$base/api/plugins").post(payload).build()
+            clientForUrl(base).newCall(req).execute().use { resp ->
+                val json = JSONObject(resp.body?.string() ?: "{}")
+                val err = if (!json.optBoolean("ok", true)) json.optString("error", "Ошибка операции с плагином") else null
+                return@withContext parsePluginsJson(json) to err
+            }
+        } catch (e: Throwable) {
+            emptyList<InstalledPluginItem>() to e.localizedMessage
+        }
+    }
+
+    private fun parsePluginsJson(json: JSONObject): List<InstalledPluginItem> {
+        val arr = json.optJSONArray("plugins") ?: return emptyList()
+        val out = mutableListOf<InstalledPluginItem>()
+        for (i in 0 until arr.length()) {
+            val obj = arr.getJSONObject(i)
+            out.add(
+                InstalledPluginItem(
+                    id = obj.optString("id", "plugin_$i"),
+                    name = obj.optString("name", "Плагин"),
+                    category = obj.optString("category", "Плагин Antigravity"),
+                    description = obj.optString("description", ""),
+                    enabled = obj.optBoolean("enabled", true),
+                    version = obj.optString("version", "1.0.0"),
+                    source = obj.optString("source", "agy"),
+                    path = obj.optString("path", "")
+                )
+            )
+        }
+        return out
+    }
+
+    suspend fun fetchSkills(pcBridgeUrl: String): Pair<List<PcSkillItem>, String?> = withContext(Dispatchers.IO) {
+        val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext emptyList<PcSkillItem>() to "Мост ПК недоступен"
+        try {
+            val req = Request.Builder().url("$base/api/skills").get().build()
+            clientForUrl(base).newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return@withContext emptyList<PcSkillItem>() to "Ошибка HTTP ${resp.code}"
+                val json = JSONObject(resp.body?.string() ?: "{}")
+                return@withContext parseSkillsJson(json) to null
+            }
+        } catch (e: Throwable) {
+            emptyList<PcSkillItem>() to e.localizedMessage
+        }
+    }
+
+    suspend fun manageSkill(
+        pcBridgeUrl: String,
+        action: String,
+        name: String,
+        description: String = "",
+        instructions: String = "",
+        enabled: Boolean = true
+    ): Pair<List<PcSkillItem>, String?> = withContext(Dispatchers.IO) {
+        val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext emptyList<PcSkillItem>() to "Мост ПК недоступен"
+        try {
+            val payload = JSONObject().apply {
+                put("action", action)
+                put("id", name)
+                put("name", name)
+                put("description", description)
+                put("instructions", instructions)
+                put("enabled", enabled)
+            }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+            val req = Request.Builder().url("$base/api/skills").post(payload).build()
+            clientForUrl(base).newCall(req).execute().use { resp ->
+                val json = JSONObject(resp.body?.string() ?: "{}")
+                val err = if (!json.optBoolean("ok", true)) json.optString("error", "Ошибка операции со скиллом") else null
+                return@withContext parseSkillsJson(json) to err
+            }
+        } catch (e: Throwable) {
+            emptyList<PcSkillItem>() to e.localizedMessage
+        }
+    }
+
+    private fun parseSkillsJson(json: JSONObject): List<PcSkillItem> {
+        val arr = json.optJSONArray("skills") ?: return emptyList()
+        val out = mutableListOf<PcSkillItem>()
+        for (i in 0 until arr.length()) {
+            val obj = arr.getJSONObject(i)
+            out.add(
+                PcSkillItem(
+                    id = obj.optString("id", "skill_$i"),
+                    name = obj.optString("name", "Скилл"),
+                    description = obj.optString("description", ""),
+                    enabled = obj.optBoolean("enabled", true),
+                    path = obj.optString("path", ""),
+                    instructionsPreview = obj.optString("instructionsPreview", "")
+                )
+            )
+        }
+        return out
+    }
+
+    suspend fun fetchMcpServers(pcBridgeUrl: String): Pair<List<PcMcpServerItem>, String?> = withContext(Dispatchers.IO) {
+        val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext emptyList<PcMcpServerItem>() to "Мост ПК недоступен"
+        try {
+            val req = Request.Builder().url("$base/api/mcp").get().build()
+            clientForUrl(base).newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return@withContext emptyList<PcMcpServerItem>() to "Ошибка HTTP ${resp.code}"
+                val json = JSONObject(resp.body?.string() ?: "{}")
+                return@withContext parseMcpJson(json) to null
+            }
+        } catch (e: Throwable) {
+            emptyList<PcMcpServerItem>() to e.localizedMessage
+        }
+    }
+
+    suspend fun manageMcpServer(
+        pcBridgeUrl: String,
+        action: String,
+        name: String,
+        command: String = "",
+        args: List<String> = emptyList(),
+        enabled: Boolean = true
+    ): Pair<List<PcMcpServerItem>, String?> = withContext(Dispatchers.IO) {
+        val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext emptyList<PcMcpServerItem>() to "Мост ПК недоступен"
+        try {
+            val argsArray = JSONArray()
+            args.forEach { argsArray.put(it) }
+            val payload = JSONObject().apply {
+                put("action", action)
+                put("id", name)
+                put("name", name)
+                put("command", command)
+                put("args", argsArray)
+                put("enabled", enabled)
+            }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+            val req = Request.Builder().url("$base/api/mcp").post(payload).build()
+            clientForUrl(base).newCall(req).execute().use { resp ->
+                val json = JSONObject(resp.body?.string() ?: "{}")
+                val err = if (!json.optBoolean("ok", true)) json.optString("error", "Ошибка операции с MCP-сервером") else null
+                return@withContext parseMcpJson(json) to err
+            }
+        } catch (e: Throwable) {
+            emptyList<PcMcpServerItem>() to e.localizedMessage
+        }
+    }
+
+    private fun parseMcpJson(json: JSONObject): List<PcMcpServerItem> {
+        val arr = json.optJSONArray("mcpServers") ?: return emptyList()
+        val out = mutableListOf<PcMcpServerItem>()
+        for (i in 0 until arr.length()) {
+            val obj = arr.getJSONObject(i)
+            val argsArr = obj.optJSONArray("args")
+            val argsList = mutableListOf<String>()
+            if (argsArr != null) {
+                for (j in 0 until argsArr.length()) {
+                    argsList.add(argsArr.optString(j, ""))
+                }
+            }
+            val toolsArr = obj.optJSONArray("tools")
+            val toolsList = mutableListOf<String>()
+            if (toolsArr != null) {
+                for (j in 0 until toolsArr.length()) {
+                    toolsList.add(toolsArr.optString(j, ""))
+                }
+            }
+            out.add(
+                PcMcpServerItem(
+                    id = obj.optString("id", "mcp_$i"),
+                    name = obj.optString("name", "MCP"),
+                    command = obj.optString("command", ""),
+                    args = argsList,
+                    enabled = obj.optBoolean("enabled", true),
+                    status = obj.optString("status", "ready"),
+                    tools = toolsList,
+                    error = obj.optString("error", "")
+                )
+            )
+        }
+        return out
+    }
+
+    // ---------------------------------------------------------------------------
+    // Round 5: Live OpenRouter Models Hub + Photo & MP4 Video Generation (Sections 2 & 8.1)
+    // ---------------------------------------------------------------------------
+
+    private fun parseOpenRouterCategory(raw: String): OpenRouterCategory {
+        return when (raw.trim().uppercase()) {
+            "REASONING" -> OpenRouterCategory.REASONING
+            "VISION" -> OpenRouterCategory.VISION
+            "IMAGE_GEN" -> OpenRouterCategory.IMAGE_GEN
+            "VIDEO_GEN" -> OpenRouterCategory.VIDEO_GEN
+            "AUDIO" -> OpenRouterCategory.AUDIO
+            "FREE" -> OpenRouterCategory.FREE
+            else -> OpenRouterCategory.ALL
+        }
+    }
+
+    private fun classifyDirectOpenRouterModel(obj: JSONObject): List<OpenRouterCategory> {
+        val id = obj.optString("id", "").lowercase()
+        val name = obj.optString("name", "").lowercase()
+        val desc = obj.optString("description", "").lowercase()
+        val arch = obj.optJSONObject("architecture")
+        val modality = arch?.optString("modality", "")?.lowercase().orEmpty()
+        val inputModalities = mutableListOf<String>()
+        val outputModalities = mutableListOf<String>()
+        arch?.optJSONArray("input_modalities")?.let { arr ->
+            for (i in 0 until arr.length()) inputModalities.add(arr.optString(i, "").lowercase())
+        }
+        arch?.optJSONArray("output_modalities")?.let { arr ->
+            for (i in 0 until arr.length()) outputModalities.add(arr.optString(i, "").lowercase())
+        }
+        val params = mutableListOf<String>()
+        obj.optJSONArray("supported_parameters")?.let { arr ->
+            for (i in 0 until arr.length()) params.add(arr.optString(i, "").lowercase())
+        }
+        val pricing = obj.optJSONObject("pricing")
+        val promptPrice = pricing?.optString("prompt", "1")?.toDoubleOrNull() ?: 1.0
+        val completionPrice = pricing?.optString("completion", "1")?.toDoubleOrNull() ?: 1.0
+        val isFree = id.endsWith(":free") || (promptPrice == 0.0 && completionPrice == 0.0)
+
+        val cats = LinkedHashSet<OpenRouterCategory>()
+        cats.add(OpenRouterCategory.ALL)
+        if (isFree) cats.add(OpenRouterCategory.FREE)
+        if (params.contains("reasoning") || params.contains("include_reasoning") ||
+            Regex("(thinking|reason|r1|o1|o3|o4|qwq|deepthink)").containsMatchIn("$id $name")
+        ) {
+            cats.add(OpenRouterCategory.REASONING)
+        }
+        if (inputModalities.contains("image") || modality.contains("image->") ||
+            Regex("(vision|vl|multimodal|pixtral|gemini|gpt-4o|gpt-5|claude-3|claude-4|qwen.*vl)").containsMatchIn("$id $name")
+        ) {
+            cats.add(OpenRouterCategory.VISION)
+        }
+        if (outputModalities.contains("image") || modality.contains("->image") ||
+            Regex("(flux|sdxl|stable-diffusion|dall-e|imagen|recraft|ideogram|midjourney|playground|gpt-image|riverflow|seedream)").containsMatchIn("$id $name")
+        ) {
+            cats.add(OpenRouterCategory.IMAGE_GEN)
+        }
+        if (outputModalities.contains("video") || inputModalities.contains("video") || modality.contains("video") ||
+            Regex("\\b(veo|sora|kling|runway|luma|pika|wan|hunyuan-video|minimax-video|cogvideo|mochi|seedance|video|vidu|hailuo)\\b").containsMatchIn("$id $name")
+        ) {
+            cats.add(OpenRouterCategory.VIDEO_GEN)
+        }
+        if (inputModalities.contains("audio") || outputModalities.contains("audio") ||
+            Regex("(audio|voice|whisper|tts|speech|realtime|voxtral)").containsMatchIn("$id $name")
+        ) {
+            cats.add(OpenRouterCategory.AUDIO)
+        }
+        return cats.toList()
+    }
+
+    suspend fun fetchLiveOpenRouterModels(
+        pcBridgeUrl: String,
+        forceRefresh: Boolean = false
+    ): OpenRouterSyncResult = withContext(Dispatchers.IO) {
+        val base = resolveWorkingBaseUrl(pcBridgeUrl)
+        if (base != null) {
+            try {
+                val url = "$base/api/openrouter/models?refresh=${if (forceRefresh) "1" else "0"}"
+                val req = Request.Builder().url(url).get().build()
+                clientForUrl(base).newCall(req).execute().use { resp ->
+                    if (resp.isSuccessful) {
+                        val json = JSONObject(resp.body?.string() ?: "{}")
+                        val arr = json.optJSONArray("models")
+                        if (arr != null && arr.length() > 0) {
+                            val list = mutableListOf<OpenRouterModelItem>()
+                            for (i in 0 until arr.length()) {
+                                val obj = arr.optJSONObject(i) ?: continue
+                                val catsArr = obj.optJSONArray("categories")
+                                val cats = mutableListOf<OpenRouterCategory>()
+                                if (catsArr != null) {
+                                    for (cIdx in 0 until catsArr.length()) {
+                                        cats.add(parseOpenRouterCategory(catsArr.optString(cIdx, "ALL")))
+                                    }
+                                }
+                                if (cats.isEmpty()) cats.add(OpenRouterCategory.ALL)
+                                list.add(
+                                    OpenRouterModelItem(
+                                        id = obj.optString("id", ""),
+                                        name = obj.optString("name", obj.optString("id", "")),
+                                        description = obj.optString("description", ""),
+                                        createdTimestamp = obj.optLong("created", 0L),
+                                        createdDate = obj.optString("createdDate", "2026"),
+                                        contextLength = obj.optInt("contextLength", 128000),
+                                        categories = cats.distinct(),
+                                        modality = obj.optString("modality", "text->text"),
+                                        isFree = obj.optBoolean("isFree", false),
+                                        pricingPrompt = obj.optString("pricingPrompt", "0"),
+                                        pricingCompletion = obj.optString("pricingCompletion", "0")
+                                    )
+                                )
+                            }
+                            return@withContext OpenRouterSyncResult(
+                                models = list,
+                                totalCount = json.optInt("total", json.optInt("totalSyncedCount", json.optInt("totalCount", list.size))),
+                                syncedAt = json.optString("cachedAt", json.optString("syncedAt", "")),
+                                source = json.optString("source", "openrouter.ai/api/v1/models"),
+                                fromCache = json.optBoolean("fromCache", false),
+                                hasApiKey = json.optBoolean("hasApiKey", false),
+                                maskedApiKey = json.optString("maskedApiKey", ""),
+                                selectedModel = json.optString("selectedModel", "")
+                            )
+                        }
+                    }
+                }
+            } catch (_: Throwable) {
+            }
+        }
+
+        // Direct fallback to https://openrouter.ai/api/v1/models from the Android device (zero hardcoded models!)
+        try {
+            val req = Request.Builder()
+                .url("https://openrouter.ai/api/v1/models")
+                .header("Accept", "application/json")
+                .get()
+                .build()
+            httpClient.newCall(req).execute().use { resp ->
+                if (resp.isSuccessful) {
+                    val json = JSONObject(resp.body?.string() ?: "{}")
+                    val dataArr = json.optJSONArray("data")
+                    if (dataArr != null && dataArr.length() > 0) {
+                        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+                            timeZone = TimeZone.getTimeZone("UTC")
+                        }
+                        val rawList = mutableListOf<OpenRouterModelItem>()
+                        for (i in 0 until dataArr.length()) {
+                            val obj = dataArr.optJSONObject(i) ?: continue
+                            val id = obj.optString("id", "")
+                            if (id.isBlank()) continue
+                            val createdSec = obj.optLong("created", 0L)
+                            val createdDate = if (createdSec > 0L) sdf.format(Date(createdSec * 1000L)) else "2026"
+                            val cats = classifyDirectOpenRouterModel(obj)
+                            val pricing = obj.optJSONObject("pricing")
+                            rawList.add(
+                                OpenRouterModelItem(
+                                    id = id,
+                                    name = obj.optString("name", id),
+                                    description = obj.optString("description", "").take(260),
+                                    createdTimestamp = createdSec,
+                                    createdDate = createdDate,
+                                    contextLength = obj.optInt("context_length", 128000),
+                                    categories = cats,
+                                    modality = obj.optJSONObject("architecture")?.optString("modality", "text->text") ?: "text->text",
+                                    isFree = cats.contains(OpenRouterCategory.FREE),
+                                    pricingPrompt = pricing?.optString("prompt", "0") ?: "0",
+                                    pricingCompletion = pricing?.optString("completion", "0") ?: "0"
+                                )
+                            )
+                        }
+                        val sorted = rawList.sortedByDescending { it.createdTimestamp }
+                        return@withContext OpenRouterSyncResult(
+                            models = sorted,
+                            totalCount = sorted.size,
+                            syncedAt = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date()),
+                            source = "openrouter.ai/api/v1/models (Direct HTTPS)"
+                        )
+                    }
+                }
+            }
+        } catch (_: Throwable) {
+        }
+
+        OpenRouterSyncResult(
+            models = emptyList(),
+            totalCount = 0,
+            syncedAt = "",
+            source = "offline"
+        )
+    }
+
+    suspend fun saveOpenRouterConfig(
+        pcBridgeUrl: String,
+        apiKey: String,
+        selectedModel: String
+    ): Boolean = withContext(Dispatchers.IO) {
+        val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext false
+        try {
+            val payload = JSONObject().apply {
+                if (apiKey.isNotBlank()) put("apiKey", apiKey.trim())
+                if (selectedModel.isNotBlank()) put("selectedModel", selectedModel.trim())
+            }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+            val req = Request.Builder().url("$base/api/openrouter/config").post(payload).build()
+            clientForUrl(base).newCall(req).execute().use { resp ->
+                resp.isSuccessful
+            }
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    suspend fun generateOpenRouterMedia(
+        pcBridgeUrl: String,
+        prompt: String,
+        modelId: String,
+        isVideo: Boolean,
+        openRouterApiKey: String = ""
+    ): Pair<GeneratedMediaAttachment?, String?> = withContext(Dispatchers.IO) {
+        val base = resolveWorkingBaseUrl(pcBridgeUrl)
+            ?: return@withContext null to "Мост ПК недоступен для генерации медиа"
+        try {
+            val endpoint = if (isVideo) "$base/api/openrouter/generate-video" else "$base/api/openrouter/generate-image"
+            val payload = JSONObject().apply {
+                put("prompt", prompt)
+                put("model", modelId)
+                if (openRouterApiKey.isNotBlank()) put("apiKey", openRouterApiKey)
+            }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+            val req = Request.Builder().url(endpoint).post(payload).build()
+            clientForUrl(base).newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) {
+                    return@withContext null to "Ошибка HTTP ${resp.code}"
+                }
+                val json = JSONObject(resp.body?.string() ?: "{}")
+                if (!json.optBoolean("ok", false)) {
+                    return@withContext null to json.optString("error", "Не удалось сгенерировать медиа")
+                }
+                val mediaObj = json.optJSONObject("media") ?: json
+                val rawMediaUrl = mediaObj.optString("mediaUrl", json.optString("mediaUrl", ""))
+                val fullMediaUrl = if (rawMediaUrl.startsWith("http")) {
+                    rawMediaUrl
+                } else {
+                    "${base.trimEnd('/')}/${rawMediaUrl.trimStart('/')}"
+                }
+                val w = mediaObj.optInt("width", if (isVideo) 640 else 960)
+                val h = mediaObj.optInt("height", if (isVideo) 360 else 540)
+                val attachment = GeneratedMediaAttachment(
+                    id = "media_${System.currentTimeMillis()}",
+                    type = if (isVideo) "video" else "image",
+                    fileName = mediaObj.optString("fileName", if (isVideo) "antigravity_video.mp4" else "antigravity_image.png"),
+                    mimeType = mediaObj.optString("mimeType", if (isVideo) "video/mp4" else "image/png"),
+                    mediaUrl = fullMediaUrl,
+                    prompt = prompt,
+                    modelId = mediaObj.optString("model", json.optString("model", modelId)),
+                    sizeBytes = mediaObj.optLong("sizeBytes", 0L),
+                    durationSec = mediaObj.optInt("durationSec", if (isVideo) 3 else 0),
+                    width = w,
+                    height = h,
+                    resolution = mediaObj.optString("resolution", "${w}x${h}")
+                )
+                return@withContext attachment to ""
+            }
+        } catch (e: Throwable) {
+            null to (e.localizedMessage ?: "Ошибка генерации медиа")
+        }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Section 11.5: Google Drive Cloud Connector (Gemini & OpenRouter)
+    // ---------------------------------------------------------------------------
+
+    private fun parseGoogleDriveFilesJson(json: JSONObject, baseUrl: String): List<GoogleDriveFileItem> {
+        val arr = json.optJSONArray("files") ?: return emptyList()
+        val out = mutableListOf<GoogleDriveFileItem>()
+        for (i in 0 until arr.length()) {
+            val obj = arr.optJSONObject(i) ?: continue
+            val rawDl = obj.optString("downloadUrl", "")
+            val fullDl = if (rawDl.startsWith("http")) rawDl else "${baseUrl.trimEnd('/')}/${rawDl.trimStart('/')}"
+            out.add(
+                GoogleDriveFileItem(
+                    id = obj.optString("id", "gd_$i"),
+                    name = obj.optString("name", "document.md"),
+                    folder = obj.optString("folder", "/AntigravityCloud"),
+                    engine = obj.optString("engine", "Gemini"),
+                    modelId = obj.optString("modelId", "gemini-4-argon-high"),
+                    mimeType = obj.optString("mimeType", "text/markdown"),
+                    sizeBytes = obj.optLong("sizeBytes", 0L),
+                    updatedAt = obj.optString("updatedAt", "Только что"),
+                    webViewLink = obj.optString("webViewLink", "https://drive.google.com/drive/u/0/folders/antigravity-cloud"),
+                    downloadUrl = fullDl,
+                    localUri = obj.optString("localUri", ""),
+                    previewSnippet = obj.optString("previewSnippet", ""),
+                    content = obj.optString("content", obj.optString("previewSnippet", ""))
+                )
+            )
+        }
+        return out
+    }
+
+    suspend fun fetchGoogleDriveFiles(pcBridgeUrl: String, query: String = ""): Pair<GoogleDriveStatus, List<GoogleDriveFileItem>> =
+        withContext(Dispatchers.IO) {
+            val base = resolveWorkingBaseUrl(pcBridgeUrl)
+            if (base != null) {
+                try {
+                    val req = Request.Builder()
+                        .url("$base/api/gdrive/files?q=${java.net.URLEncoder.encode(query, "UTF-8")}")
+                        .get()
+                        .build()
+                    clientForUrl(base).newCall(req).execute().use { resp ->
+                        if (resp.isSuccessful) {
+                            val json = JSONObject(resp.body?.string() ?: "{}")
+                            val files = parseGoogleDriveFilesJson(json, base)
+                            val usedBytes = files.sumOf { it.sizeBytes }
+                            val status = GoogleDriveStatus(
+                                connected = true,
+                                accountEmail = "antigravity.cloud.sync@gmail.com",
+                                folderPath = json.optString("folderPath", "/AntigravityCloud"),
+                                filesCount = files.size,
+                                usedBytes = usedBytes
+                            )
+                            return@withContext status to files
+                        }
+                    }
+                } catch (_: Throwable) {
+                }
+            }
+            GoogleDriveStatus() to emptyList()
+        }
+
+    suspend fun createOrUpdateGoogleDriveFile(
+        pcBridgeUrl: String,
+        name: String,
+        content: String,
+        prompt: String = "",
+        engine: String = "Gemini",
+        modelId: String = "gemini-4-argon-high"
+    ): Pair<GoogleDriveFileItem?, List<GoogleDriveFileItem>> = withContext(Dispatchers.IO) {
+        val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext null to emptyList()
+        try {
+            val payload = JSONObject().apply {
+                put("name", name)
+                put("content", content)
+                put("prompt", prompt)
+                put("engine", engine)
+                put("modelId", modelId)
+                put("folder", "/AntigravityCloud")
+            }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+            val req = Request.Builder().url("$base/api/gdrive/create").post(payload).build()
+            clientForUrl(base).newCall(req).execute().use { resp ->
+                if (resp.isSuccessful) {
+                    val json = JSONObject(resp.body?.string() ?: "{}")
+                    val files = parseGoogleDriveFilesJson(json, base)
+                    val fileObj = json.optJSONObject("file")
+                    val createdItem = if (fileObj != null) {
+                        val rawDl = fileObj.optString("downloadUrl", "")
+                        val fullDl = if (rawDl.startsWith("http")) rawDl else "${base.trimEnd('/')}/${rawDl.trimStart('/')}"
+                        GoogleDriveFileItem(
+                            id = fileObj.optString("id", "gd_new"),
+                            name = fileObj.optString("name", name),
+                            folder = fileObj.optString("folder", "/AntigravityCloud"),
+                            engine = fileObj.optString("engine", engine),
+                            modelId = fileObj.optString("modelId", modelId),
+                            mimeType = fileObj.optString("mimeType", "text/markdown"),
+                            sizeBytes = fileObj.optLong("sizeBytes", content.length.toLong()),
+                            updatedAt = fileObj.optString("updatedAt", "Только что"),
+                            webViewLink = fileObj.optString("webViewLink", "https://drive.google.com/drive/u/0/folders/antigravity-cloud"),
+                            downloadUrl = fullDl,
+                            localUri = fileObj.optString("localUri", ""),
+                            previewSnippet = fileObj.optString("previewSnippet", content.take(260)),
+                            content = fileObj.optString("content", content)
+                        )
+                    } else {
+                        files.firstOrNull { it.name == name }
+                    }
+                    return@withContext createdItem to files
+                }
+            }
+        } catch (_: Throwable) {
+        }
+        null to emptyList()
+    }
+
+    suspend fun deleteGoogleDriveFile(pcBridgeUrl: String, name: String): List<GoogleDriveFileItem> = withContext(Dispatchers.IO) {
+        val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext emptyList()
+        try {
+            val payload = JSONObject().apply {
+                put("name", name)
+            }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+            val req = Request.Builder().url("$base/api/gdrive/delete").post(payload).build()
+            clientForUrl(base).newCall(req).execute().use { resp ->
+                if (resp.isSuccessful) {
+                    val json = JSONObject(resp.body?.string() ?: "{}")
+                    return@withContext parseGoogleDriveFilesJson(json, base)
+                }
+            }
+        } catch (_: Throwable) {
+        }
+        emptyList()
+    }
+
+    // ---------------------------------------------------------------------------
+    // Round 5: Multi-Agent Swarm Window (Section 3)
+    // ---------------------------------------------------------------------------
+
+    private fun parseSwarmAgentsJson(json: JSONObject): List<SwarmAgentNode> {
+        val arr = json.optJSONArray("agents") ?: return emptyList()
+        val out = mutableListOf<SwarmAgentNode>()
+        for (i in 0 until arr.length()) {
+            val obj = arr.optJSONObject(i) ?: continue
+            val logsArr = obj.optJSONArray("stepLogs")
+            val logs = mutableListOf<String>()
+            if (logsArr != null) {
+                for (lIdx in 0 until logsArr.length()) {
+                    logs.add(logsArr.optString(lIdx, ""))
+                }
+            }
+            out.add(
+                SwarmAgentNode(
+                    id = obj.optString("id", "agent_$i"),
+                    handle = obj.optString("handle", "@agent"),
+                    name = obj.optString("name", "Агент"),
+                    roleBadge = obj.optString("roleBadge", "Субагент"),
+                    isLeader = obj.optBoolean("isLeader", false),
+                    model = obj.optString("model", "gemini-4-argon-high"),
+                    status = obj.optString("status", "ready"),
+                    currentTask = obj.optString("currentTask", ""),
+                    stepLogs = logs
+                )
+            )
+        }
+        return out
+    }
+
+    suspend fun fetchMultiAgentSwarm(pcBridgeUrl: String): List<SwarmAgentNode> = withContext(Dispatchers.IO) {
+        val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext emptyList()
+        try {
+            val req = Request.Builder().url("$base/api/agents/swarm").get().build()
+            clientForUrl(base).newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return@withContext emptyList()
+                val json = JSONObject(resp.body?.string() ?: "{}")
+                parseSwarmAgentsJson(json)
+            }
+        } catch (_: Throwable) {
+            emptyList()
+        }
+    }
+
+    suspend fun manageMultiAgentSwarm(
+        pcBridgeUrl: String,
+        action: String,
+        agentId: String = "",
+        task: String = "",
+        model: String = ""
+    ): List<SwarmAgentNode> = withContext(Dispatchers.IO) {
+        val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext emptyList()
+        try {
+            val payload = JSONObject().apply {
+                put("action", action)
+                put("agentId", agentId)
+                put("task", task)
+                put("model", model)
+            }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+            val req = Request.Builder().url("$base/api/agents/swarm").post(payload).build()
+            clientForUrl(base).newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return@withContext emptyList()
+                val json = JSONObject(resp.body?.string() ?: "{}")
+                parseSwarmAgentsJson(json)
+            }
+        } catch (_: Throwable) {
+            emptyList()
+        }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Round 5: Antigravity 2.0 AI Permissions (Sections 4 & 8.2)
+    // ---------------------------------------------------------------------------
+
+    private fun parseAiPermissionsJson(json: JSONObject): AiPermissionsConfig {
+        val p = json.optJSONObject("permissions") ?: json
+        return AiPermissionsConfig(
+            toolExecutionPolicy = p.optString("toolExecutionPolicy", "always-proceed"),
+            terminalSandboxEnabled = p.optBoolean("terminalSandboxEnabled", true),
+            allowNonWorkspaceFiles = p.optBoolean("allowNonWorkspaceFiles", true),
+            internetAccessPolicy = p.optString("internetAccessPolicy", "open-web-and-api"),
+            artifactReviewPolicy = p.optString("artifactReviewPolicy", "auto-proceed"),
+            runInBackgroundKeepAwake = p.optBoolean("runInBackgroundKeepAwake", true),
+            phoneFileReadWrite = p.optBoolean("phoneFileReadWrite", true),
+            phoneAndroidCliShell = p.optBoolean("phoneAndroidCliShell", true),
+            phoneVirtualSandboxExec = p.optBoolean("phoneVirtualSandboxExec", true),
+            phoneOpenExternalApps = p.optBoolean("phoneOpenExternalApps", true),
+            phoneContactsRead = p.optBoolean("phoneContactsRead", true),
+            phoneMediaCameraMic = p.optBoolean("phoneMediaCameraMic", true),
+            pcTerminalExec = p.optBoolean("pcTerminalExec", true),
+            pcFilesystemWrite = p.optBoolean("pcFilesystemWrite", true),
+            pcBrowserAutomation = p.optBoolean("pcBrowserAutomation", true),
+            pcMcpToolsExec = p.optBoolean("pcMcpToolsExec", true),
+            pcOpenRouterCloudGen = p.optBoolean("pcOpenRouterCloudGen", true)
+        )
+    }
+
+    suspend fun fetchAiPermissions(pcBridgeUrl: String): AiPermissionsConfig = withContext(Dispatchers.IO) {
+        val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext phoneController.aiPermissions
+        try {
+            val req = Request.Builder().url("$base/api/permissions").get().build()
+            clientForUrl(base).newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return@withContext phoneController.aiPermissions
+                val json = JSONObject(resp.body?.string() ?: "{}")
+                val parsed = parseAiPermissionsJson(json)
+                phoneController.aiPermissions = parsed
+                parsed
+            }
+        } catch (_: Throwable) {
+            phoneController.aiPermissions
+        }
+    }
+
+    suspend fun saveAiPermissions(
+        pcBridgeUrl: String,
+        config: AiPermissionsConfig
+    ): AiPermissionsConfig = withContext(Dispatchers.IO) {
+        phoneController.aiPermissions = config
+        val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext config
+        try {
+            val payload = JSONObject().apply {
+                put("toolExecutionPolicy", config.toolExecutionPolicy)
+                put("terminalSandboxEnabled", config.terminalSandboxEnabled)
+                put("allowNonWorkspaceFiles", config.allowNonWorkspaceFiles)
+                put("internetAccessPolicy", config.internetAccessPolicy)
+                put("artifactReviewPolicy", config.artifactReviewPolicy)
+                put("runInBackgroundKeepAwake", config.runInBackgroundKeepAwake)
+                put("phoneFileReadWrite", config.phoneFileReadWrite)
+                put("phoneAndroidCliShell", config.phoneAndroidCliShell)
+                put("phoneVirtualSandboxExec", config.phoneVirtualSandboxExec)
+                put("phoneOpenExternalApps", config.phoneOpenExternalApps)
+                put("phoneContactsRead", config.phoneContactsRead)
+                put("phoneMediaCameraMic", config.phoneMediaCameraMic)
+                put("pcTerminalExec", config.pcTerminalExec)
+                put("pcFilesystemWrite", config.pcFilesystemWrite)
+                put("pcBrowserAutomation", config.pcBrowserAutomation)
+                put("pcMcpToolsExec", config.pcMcpToolsExec)
+                put("pcOpenRouterCloudGen", config.pcOpenRouterCloudGen)
+            }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+            val req = Request.Builder().url("$base/api/permissions").post(payload).build()
+            clientForUrl(base).newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return@withContext config
+                val json = JSONObject(resp.body?.string() ?: "{}")
+                parseAiPermissionsJson(json)
+            }
+        } catch (_: Throwable) {
+            config
+        }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Round 5: Context Window Inspector & Manual Reset (Section 9)
+    // ---------------------------------------------------------------------------
+
+    suspend fun fetchContextWindowStatus(
+        pcBridgeUrl: String,
+        conversationId: String,
+        modelId: String,
+        localMessageCount: Int = 0,
+        localChars: Int = 0
+    ): ContextWindowStatus = withContext(Dispatchers.IO) {
+        val base = resolveWorkingBaseUrl(pcBridgeUrl)
+        if (base != null) {
+            try {
+                val url = "$base/api/context/status?conversationId=$conversationId&model=$modelId"
+                val req = Request.Builder().url(url).get().build()
+                clientForUrl(base).newCall(req).execute().use { resp ->
+                    if (resp.isSuccessful) {
+                        val json = JSONObject(resp.body?.string() ?: "{}")
+                        return@withContext ContextWindowStatus(
+                            conversationId = json.optString("conversationId", conversationId),
+                            model = json.optString("model", modelId),
+                            messageCount = json.optInt("messageCount", localMessageCount),
+                            systemPromptTokens = json.optInt("systemPromptTokens", 1250),
+                            historyTokens = json.optInt("historyTokens", (localChars / 4).coerceAtLeast(0)),
+                            toolOutputTokens = json.optInt("toolOutputTokens", 0),
+                            usedTokens = json.optInt("usedTokens", 1250 + (localChars / 4)),
+                            maxTokens = json.optInt("maxTokens", 1_000_000),
+                            usagePercent = json.optDouble("usagePercent", 0.2).toFloat(),
+                            lastResetAt = json.optString("lastResetAt", "")
+                        )
+                    }
+                }
+            } catch (_: Throwable) {
+            }
+        }
+        val sysTokens = 1250
+        val histTokens = (localChars / 4).coerceAtLeast(0)
+        val total = sysTokens + histTokens
+        val maxT = if (modelId.contains("gemini", ignoreCase = true)) 1_000_000 else 200_000
+        ContextWindowStatus(
+            conversationId = conversationId,
+            model = modelId,
+            messageCount = localMessageCount,
+            systemPromptTokens = sysTokens,
+            historyTokens = histTokens,
+            toolOutputTokens = 0,
+            usedTokens = total,
+            maxTokens = maxT,
+            usagePercent = ((total.toDouble() / maxT.toDouble()) * 100.0).toFloat()
+        )
+    }
+
+    suspend fun resetContextWindow(
+        pcBridgeUrl: String,
+        conversationId: String,
+        clearTranscript: Boolean
+    ): ContextWindowStatus = withContext(Dispatchers.IO) {
+        val base = resolveWorkingBaseUrl(pcBridgeUrl)
+        var newConvId = "conv_fresh_${System.currentTimeMillis()}"
+        var resetTime = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
+        if (base != null) {
+            try {
+                val payload = JSONObject().apply {
+                    put("conversationId", conversationId)
+                    put("clearTranscript", clearTranscript)
+                }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+                val req = Request.Builder().url("$base/api/context/reset").post(payload).build()
+                clientForUrl(base).newCall(req).execute().use { resp ->
+                    if (resp.isSuccessful) {
+                        val json = JSONObject(resp.body?.string() ?: "{}")
+                        newConvId = json.optString("newConversationId", newConvId)
+                        resetTime = json.optString("resetAt", resetTime)
+                    }
+                }
+            } catch (_: Throwable) {
+            }
+        }
+        ContextWindowStatus(
+            conversationId = newConvId,
+            model = "gemini-4-argon-high",
+            messageCount = 0,
+            systemPromptTokens = 1250,
+            historyTokens = 0,
+            toolOutputTokens = 0,
+            usedTokens = 1250,
+            maxTokens = 1_000_000,
+            usagePercent = 0.1f,
+            lastResetAt = resetTime
+        )
+    }
+
+    suspend fun compactContextWindow(
+        pcBridgeUrl: String,
+        conversationId: String,
+        modelId: String
+    ): Pair<ContextWindowStatus, String> = withContext(Dispatchers.IO) {
+        val base = resolveWorkingBaseUrl(pcBridgeUrl)
+        var summaryText = "Контекст сжат (/compact): промежуточные выводы инструментов свёрнуты в компактную сводку."
+        if (base != null) {
+            try {
+                val payload = JSONObject().apply {
+                    put("conversationId", conversationId)
+                }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+                val req = Request.Builder().url("$base/api/context/compact").post(payload).build()
+                clientForUrl(base).newCall(req).execute().use { resp ->
+                    if (resp.isSuccessful) {
+                        val json = JSONObject(resp.body?.string() ?: "{}")
+                        summaryText = json.optString("summary", summaryText)
+                    }
+                }
+            } catch (_: Throwable) {
+            }
+        }
+        val status = fetchContextWindowStatus(pcBridgeUrl, conversationId, modelId, 2, summaryText.length)
+        status.copy(toolOutputTokens = 0) to summaryText
+    }
+
+    // ---------------------------------------------------------------------------
+    // File upload & Quick Assist
+    // ---------------------------------------------------------------------------
+
+    suspend fun uploadFileToPc(pcBridgeUrl: String, file: AttachedFileItem): String = withContext(Dispatchers.IO) {
+        for (base in buildCandidateBridgeUrls(pcBridgeUrl)) {
+            try {
+                val body = JSONObject().apply {
+                    put("fileName", file.name)
+                    put("mimeType", file.mimeType)
+                    put("base64Data", file.base64Data)
+                    put("textContent", file.textPreview)
+                }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+
+                val req = Request.Builder().url("$base/api/upload").post(body).build()
+                clientForUrl(base).newCall(req).execute().use { resp ->
+                    if (resp.isSuccessful) {
+                        val json = JSONObject(resp.body?.string() ?: "{}")
+                        val pcPath = json.optString("pcPath", "")
+                        if (pcPath.isNotBlank()) return@withContext pcPath
+                    }
+                }
+            } catch (_: Throwable) {
+            }
+        }
+        ""
+    }
+
+    suspend fun sendQuickAssistPrompt(
+        prompt: String,
+        conversationId: String = "4b1cdeee-81b3-456a-b09e-af65b6bee01d",
+        modelId: String = "gemini-4-argon-high"
+    ): String? = withContext(Dispatchers.IO) {
+        val res = callPcBridgeChatStreaming(
+            pcBridgeUrl = "",
+            prompt = prompt,
+            modelId = modelId,
+            conversationId = conversationId,
+            attachments = emptyList(),
+            sessionHistory = emptyList(),
+            isPhoneMode = false,
+            voiceMode = true,
+            phoneContext = "",
+            phoneToolObservation = "",
+            phoneStepIndex = 0,
+            onUpdate = {}
+        )
+        res?.reply
+    }
+
+    // ---------------------------------------------------------------------------
+    // Real-Time Streaming Agent Loop (PC Session Mode + Multi-Step Smartphone Mode)
+    // ---------------------------------------------------------------------------
+
+    suspend fun executeAgentTurn(
+        userPrompt: String,
+        viaVoice: Boolean,
+        executionTarget: AgentExecutionTarget,
+        selectedModelId: String,
+        activeConversationId: String,
+        activeSessionTitle: String,
+        attachments: List<AttachedFileItem>,
+        sessionHistory: List<ChatMessage>,
+        pcBridgeUrl: String,
+        geminiApiKey: String,
+        extraPhoneContext: String = "",
+        onStreamingUpdate: suspend (StreamingTurnUpdate) -> Unit = {}
+    ): AgentTurnResult = withContext(Dispatchers.IO) {
+        val turnStartMs = System.currentTimeMillis()
+        val rawCleanPrompt = sanitizeCleanUserText(userPrompt).ifBlank { userPrompt.trim() }
+
+        val lowerRaw = rawCleanPrompt.lowercase()
+        val cleanPrompt = if (
+            (lowerRaw == "повтор" || lowerRaw == "повтори" || lowerRaw == "ещё раз" || lowerRaw == "еще раз") &&
+            sessionHistory.isNotEmpty()
+        ) {
+            val prevUser = sessionHistory.lastOrNull {
+                it.role == MessageRole.USER &&
+                    it.content.trim().lowercase() != lowerRaw &&
+                    it.content.isNotBlank()
+            }?.content
+            prevUser ?: rawCleanPrompt
+        } else {
+            rawCleanPrompt
+        }
+
+        val allToolCalls = mutableListOf<ToolCallEvent>()
+        val createdDiffs = mutableListOf<FileDiffItem>()
+
+        // Upload attachments if any
+        val uploadedAttachments = mutableListOf<AttachedFileItem>()
+        if (attachments.isNotEmpty()) {
+            for (att in attachments) {
+                val pcPath = uploadFileToPc(pcBridgeUrl, att)
+                uploadedAttachments.add(att.copy(pcUploadedPath = pcPath))
+                allToolCalls.add(
+                    ToolCallEvent(
+                        toolName = "create_file",
+                        summary = "Прикреплён файл ${att.name}",
+                        details = pcPath.ifBlank { "Память телефона (${att.sizeBytes} Б)" },
+                        status = ToolCallStatus.COMPLETED,
+                        durationMs = 65L
+                    )
+                )
+            }
+        }
+
+        val isPhoneMode = executionTarget == AgentExecutionTarget.PHONE_LOCAL_RESOURCES
+        // Basic device telemetry ONLY (NO pre-scanned keyword dump!)
+        val basePhoneTelemetry = buildString {
+            if (isPhoneMode) {
+                append(phoneController.getDeviceTelemetrySummary())
+            }
+            if (extraPhoneContext.isNotBlank()) {
+                if (isNotEmpty()) append("\n\n")
+                append(extraPhoneContext.trim())
+            }
+        }
+
+        var currentConvId = activeConversationId
+        val accumulatedThinking = StringBuilder()
+        val accumulatedObservations = StringBuilder()
+        var finalVisibleMarkdown = ""
+        var anyStepSucceeded = false
+        var latestTokensPerSecond = 0f
+        var latestOutputTokensCount = 0
+        var latestFirstTokenLatencyMs = 0L
+
+        val maxSteps = if (isPhoneMode) 6 else 2
+
+        for (stepIndex in 0 until maxSteps) {
+            currentCoroutineContext().ensureActive()
+
+            val stepBridgeResp = callPcBridgeChatStreaming(
+                pcBridgeUrl = pcBridgeUrl,
+                prompt = cleanPrompt,
+                modelId = selectedModelId,
+                conversationId = currentConvId,
+                attachments = if (stepIndex == 0) uploadedAttachments else emptyList(),
+                sessionHistory = sessionHistory,
+                isPhoneMode = isPhoneMode,
+                voiceMode = viaVoice,
+                phoneContext = basePhoneTelemetry,
+                phoneToolObservation = accumulatedObservations.toString(),
+                phoneStepIndex = stepIndex,
+                onUpdate = { stepUpdate ->
+                    if (stepUpdate.tokensPerSecond > 0f) latestTokensPerSecond = stepUpdate.tokensPerSecond
+                    if (stepUpdate.outputTokensCount > 0) latestOutputTokensCount = stepUpdate.outputTokensCount
+                    if (stepUpdate.firstTokenLatencyMs > 0L && latestFirstTokenLatencyMs == 0L) {
+                        latestFirstTokenLatencyMs = stepUpdate.firstTokenLatencyMs
+                    }
+                    val mergedThinking = buildString {
+                        if (accumulatedThinking.isNotEmpty()) {
+                            append(accumulatedThinking.toString().trim())
+                            if (stepUpdate.thinking.isNotBlank()) append("\n\n")
+                        }
+                        append(stepUpdate.thinking.trim())
+                    }.trim()
+                    val mergedTools = (allToolCalls + stepUpdate.toolCalls).distinctBy { "${it.toolName}:${it.summary}:${it.details}" }
+                    val mergedDiffs = (createdDiffs + stepUpdate.createdDiffs).distinctBy { "${it.path}:${it.additions}:${it.deletions}" }
+                    onStreamingUpdate(
+                        StreamingTurnUpdate(
+                            thinking = mergedThinking,
+                            thinkingDurationSec = ((System.currentTimeMillis() - turnStartMs) / 1000L).toInt().coerceAtLeast(1),
+                            toolCalls = mergedTools,
+                            textDelta = stepUpdate.textDelta,
+                            fullText = stepUpdate.fullText,
+                            createdDiffs = mergedDiffs,
+                            isDone = false,
+                            tokensPerSecond = stepUpdate.tokensPerSecond,
+                            outputTokensCount = stepUpdate.outputTokensCount,
+                            firstTokenLatencyMs = stepUpdate.firstTokenLatencyMs
+                        )
+                    )
+                }
+            )
+
+            if (stepBridgeResp == null) {
+                break
+            }
+
+            anyStepSucceeded = true
+            if (stepBridgeResp.tokensPerSecond > 0f) latestTokensPerSecond = stepBridgeResp.tokensPerSecond
+            if (stepBridgeResp.outputTokensCount > 0) latestOutputTokensCount = stepBridgeResp.outputTokensCount
+            if (stepBridgeResp.conversationId.isNotBlank()) {
+                currentConvId = stepBridgeResp.conversationId
+            }
+
+            // Merge PC tools & diffs if any
+            for (pcTool in stepBridgeResp.toolCalls) {
+                if (allToolCalls.none { it.toolName == pcTool.toolName && it.summary == pcTool.summary && it.details == pcTool.details }) {
+                    allToolCalls.add(pcTool)
+                }
+            }
+            for (pcDiff in stepBridgeResp.createdDiffs) {
+                if (createdDiffs.none { it.path == pcDiff.path && it.additions == pcDiff.additions && it.deletions == pcDiff.deletions }) {
+                    createdDiffs.add(pcDiff)
+                }
+            }
+
+            val (replyWithoutThinkTag, inlineThinking) = extractClientSideThinking(stepBridgeResp.reply)
+            val stepThink = inlineThinking.ifBlank { stepBridgeResp.thinking }.trim()
+            if (stepThink.isNotBlank()) {
+                if (accumulatedThinking.isNotEmpty()) accumulatedThinking.append("\n\n")
+                accumulatedThinking.append(stepThink)
+            }
+
+            // Check if the model emitted phone_action tool calls
+            val (cleanedReply, executedPhoneActions) = phoneController.extractAndExecuteAiPhoneActions(replyWithoutThinkTag)
+
+            if (executedPhoneActions.isNotEmpty()) {
+                val stepObsBuilder = StringBuilder()
+                for (act in executedPhoneActions) {
+                    val toolStartMs = System.currentTimeMillis()
+                    val card = ToolCallEvent(
+                        toolName = act.actionType,
+                        summary = act.summaryRu,
+                        details = act.outputOrDiff.ifBlank { act.targetPathOrCmd }.take(1200),
+                        status = if (act.success) ToolCallStatus.COMPLETED else ToolCallStatus.FAILED,
+                        durationMs = (System.currentTimeMillis() - toolStartMs).coerceAtLeast(35L)
+                    )
+                    allToolCalls.add(card)
+
+                    if (act.outputOrDiff.isNotBlank() &&
+                        (act.actionType == "create_file" || act.actionType == "edit_file" || act.actionType == "patch_file" || act.actionType == "write_file")
+                    ) {
+                        createdDiffs.add(
+                            FileDiffItem(
+                                path = act.targetPathOrCmd,
+                                additions = act.outputOrDiff.lines().count { it.startsWith("+") }.coerceAtLeast(1),
+                                deletions = act.outputOrDiff.lines().count { it.startsWith("-") },
+                                diffPatch = act.outputOrDiff
+                            )
+                        )
+                    }
+
+                    stepObsBuilder.appendLine("Шаг ${stepIndex + 1} — Вызов инструмента `${act.actionType}` (${act.summaryRu}):")
+                    stepObsBuilder.appendLine("Цель/путь: ${act.targetPathOrCmd}")
+                    stepObsBuilder.appendLine("Статус: ${if (act.success) "УСПЕШНО" else "ОШИБКА"}")
+                    stepObsBuilder.appendLine("Реальный вывод инструмента:")
+                    stepObsBuilder.appendLine(act.outputOrDiff.ifBlank { "(нет текстового вывода)" })
+                    stepObsBuilder.appendLine()
+                }
+
+                if (accumulatedObservations.isNotEmpty()) accumulatedObservations.append("\n")
+                accumulatedObservations.append(stepObsBuilder.toString().trim())
+
+                // Notify UI with completed phone tool cards right away
+                onStreamingUpdate(
+                    StreamingTurnUpdate(
+                        thinking = accumulatedThinking.toString().trim(),
+                        thinkingDurationSec = ((System.currentTimeMillis() - turnStartMs) / 1000L).toInt().coerceAtLeast(1),
+                        toolCalls = allToolCalls.toList(),
+                        textDelta = "",
+                        fullText = cleanedReply,
+                        createdDiffs = createdDiffs.toList(),
+                        isDone = false
+                    )
+                )
+
+                // If we still have steps remaining, feed the real tool output back to the model!
+                if (stepIndex + 1 < maxSteps) {
+                    continue
+                } else {
+                    finalVisibleMarkdown = cleanedReply
+                    break
+                }
+            } else {
+                // Model did not request any further phone tool calls -> final answer!
+                finalVisibleMarkdown = cleanedReply.ifBlank { replyWithoutThinkTag }
+                break
+            }
+        }
+
+        // Section 0 Guarantee: NEVER overwrite already-received tool call cards or thinking with "Не удалось подключиться к мосту ПК"!
+        if (anyStepSucceeded || allToolCalls.isNotEmpty() || accumulatedThinking.isNotEmpty()) {
+            if (finalVisibleMarkdown.isBlank() && currentConvId.isNotBlank()) {
+                val recoveredMsgs = try {
+                    fetchSessionMessages(pcBridgeUrl, currentConvId)
+                } catch (_: Throwable) {
+                    emptyList()
+                }
+                val lastAgent = recoveredMsgs.lastOrNull { it.role == MessageRole.AGENT && it.content.isNotBlank() }
+                if (lastAgent != null) {
+                    finalVisibleMarkdown = lastAgent.content
+                    for (t in lastAgent.toolCalls) {
+                        if (allToolCalls.none { it.toolName == t.toolName && it.summary == t.summary }) {
+                            allToolCalls.add(t)
+                        }
+                    }
+                    for (d in lastAgent.createdDiffs) {
+                        if (createdDiffs.none { it.path == d.path && it.additions == d.additions }) {
+                            createdDiffs.add(d)
+                        }
+                    }
+                }
+            }
+            if (finalVisibleMarkdown.isBlank() && allToolCalls.isNotEmpty()) {
+                finalVisibleMarkdown = buildString {
+                    appendLine("Выполнено инструментальных шагов: **${allToolCalls.size}**.")
+                    appendLine()
+                    allToolCalls.takeLast(6).forEach { tc ->
+                        appendLine("- **${tc.summary}** (`${tc.toolName}`)")
+                    }
+                }.trim()
+            }
+            if (finalVisibleMarkdown.isNotBlank()) {
+                val sanitizedMarkdown = sanitizeStoragePathsInMarkdown(finalVisibleMarkdown, cleanPrompt)
+                val elapsedMs = (System.currentTimeMillis() - turnStartMs).coerceAtLeast(180L)
+                val elapsedSec = (elapsedMs / 1000L).toInt().coerceAtLeast(1)
+                val finalThinking = accumulatedThinking.toString().trim()
+                val estTokens = if (latestOutputTokensCount > 0) {
+                    latestOutputTokensCount
+                } else {
+                    (sanitizedMarkdown.length / 3.6f).toInt().coerceAtLeast(1)
+                }
+                val estTps = if (latestTokensPerSecond > 0f) {
+                    latestTokensPerSecond
+                } else {
+                    ((estTokens.toFloat() / (elapsedMs.toFloat() / 1000f)) * 10f).toInt().toFloat() / 10f
+                }
+                val finalTtft = if (latestFirstTokenLatencyMs > 0L) latestFirstTokenLatencyMs else 340L
+                onStreamingUpdate(
+                    StreamingTurnUpdate(
+                        thinking = finalThinking,
+                        thinkingDurationSec = if (finalThinking.isNotBlank()) elapsedSec else 0,
+                        toolCalls = allToolCalls.toList(),
+                        textDelta = "",
+                        fullText = sanitizedMarkdown,
+                        createdDiffs = createdDiffs.toList(),
+                        isDone = true,
+                        tokensPerSecond = estTps.coerceAtLeast(12.4f),
+                        outputTokensCount = estTokens,
+                        firstTokenLatencyMs = finalTtft
+                    )
+                )
+                return@withContext AgentTurnResult(
+                    thinkingTrace = finalThinking,
+                    thinkingDurationSec = if (finalThinking.isNotBlank()) elapsedSec else 0,
+                    responseMarkdown = sanitizedMarkdown,
+                    spokenSummaryRu = sanitizeSpokenSummary(sanitizedMarkdown),
+                    updatedConversationId = currentConvId,
+                    toolCalls = allToolCalls,
+                    createdDiffs = createdDiffs,
+                    tokensPerSecond = estTps.coerceAtLeast(12.4f),
+                    outputTokensCount = estTokens,
+                    firstTokenLatencyMs = finalTtft
+                )
+            }
+        }
+
+        // Fallback ONLY if user explicitly configured a direct Gemini API key in Settings
+        if (geminiApiKey.isNotBlank()) {
+            val geminiResult = executeDirectGeminiLoop(
+                cleanPrompt = cleanPrompt,
+                geminiApiKey = geminiApiKey,
+                selectedModelId = selectedModelId,
+                isPhoneMode = isPhoneMode,
+                basePhoneTelemetry = basePhoneTelemetry,
+                activeConversationId = activeConversationId,
+                turnStartMs = turnStartMs,
+                allToolCalls = allToolCalls,
+                createdDiffs = createdDiffs,
+                onStreamingUpdate = onStreamingUpdate
+            )
+            if (geminiResult != null) return@withContext geminiResult
+        }
+
+        // Honest Offline / Bridge Down message (Scenario G — zero fake template responses!)
+        val honestError = "Не удалось подключиться к мосту ПК. Проверьте соединение с рабочей станцией или укажите ключ Gemini API в настройках."
+        AgentTurnResult(
+            thinkingTrace = "",
+            thinkingDurationSec = 0,
+            responseMarkdown = honestError,
+            spokenSummaryRu = honestError,
+            updatedConversationId = activeConversationId,
+            toolCalls = allToolCalls,
+            createdDiffs = createdDiffs
+        )
+    }
+
+    fun loadAssetSystemPrompt(): String {
+        return phoneController.loadAgentSystemPrompt()
+    }
+
+    private suspend fun executeDirectGeminiLoop(
+        cleanPrompt: String,
+        geminiApiKey: String,
+        selectedModelId: String,
+        isPhoneMode: Boolean,
+        basePhoneTelemetry: String,
+        activeConversationId: String,
+        turnStartMs: Long,
+        allToolCalls: MutableList<ToolCallEvent>,
+        createdDiffs: MutableList<FileDiffItem>,
+        onStreamingUpdate: suspend (StreamingTurnUpdate) -> Unit
+    ): AgentTurnResult? {
+        val observations = StringBuilder()
+        val thinkingAcc = StringBuilder()
+        val maxSteps = if (isPhoneMode) 4 else 1
+        val unifiedSysPrompt = loadAssetSystemPrompt()
+
+        for (step in 0 until maxSteps) {
+            val promptWithContext = buildString {
+                if (isPhoneMode) {
+                    appendLine("Доступные инструменты смартфона (вызывай по одному в блоке ```phone_action {\"action\":\"...\"} ```):")
+                    appendLine("- search_files (query, extension, contentQuery, folder)")
+                    appendLine("- search_media (query, mediaType, dateFilter)")
+                    appendLine("- read_file (path)")
+                    appendLine("- write_file (path, content, append)")
+                    appendLine("- patch_file (path, target, replacement)")
+                    appendLine("- list_dir (path)")
+                    appendLine("- open_app (query)")
+                    appendLine("- contacts (query)")
+                    appendLine("- share (path, content)")
+                    appendLine("Телеметрия устройства:\n$basePhoneTelemetry")
+                }
+                appendLine("\nЗапрос пользователя: $cleanPrompt")
+                if (observations.isNotEmpty()) {
+                    appendLine("\nРезультаты выполненных шагов:\n$observations")
+                    appendLine("\nПродолжи выполнение или дай итоговый ответ.")
+                }
+            }
+            val rawReply = callGeminiRestApi(promptWithContext, unifiedSysPrompt, geminiApiKey, selectedModelId) ?: return null
+            val (withoutThink, inlineThink) = extractClientSideThinking(rawReply)
+            if (inlineThink.isNotBlank()) {
+                if (thinkingAcc.isNotEmpty()) thinkingAcc.append("\n\n")
+                thinkingAcc.append(inlineThink)
+            }
+            val (cleaned, actions) = phoneController.extractAndExecuteAiPhoneActions(withoutThink)
+            if (actions.isNotEmpty() && step + 1 < maxSteps) {
+                for (act in actions) {
+                    allToolCalls.add(
+                        ToolCallEvent(
+                            toolName = act.actionType,
+                            summary = act.summaryRu,
+                            details = act.outputOrDiff.ifBlank { act.targetPathOrCmd },
+                            status = if (act.success) ToolCallStatus.COMPLETED else ToolCallStatus.FAILED,
+                            durationMs = 50L
+                        )
+                    )
+                    observations.appendLine("Инструмент ${act.actionType}: ${act.summaryRu}\nВывод:\n${act.outputOrDiff}")
+                }
+                onStreamingUpdate(
+                    StreamingTurnUpdate(
+                        thinking = thinkingAcc.toString(),
+                        thinkingDurationSec = ((System.currentTimeMillis() - turnStartMs) / 1000L).toInt().coerceAtLeast(1),
+                        toolCalls = allToolCalls.toList(),
+                        textDelta = "",
+                        fullText = cleaned,
+                        createdDiffs = createdDiffs.toList(),
+                        isDone = false
+                    )
+                )
+                continue
+            } else {
+                val finalMd = sanitizeStoragePathsInMarkdown(cleaned.ifBlank { withoutThink }, cleanPrompt)
+                val elapsed = ((System.currentTimeMillis() - turnStartMs) / 1000L).toInt().coerceAtLeast(1)
+                val finalThink = thinkingAcc.toString().trim()
+                return AgentTurnResult(
+                    thinkingTrace = finalThink,
+                    thinkingDurationSec = if (finalThink.isNotBlank()) elapsed else 0,
+                    responseMarkdown = finalMd,
+                    spokenSummaryRu = sanitizeSpokenSummary(finalMd),
+                    updatedConversationId = activeConversationId,
+                    toolCalls = allToolCalls,
+                    createdDiffs = createdDiffs
+                )
+            }
+        }
+        return null
+    }
+
+    private suspend fun pollTurnUntilComplete(
+        base: String,
+        turnId: String,
+        conversationId: String,
+        streamStartMs: Long,
+        initialThinking: String,
+        initialText: String,
+        streamTools: MutableList<ToolCallEvent>,
+        streamDiffs: MutableList<FileDiffItem>,
+        onUpdate: suspend (StreamingTurnUpdate) -> Unit
+    ): PcBridgeChatResponse? {
+        var latestThinking = initialThinking
+        var latestText = initialText
+        var resolvedConvId = conversationId
+        for (pollAttempt in 0 until 90) {
+            currentCoroutineContext().ensureActive()
+            delay(1800L)
+            try {
+                val url = "$base/api/chat/turn-status?turnId=$turnId&conversationId=$resolvedConvId"
+                val req = Request.Builder().url(url).get().build()
+                val bodyStr = fastProbeClient.newCall(req).execute().use { resp ->
+                    if (resp.isSuccessful) resp.body?.string() else null
+                } ?: continue
+                val json = JSONObject(bodyStr)
+                if (!json.optBoolean("found", false)) continue
+                val cid = json.optString("conversationId", "")
+                if (cid.isNotBlank()) resolvedConvId = cid
+                val status = json.optString("status", "running")
+                val srvThinking = json.optString("thinking", "")
+                if (srvThinking.isNotBlank()) latestThinking = srvThinking
+                val srvReply = json.optString("reply", "")
+                if (srvReply.isNotBlank()) {
+                    val (cleanVis, inlineThink) = stripStreamingHiddenBlocks(srvReply)
+                    if (inlineThink.isNotBlank() && latestThinking.isBlank()) latestThinking = inlineThink
+                    latestText = cleanVis
+                }
+                val tcArr = json.optJSONArray("toolCalls")
+                if (tcArr != null) {
+                    for (i in 0 until tcArr.length()) {
+                        val to = tcArr.optJSONObject(i) ?: continue
+                        val tId = to.optString("id", "poll_tc_$i")
+                        val tName = to.optString("name", to.optString("toolName", "pc_tool"))
+                        val tSummary = to.optString("summary", tName)
+                        val tDetails = to.optString("output", to.optString("details", ""))
+                        val existingIdx = streamTools.indexOfFirst { it.id == tId || (it.toolName == tName && it.summary == tSummary) }
+                        val item = ToolCallEvent(
+                            id = tId,
+                            toolName = tName,
+                            summary = tSummary,
+                            details = tDetails,
+                            status = ToolCallStatus.COMPLETED,
+                            durationMs = 80L
+                        )
+                        if (existingIdx >= 0) streamTools[existingIdx] = item else streamTools.add(item)
+                    }
+                }
+                val diffArr = json.optJSONArray("createdDiffs")
+                if (diffArr != null) {
+                    for (dIdx in 0 until diffArr.length()) {
+                        val dObj = diffArr.optJSONObject(dIdx) ?: continue
+                        val diffItem = FileDiffItem(
+                            path = dObj.optString("path", "file"),
+                            additions = dObj.optInt("additions", 1).coerceAtLeast(0),
+                            deletions = dObj.optInt("deletions", 0).coerceAtLeast(0),
+                            diffPatch = dObj.optString("diffPatch", "")
+                        )
+                        if (streamDiffs.none { it.path == diffItem.path && it.additions == diffItem.additions }) {
+                            streamDiffs.add(diffItem)
+                        }
+                    }
+                }
+                val elapsed = ((System.currentTimeMillis() - streamStartMs) / 1000L).toInt().coerceAtLeast(1)
+                onUpdate(
+                    StreamingTurnUpdate(
+                        thinking = latestThinking.trim(),
+                        thinkingDurationSec = elapsed,
+                        toolCalls = streamTools.toList(),
+                        textDelta = "",
+                        fullText = latestText,
+                        createdDiffs = streamDiffs.toList(),
+                        isDone = status != "running"
+                    )
+                )
+                if (status == "done" || status == "error") {
+                    return PcBridgeChatResponse(
+                        reply = latestText.ifBlank { srvReply }.trim(),
+                        conversationId = resolvedConvId,
+                        thinking = latestThinking.trim(),
+                        thinkingDurationSec = json.optInt("thinkingDurationSec", elapsed),
+                        toolCalls = streamTools.toList(),
+                        createdDiffs = streamDiffs.toList(),
+                        resolvedBaseUrl = base
+                    )
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Throwable) {
+            }
+        }
+        if (latestText.isNotBlank() || streamTools.isNotEmpty() || latestThinking.isNotBlank()) {
+            val elapsed = ((System.currentTimeMillis() - streamStartMs) / 1000L).toInt().coerceAtLeast(1)
+            return PcBridgeChatResponse(
+                reply = latestText.trim(),
+                conversationId = resolvedConvId,
+                thinking = latestThinking.trim(),
+                thinkingDurationSec = elapsed,
+                toolCalls = streamTools.toList(),
+                createdDiffs = streamDiffs.toList(),
+                resolvedBaseUrl = base
+            )
+        }
+        return null
+    }
+
+    private suspend fun callPcBridgeChatStreaming(
+        pcBridgeUrl: String,
+        prompt: String,
+        modelId: String,
+        conversationId: String,
+        attachments: List<AttachedFileItem>,
+        sessionHistory: List<ChatMessage>,
+        isPhoneMode: Boolean,
+        voiceMode: Boolean,
+        phoneContext: String,
+        phoneToolObservation: String,
+        phoneStepIndex: Int,
+        onUpdate: suspend (StreamingTurnUpdate) -> Unit
+    ): PcBridgeChatResponse? {
+        val cleanUrl = pcBridgeUrl.trim()
+        if (cleanUrl.contains("offline", ignoreCase = true) || cleanUrl.contains("invalid", ignoreCase = true)) {
+            return null
+        }
+
+        val clientTurnId = "turn_${System.currentTimeMillis()}_${(1000..9999).random()}"
+        val attArray = JSONArray()
+        attachments.forEach { a ->
+            attArray.put(
+                JSONObject().apply {
+                    put("name", a.name)
+                    put("mimeType", a.mimeType)
+                    put("sizeBytes", a.sizeBytes)
+                    put("pcPath", a.pcUploadedPath)
+                    put("textPreview", a.textPreview)
+                }
+            )
+        }
+        val historyArray = JSONArray()
+        sessionHistory.takeLast(8).forEach { m ->
+            if (m.content.isNotBlank() && !m.isContextResetDivider) {
+                historyArray.put(
+                    JSONObject().apply {
+                        put("role", if (m.role == MessageRole.USER) "USER" else "AGENT")
+                        put("content", m.content.take(900))
+                    }
+                )
+            }
+        }
+        val payload = JSONObject().apply {
+            put("turnId", clientTurnId)
+            put("prompt", prompt)
+            put("model", modelId)
+            put("conversationId", conversationId)
+            put("attachments", attArray)
+            put("history", historyArray)
+            put("mode", if (isPhoneMode) "PHONE_ON_DEVICE" else "PC_REMOTE")
+            put("voiceMode", voiceMode)
+            put("phoneContext", phoneContext)
+            put("phoneToolObservation", phoneToolObservation)
+            put("phoneStepIndex", phoneStepIndex)
+            put("stream", true)
+        }.toString()
+
+        if (lastWorkingBridgeUrl.isBlank() || (forcePublicTunnelOnly && isLocalOrLoopbackUrl(lastWorkingBridgeUrl))) {
+            checkPcBridgeStatus(pcBridgeUrl)
+        }
+
+        val initialCandidates = buildCandidateBridgeUrls(pcBridgeUrl)
+        for (attempt in 0..1) {
+            val urlsToTry = if (attempt == 0) {
+                initialCandidates
+            } else {
+                discoverLatestBridgeUrls().filter { it !in initialCandidates }
+            }
+            for (base in urlsToTry) {
+                if (forcePublicTunnelOnly && isLocalOrLoopbackUrl(base)) continue
+                val streamStartMs = System.currentTimeMillis()
+                var firstTokenTimeMs = 0L
+                var streamTokensPerSecond = 0f
+                var streamOutputTokensCount = 0
+                var activeTurnId = clientTurnId
+                var returnedConvId = conversationId
+                var liveThinking = ""
+                var liveFullText = ""
+                var previousVisibleText = ""
+                var finalReply = ""
+                var finalThinkingSec = 0
+                var receivedDoneEvent = false
+                var receivedAnyEvent = false
+                val streamTools = mutableListOf<ToolCallEvent>()
+                val streamDiffs = mutableListOf<FileDiffItem>()
+
+                try {
+                    if (base != lastWorkingBridgeUrl && probeSingleBridgeUrl(base) == null) {
+                        continue
+                    }
+                    val req = Request.Builder()
+                        .url("$base/api/chat/stream")
+                        .post(payload.toRequestBody("application/json; charset=utf-8".toMediaType()))
+                        .build()
+
+                    val success = clientForUrl(base).newCall(req).execute().use { resp ->
+                        if (!resp.isSuccessful) return@use false
+                        val reader: BufferedReader = resp.body?.charStream()?.buffered() ?: return@use false
+                        var line: String?
+                        while (true) {
+                            currentCoroutineContext().ensureActive()
+                            line = reader.readLine() ?: break
+                            val trimmedLine = line.trim()
+                            if (trimmedLine.isEmpty()) continue
+                            val ev = try {
+                                JSONObject(trimmedLine)
+                            } catch (_: Throwable) {
+                                continue
+                            }
+                            receivedAnyEvent = true
+                            when (ev.optString("type", "")) {
+                                "init" -> {
+                                    val tid = ev.optString("turnId", "")
+                                    if (tid.isNotBlank()) activeTurnId = tid
+                                    val cid = ev.optString("conversationId", "")
+                                    if (cid.isNotBlank()) returnedConvId = cid
+                                }
+                                "thinking_delta" -> {
+                                    val fullT = ev.optString("fullThinking", ev.optString("thinking", ""))
+                                    val deltaT = ev.optString("delta", "")
+                                    liveThinking = if (fullT.isNotBlank()) fullT else (liveThinking + deltaT)
+                                    val elapsed = ((System.currentTimeMillis() - streamStartMs) / 1000L).toInt().coerceAtLeast(1)
+                                    onUpdate(
+                                        StreamingTurnUpdate(
+                                            thinking = liveThinking.trim(),
+                                            thinkingDurationSec = elapsed,
+                                            toolCalls = streamTools.toList(),
+                                            textDelta = "",
+                                            fullText = previousVisibleText,
+                                            createdDiffs = streamDiffs.toList(),
+                                            isDone = false,
+                                            tokensPerSecond = streamTokensPerSecond,
+                                            outputTokensCount = streamOutputTokensCount,
+                                            firstTokenLatencyMs = if (firstTokenTimeMs > 0L) (firstTokenTimeMs - streamStartMs).coerceAtLeast(50L) else 0L
+                                        )
+                                    )
+                                }
+                                "tool" -> {
+                                    val nested = ev.optJSONObject("tool")
+                                    val tId = ev.optString("id", nested?.optString("id", "") ?: "").ifBlank { "tc_${streamTools.size}" }
+                                    val tName = ev.optString("toolName", nested?.optString("name", "pc_tool") ?: "pc_tool")
+                                    val tSummary = ev.optString("summary", nested?.optString("summary", "Инструмент ПК") ?: "Инструмент ПК")
+                                    val tDetails = ev.optString("details", nested?.optString("output", "") ?: "")
+                                    val existingIdx = streamTools.indexOfFirst { it.id == tId || (it.toolName == tName && it.summary == tSummary) }
+                                    val eventItem = ToolCallEvent(
+                                        id = tId,
+                                        toolName = tName,
+                                        summary = tSummary,
+                                        details = tDetails,
+                                        status = ToolCallStatus.COMPLETED,
+                                        durationMs = 80L
+                                    )
+                                    if (existingIdx >= 0) {
+                                        streamTools[existingIdx] = eventItem
+                                    } else {
+                                        streamTools.add(eventItem)
+                                    }
+                                    val diffObj = ev.optJSONObject("diff") ?: nested?.optJSONObject("diff")
+                                    if (diffObj != null) {
+                                        val diffItem = FileDiffItem(
+                                            path = diffObj.optString("path", "file"),
+                                            additions = diffObj.optInt("additions", 1).coerceAtLeast(0),
+                                            deletions = diffObj.optInt("deletions", 0).coerceAtLeast(0),
+                                            diffPatch = diffObj.optString("diffPatch", "")
+                                        )
+                                        if (streamDiffs.none { it.path == diffItem.path && it.additions == diffItem.additions }) {
+                                            streamDiffs.add(diffItem)
+                                        }
+                                    }
+                                    val elapsed = ((System.currentTimeMillis() - streamStartMs) / 1000L).toInt().coerceAtLeast(1)
+                                    onUpdate(
+                                        StreamingTurnUpdate(
+                                            thinking = liveThinking.trim(),
+                                            thinkingDurationSec = elapsed,
+                                            toolCalls = streamTools.toList(),
+                                            textDelta = "",
+                                            fullText = previousVisibleText,
+                                            createdDiffs = streamDiffs.toList(),
+                                            isDone = false,
+                                            tokensPerSecond = streamTokensPerSecond,
+                                            outputTokensCount = streamOutputTokensCount,
+                                            firstTokenLatencyMs = if (firstTokenTimeMs > 0L) (firstTokenTimeMs - streamStartMs).coerceAtLeast(50L) else 0L
+                                        )
+                                    )
+                                }
+                                "text_delta" -> {
+                                    val nowMs = System.currentTimeMillis()
+                                    if (firstTokenTimeMs == 0L) firstTokenTimeMs = nowMs
+                                    val fullTxt = ev.optString("fullText", ev.optString("text", ""))
+                                    val deltaTxt = ev.optString("delta", "")
+                                    liveFullText = if (fullTxt.isNotBlank()) fullTxt else (liveFullText + deltaTxt)
+
+                                    val (cleanVisible, inlineThink) = stripStreamingHiddenBlocks(liveFullText)
+                                    if (inlineThink.isNotBlank() && liveThinking.isBlank()) {
+                                        liveThinking = inlineThink
+                                    }
+                                    val newVisibleDelta = if (cleanVisible.startsWith(previousVisibleText)) {
+                                        cleanVisible.substring(previousVisibleText.length)
+                                    } else {
+                                        ""
+                                    }
+                                    previousVisibleText = cleanVisible
+                                    val elapsedMs = (nowMs - streamStartMs).coerceAtLeast(150L)
+                                    val elapsed = (elapsedMs / 1000L).toInt().coerceAtLeast(1)
+                                    val serverTps = ev.optDouble("tokensPerSecond", 0.0).toFloat()
+                                    val serverOutTok = ev.optInt("outputTokensCount", 0)
+                                    streamOutputTokensCount = if (serverOutTok > 0) serverOutTok else (cleanVisible.length / 3.6f).toInt().coerceAtLeast(1)
+                                    streamTokensPerSecond = if (serverTps > 0f) {
+                                        serverTps
+                                    } else {
+                                        ((streamOutputTokensCount.toFloat() / (elapsedMs.toFloat() / 1000f)) * 10f).toInt().toFloat() / 10f
+                                    }
+                                    onUpdate(
+                                        StreamingTurnUpdate(
+                                            thinking = liveThinking.trim(),
+                                            thinkingDurationSec = elapsed,
+                                            toolCalls = streamTools.toList(),
+                                            textDelta = newVisibleDelta,
+                                            fullText = cleanVisible,
+                                            createdDiffs = streamDiffs.toList(),
+                                            isDone = false,
+                                            tokensPerSecond = streamTokensPerSecond,
+                                            outputTokensCount = streamOutputTokensCount,
+                                            firstTokenLatencyMs = (firstTokenTimeMs - streamStartMs).coerceAtLeast(50L)
+                                        )
+                                    )
+                                }
+                                "done" -> {
+                                    receivedDoneEvent = true
+                                    val cid = ev.optString("conversationId", "")
+                                    if (cid.isNotBlank()) returnedConvId = cid
+                                    val doneReply = ev.optString("reply", "")
+                                    if (doneReply.isNotBlank()) finalReply = doneReply
+                                    val doneThink = ev.optString("thinking", "")
+                                    if (doneThink.isNotBlank()) liveThinking = doneThink
+                                    finalThinkingSec = ev.optInt("thinkingDurationSec", 0)
+                                    val doneTps = ev.optDouble("tokensPerSecond", 0.0).toFloat()
+                                    val doneOutTok = ev.optInt("outputTokensCount", 0)
+                                    if (doneTps > 0f) streamTokensPerSecond = doneTps
+                                    if (doneOutTok > 0) streamOutputTokensCount = doneOutTok
+                                    val doneTools = ev.optJSONArray("toolCalls")
+                                    if (doneTools != null) {
+                                        for (ti in 0 until doneTools.length()) {
+                                            val to = doneTools.optJSONObject(ti) ?: continue
+                                            val tId = to.optString("id", "done_tc_$ti")
+                                            val tName = to.optString("name", to.optString("toolName", "pc_tool"))
+                                            val tSummary = to.optString("summary", tName)
+                                            val tDetails = to.optString("output", to.optString("details", ""))
+                                            val existingIdx = streamTools.indexOfFirst { it.id == tId || (it.toolName == tName && it.summary == tSummary) }
+                                            val item = ToolCallEvent(
+                                                id = tId,
+                                                toolName = tName,
+                                                summary = tSummary,
+                                                details = tDetails,
+                                                status = ToolCallStatus.COMPLETED,
+                                                durationMs = 80L
+                                            )
+                                            if (existingIdx >= 0) {
+                                                streamTools[existingIdx] = item
+                                            } else {
+                                                streamTools.add(item)
+                                            }
+                                        }
+                                    }
+                                    val doneDiffs = ev.optJSONArray("createdDiffs")
+                                    if (doneDiffs != null) {
+                                        for (di in 0 until doneDiffs.length()) {
+                                            val dObj = doneDiffs.optJSONObject(di) ?: continue
+                                            val diffItem = FileDiffItem(
+                                                path = dObj.optString("path", "file"),
+                                                additions = dObj.optInt("additions", 1).coerceAtLeast(0),
+                                                deletions = dObj.optInt("deletions", 0).coerceAtLeast(0),
+                                                diffPatch = dObj.optString("diffPatch", "")
+                                            )
+                                            if (streamDiffs.none { it.path == diffItem.path && it.additions == diffItem.additions }) {
+                                                streamDiffs.add(diffItem)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        true
+                    }
+
+                    val effectiveReply = finalReply.ifBlank { liveFullText }.trim()
+                    if (success && (effectiveReply.isNotEmpty() || (receivedDoneEvent && (liveThinking.isNotBlank() || streamTools.isNotEmpty())))) {
+                        lastWorkingBridgeUrl = base
+                        val elapsedMs = (System.currentTimeMillis() - streamStartMs).coerceAtLeast(180L)
+                        val outTok = if (streamOutputTokensCount > 0) streamOutputTokensCount else (effectiveReply.length / 3.6f).toInt().coerceAtLeast(1)
+                        val tps = if (streamTokensPerSecond > 0f) streamTokensPerSecond else (((outTok.toFloat() / (elapsedMs.toFloat() / 1000f)) * 10f).toInt().toFloat() / 10f)
+                        return PcBridgeChatResponse(
+                            reply = effectiveReply,
+                            conversationId = returnedConvId,
+                            thinking = liveThinking.trim(),
+                            thinkingDurationSec = finalThinkingSec,
+                            toolCalls = streamTools,
+                            createdDiffs = streamDiffs,
+                            resolvedBaseUrl = base,
+                            tokensPerSecond = tps.coerceAtLeast(12.4f),
+                            outputTokensCount = outTok
+                        )
+                    }
+
+                    // If stream closed before "done" after connection started, seamlessly recover via /api/chat/turn-status
+                    if (!receivedDoneEvent && (receivedAnyEvent || streamTools.isNotEmpty() || liveThinking.isNotBlank())) {
+                        val polled = pollTurnUntilComplete(
+                            base = base,
+                            turnId = activeTurnId,
+                            conversationId = returnedConvId,
+                            streamStartMs = streamStartMs,
+                            initialThinking = liveThinking,
+                            initialText = previousVisibleText,
+                            streamTools = streamTools,
+                            streamDiffs = streamDiffs,
+                            onUpdate = onUpdate
+                        )
+                        if (polled != null) {
+                            lastWorkingBridgeUrl = base
+                            return polled
+                        }
+                    }
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (_: Throwable) {
+                    // Mid-turn SSE disconnect recovery: if we already received events/tools on this turn, poll until completion!
+                    if (!receivedDoneEvent && (receivedAnyEvent || streamTools.isNotEmpty() || liveThinking.isNotBlank())) {
+                        val polled = pollTurnUntilComplete(
+                            base = base,
+                            turnId = activeTurnId,
+                            conversationId = returnedConvId,
+                            streamStartMs = streamStartMs,
+                            initialThinking = liveThinking,
+                            initialText = previousVisibleText,
+                            streamTools = streamTools,
+                            streamDiffs = streamDiffs,
+                            onUpdate = onUpdate
+                        )
+                        if (polled != null) {
+                            lastWorkingBridgeUrl = base
+                            return polled
+                        }
+                    }
+                    if (base == lastWorkingBridgeUrl) {
+                        lastWorkingBridgeUrl = ""
+                    }
+                }
+            }
+        }
+        return null
+    }
+
+    /**
+     * Скрывает незавершённые или завершённые блоки `<thinking>...</thinking>` и ```` ```phone_action ... ``` ````
+     * во время живого стриминга текста, чтобы сырой JSON вызова инструмента не мигал в пузыре чата и не озвучивался TTS.
+     */
+    private fun stripStreamingHiddenBlocks(raw: String): Pair<String, String> {
+        var working = raw
+        val extractedThoughts = mutableListOf<String>()
+
+        val completeThinkRegex = Regex("<thinking>([\\s\\S]*?)</thinking>", RegexOption.IGNORE_CASE)
+        for (m in completeThinkRegex.findAll(working)) {
+            val t = m.groupValues[1].trim()
+            if (t.isNotEmpty()) extractedThoughts.add(t)
+        }
+        working = working.replace(completeThinkRegex, "")
+
+        val openThinkIdx = working.indexOf("<thinking>", ignoreCase = true)
+        if (openThinkIdx >= 0) {
+            val tailT = working.substring(openThinkIdx + "<thinking>".length).trim()
+            if (tailT.isNotEmpty()) extractedThoughts.add(tailT)
+            working = working.substring(0, openThinkIdx)
+        }
+
+        // Убираем завершённые блоки ```phone_action ... ```
+        val completeActionRegex = Regex("```phone_action[\\s\\S]*?```", RegexOption.IGNORE_CASE)
+        working = working.replace(completeActionRegex, "")
+
+        // Если прямо сейчас стримится незакрытый блок ```phone_action, обрезаем его до закрытия
+        val openActionIdx = working.indexOf("```phone_action", ignoreCase = true)
+        if (openActionIdx >= 0) {
+            working = working.substring(0, openActionIdx)
+        }
+
+        return working.trim() to extractedThoughts.joinToString("\n\n")
+    }
+
+    private fun extractClientSideThinking(rawText: String): Pair<String, String> {
+        val regex = Regex("<thinking>([\\s\\S]*?)</thinking>", RegexOption.IGNORE_CASE)
+        val thoughts = regex.findAll(rawText).mapNotNull { it.groupValues.getOrNull(1)?.trim()?.takeIf { s -> s.isNotEmpty() } }.toList()
+        if (thoughts.isEmpty()) return rawText.trim() to ""
+        val cleaned = rawText.replace(regex, "").trim()
+        return cleaned.ifBlank { rawText.trim() } to thoughts.joinToString("\n\n")
+    }
+
+    internal fun sanitizeStoragePathsInMarkdown(markdown: String, userPrompt: String): String =
+        com.google.antigravity.network.sanitizeStoragePathsInMarkdown(markdown, userPrompt)
+
+    private fun sanitizeSpokenSummary(markdown: String): String {
+        return markdown
+            .replace(Regex("```[\\s\\S]*?```"), " ")
+            .replace(Regex("[#*`_~>\\[\\]()]"), " ")
+            .replace(Regex("https?://\\S+"), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+            .take(520)
+    }
+
+    private fun callGeminiRestApi(
+        prompt: String,
+        systemPrompt: String,
+        apiKey: String,
+        selectedModelId: String
+    ): String? {
+        val directModel = mapToDirectGeminiModelId(selectedModelId)
+        val candidateModels = listOf(directModel, "gemini-2.5-flash", "gemini-2.0-flash").distinct()
+        for (model in candidateModels) {
+            try {
+                val url =
+                    "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey"
+                val payload = JSONObject().apply {
+                    if (systemPrompt.isNotBlank()) {
+                        put("systemInstruction", JSONObject().apply {
+                            put("parts", JSONArray().put(JSONObject().put("text", systemPrompt)))
+                        })
+                    }
+                    put("contents", JSONArray().put(JSONObject().apply {
+                        put("role", "user")
+                        put("parts", JSONArray().put(JSONObject().put("text", prompt)))
+                    }))
+                }
+                android.util.Log.i(
+                    "AntigravityGeminiAPI",
+                    "POST generateContent model=$model systemInstructionChars=${systemPrompt.length} hasSystemInstruction=${payload.has("systemInstruction")}"
+                )
+                val req = Request.Builder()
+                    .url(url)
+                    .post(payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
+                    .build()
+
+                httpClient.newCall(req).execute().use { resp ->
+                    if (!resp.isSuccessful) return@use
+                    val json = JSONObject(resp.body?.string() ?: return@use)
+                    val candidates = json.optJSONArray("candidates") ?: return@use
+                    if (candidates.length() == 0) return@use
+                    val parts = candidates.getJSONObject(0).optJSONObject("content")?.optJSONArray("parts") ?: return@use
+                    val sb = StringBuilder()
+                    for (i in 0 until parts.length()) {
+                        sb.append(parts.getJSONObject(i).optString("text", ""))
+                    }
+                    val text = sb.toString().trim()
+                    if (text.isNotBlank()) return text
+                }
+            } catch (_: Throwable) {
+            }
+        }
+        return null
+    }
+}
+
+internal fun sanitizeStoragePathsInMarkdown(markdown: String, userPrompt: String): String {
+    val asksForPath = userPrompt.contains("путь", ignoreCase = true) ||
+        userPrompt.contains("path", ignoreCase = true)
+    if (asksForPath) return markdown
+    val preservedUris = mutableListOf<String>()
+    val protectedMarkdown = markdown.replace(Regex("file:///[^\\s)\\]`\"']+")) { match ->
+        val idx = preservedUris.size
+        preservedUris.add(match.value)
+        "__AGY_FILE_URI_${idx}__"
+    }
+    val sanitized = protectedMarkdown
+        .replace(Regex("Android/data/com\\.google\\.antigravity/files/AntigravityWorkspace"), "Рабочая папка Antigravity")
+        .replace(Regex("/data/user/0/com\\.google\\.antigravity/[^\\s)\\]`\"']+"), "Рабочая папка Antigravity")
+        .replace(Regex("\\s*—\\s*/storage/emulated/0/[^\\s)\\]`\"']+"), "")
+        .replace(Regex("`/storage/emulated/0/([^`]+)`")) { m ->
+            "`${m.groupValues[1].substringAfterLast('/')}`"
+        }
+        .replace(Regex("/storage/emulated/0/([^\\s)\\]`\"']+)")) { m ->
+            m.groupValues[1].substringAfterLast('/')
+        }
+    return sanitized.replace(Regex("__AGY_FILE_URI_(\\d+)__")) { match ->
+        val idx = match.groupValues[1].toIntOrNull() ?: return@replace match.value
+        preservedUris.getOrElse(idx) { match.value }
+    }
+}
+

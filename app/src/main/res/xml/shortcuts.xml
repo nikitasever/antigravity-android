@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="shortcut_new_chat"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_new_chat_short"
+        android:shortcutLongLabel="@string/shortcut_new_chat_long">
+        <intent
+            android:action="com.google.antigravity.ACTION_SHORTCUT_NEW_CHAT"
+            android:targetPackage="com.google.antigravity"
+            android:targetClass="com.google.antigravity.MainActivity" />
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="shortcut_voice_mode"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_voice_short"
+        android:shortcutLongLabel="@string/shortcut_voice_long">
+        <intent
+            android:action="com.google.antigravity.ACTION_SHORTCUT_VOICE"
+            android:targetPackage="com.google.antigravity"
+            android:targetClass="com.google.antigravity.MainActivity" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="shortcut_phone_search"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_phone_search_short"
+        android:shortcutLongLabel="@string/shortcut_phone_search_long">
+        <intent
+            android:action="com.google.antigravity.ACTION_SHORTCUT_PHONE_SEARCH"
+            android:targetPackage="com.google.antigravity"
+            android:targetClass="com.google.antigravity.MainActivity" />
+    </shortcut>
+</shortcuts>

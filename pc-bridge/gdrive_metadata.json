@@ -1,0 +1,52 @@
+{
+  "project_architecture_2026.md": {
+    "id": "gdrive_70726f6a6563745f",
+    "name": "project_architecture_2026.md",
+    "folder": "/AntigravityCloud",
+    "engine": "Gemini",
+    "modelId": "gemini-4-argon-high",
+    "mimeType": "text/markdown",
+    "updatedAt": "2026-11-01T06:32:21.470Z",
+    "webViewLink": "https://drive.google.com/drive/u/0/folders/antigravity-cloud?file=project_architecture_2026.md"
+  },
+  "openrouter_452_models_report.md": {
+    "id": "gdrive_6f70656e726f7574",
+    "name": "openrouter_452_models_report.md",
+    "folder": "/AntigravityCloud",
+    "engine": "OpenRouter",
+    "modelId": "particle-ai/particle-1",
+    "mimeType": "text/markdown",
+    "updatedAt": "2026-11-01T06:32:21.470Z",
+    "webViewLink": "https://drive.google.com/drive/u/0/folders/antigravity-cloud?file=openrouter_452_models_report.md"
+  },
+  "claude_background_tasks_audit.json": {
+    "id": "gdrive_636c617564655f62",
+    "name": "claude_background_tasks_audit.json",
+    "folder": "/AntigravityCloud",
+    "engine": "Gemini",
+    "modelId": "gemini-4-argon-high",
+    "mimeType": "application/json",
+    "updatedAt": "2026-11-01T06:32:21.471Z",
+    "webViewLink": "https://drive.google.com/drive/u/0/folders/antigravity-cloud?file=claude_background_tasks_audit.json"
+  },
+  "antigravity_cloud_architecture.md": {
+    "id": "gdrive_mvxgdkra",
+    "name": "antigravity_cloud_architecture.md",
+    "folder": "/AntigravityCloud",
+    "engine": "Gemini",
+    "modelId": "gemini-4-argon-high",
+    "mimeType": "text/markdown",
+    "updatedAt": "2026-11-01T06:32:33.622Z",
+    "webViewLink": "https://drive.google.com/drive/u/0/folders/antigravity-cloud?file=antigravity_cloud_architecture.md"
+  },
+  "openrouter_integration_spec.md": {
+    "id": "gdrive_mvxgdomv",
+    "name": "openrouter_integration_spec.md",
+    "folder": "/AntigravityCloud",
+    "engine": "OpenRouter",
+    "modelId": "anthropic/claude-3.7-sonnet",
+    "mimeType": "text/markdown",
+    "updatedAt": "2026-11-01T06:32:38.647Z",
+    "webViewLink": "https://drive.google.com/drive/u/0/folders/antigravity-cloud?file=openrouter_integration_spec.md"
+  }
+}

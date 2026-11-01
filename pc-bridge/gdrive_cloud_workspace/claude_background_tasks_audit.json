@@ -1,0 +1,12 @@
+{
+  "workflow": "claude-security:scan",
+  "agents": 17,
+  "tokens": "2.8M",
+  "phases": [
+    "Inventory",
+    "Threat model",
+    "Research",
+    "Verification"
+  ],
+  "syncedWithGoogleDrive": true
+}

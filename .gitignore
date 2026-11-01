@@ -1,0 +1,33 @@
+# Gradle & Kotlin
+.gradle/
+.kotlin/
+build/
+app/build/
+local.properties
+
+# Local runtime logs, caches & temporary dumps
+uploads/
+ui_dump.xml
+verify_step4_*.png
+screenshots/ui_*.xml
+verification_screenshots/ui.xml
+pc-bridge/node_modules/
+pc-bridge/*.log
+pc-bridge/*.pid
+pc-bridge/public_bridge_url.txt
+pc-bridge/tunnel.url
+pc-bridge/tunnels.json
+pc-bridge/openrouter-models-cache.json
+
+# Keep only Antigravity system prompt in assets; ignore unused external APK extraction dumps
+app/src/main/assets/*
+!app/src/main/assets/agent_system_prompt.md
+app/src/main/jniLibs/
+app/src/main/res/raw/pi2_*
+app/src/main/res/raw/claude_*
+app/src/main/res/raw/subscription_*
+
+# Built APK binaries (published via GitHub Actions & Releases)
+*.apk
+*.aab
+*.idsig

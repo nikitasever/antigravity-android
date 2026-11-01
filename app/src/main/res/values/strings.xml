@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Antigravity</string>
+    <string name="voice_channel_name">Голосовой режим Antigravity</string>
+    <string name="agent_channel_name">Уведомления ассистента Antigravity</string>
+    <string name="shortcut_new_chat_short">Новый чат</string>
+    <string name="shortcut_new_chat_long">Начать новый чат с ИИ</string>
+    <string name="shortcut_voice_short">Голосовой режим</string>
+    <string name="shortcut_voice_long">Запустить голосовой диалог</string>
+    <string name="shortcut_phone_search_short">Поиск по телефону</string>
+    <string name="shortcut_phone_search_long">Найти файлы и приложения на телефоне</string>
+    <string name="tile_antigravity_label">Antigravity</string>
+</resources>

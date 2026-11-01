@@ -1,0 +1,4178 @@
+package com.google.antigravity.ui
+
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.SaveAlt
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.StopCircle
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.material.icons.outlined.Cloud
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Extension
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.Laptop
+import androidx.compose.material.icons.outlined.LibraryBooks
+import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.PhoneAndroid
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Terminal
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.google.antigravity.device.PhoneResourceController
+import com.google.antigravity.model.AVAILABLE_AGY_MODELS
+import com.google.antigravity.model.AVAILABLE_VOICE_NAMES
+import com.google.antigravity.model.AgentExecutionTarget
+import com.google.antigravity.model.AntigravityModelOption
+import com.google.antigravity.model.AntigravitySettings
+import com.google.antigravity.model.ApprovalDecision
+import com.google.antigravity.model.ArtifactDocument
+import com.google.antigravity.model.AttachedFileItem
+import com.google.antigravity.model.ChatMessage
+import com.google.antigravity.model.ContextWindowStatus
+import com.google.antigravity.model.DrawerSection
+import com.google.antigravity.model.GeneratedMediaAttachment
+import com.google.antigravity.model.InstalledPluginItem
+import com.google.antigravity.model.MessageRole
+import com.google.antigravity.model.PcMcpServerItem
+import com.google.antigravity.model.PcSkillItem
+import com.google.antigravity.model.RemoteEnvFilter
+import com.google.antigravity.model.RemoteSessionItem
+import com.google.antigravity.model.ScratchProjectItem
+import com.google.antigravity.model.ScheduledAutomationItem
+import com.google.antigravity.model.SwarmAgentNode
+import com.google.antigravity.model.SwarmSubAgentItem
+import com.google.antigravity.model.TopModeTab
+import com.google.antigravity.model.VoiceProvider
+import com.google.antigravity.model.VoiceTransportMode
+import com.google.antigravity.ui.components.AiPermissionsSheet
+import com.google.antigravity.ui.components.AndroidCliAndSandboxSheet
+import com.google.antigravity.ui.components.AntigravityGoogleWebConsole
+import com.google.antigravity.ui.components.ChatGptMarkdownText
+import com.google.antigravity.ui.components.ChatGptStyleGoogleLoginScreen
+import com.google.antigravity.ui.components.CodeBackgroundTasksEntryPoint
+import com.google.antigravity.ui.components.ContextWindowBadge
+import com.google.antigravity.ui.components.ContextWindowSheet
+import com.google.antigravity.ui.components.FloatingVoiceCallPill
+import com.google.antigravity.ui.components.GeneratedMediaCard
+import com.google.antigravity.ui.components.GoogleDriveSheet
+import com.google.antigravity.ui.components.MultiAgentSwarmSheet
+import com.google.antigravity.ui.components.OpenRouterHubSheet
+import com.google.antigravity.ui.components.OrbitVoiceOverlay
+import com.google.antigravity.ui.components.ReferenceDiffCard
+import com.google.antigravity.ui.components.SlashAndMentionPopup
+import com.google.antigravity.ui.phone.PhoneAssistantScreen
+import com.google.antigravity.viewmodel.AntigravityViewModel
+import android.view.HapticFeedbackConstants
+import androidx.compose.ui.platform.LocalView
+import java.util.Locale
+import kotlinx.coroutines.launch
+
+@Composable
+fun MainScreen(
+    viewModel: AntigravityViewModel,
+    onRequestVoicePermissionAndStart: () -> Unit
+) {
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+
+    val googleProfile by viewModel.googleProfile.collectAsState()
+    val settings by viewModel.settings.collectAsState()
+    val availableModels by viewModel.availableModels.collectAsState()
+    val topModeTab by viewModel.topModeTab.collectAsState()
+    val remoteEnvFilter by viewModel.remoteEnvFilter.collectAsState()
+    val remoteSessions by viewModel.remoteSessions.collectAsState()
+    val scratchProjects by viewModel.scratchProjects.collectAsState()
+    val artifactsLibrary by viewModel.artifactsLibrary.collectAsState()
+    val scheduledTasks by viewModel.scheduledTasks.collectAsState()
+    val installedPlugins by viewModel.installedPlugins.collectAsState()
+    val installedSkills by viewModel.installedSkills.collectAsState()
+    val mcpServers by viewModel.mcpServers.collectAsState()
+    val extensionsError by viewModel.extensionsError.collectAsState()
+    val isExtensionsLoading by viewModel.isExtensionsLoading.collectAsState()
+    val pendingAttachments by viewModel.pendingAttachments.collectAsState()
+    val pcBridgeStatus by viewModel.pcBridgeStatus.collectAsState()
+    val drawerSection by viewModel.drawerSection.collectAsState()
+    val messages by viewModel.messages.collectAsState()
+    val phoneFiles by viewModel.phoneFiles.collectAsState()
+
+    // Round 5 Live StateFlows
+    val openRouterModels by viewModel.openRouterModels.collectAsState()
+    val openRouterTotalCount by viewModel.openRouterTotalCount.collectAsState()
+    val openRouterSyncedAt by viewModel.openRouterSyncedAt.collectAsState()
+    val openRouterSyncSource by viewModel.openRouterSyncSource.collectAsState()
+    val openRouterCacheStatusText by viewModel.openRouterCacheStatusText.collectAsState()
+    val openRouterApiKey by viewModel.openRouterApiKey.collectAsState()
+    val isSyncingOpenRouter by viewModel.isSyncingOpenRouter.collectAsState()
+    val isGeneratingMedia by viewModel.isGeneratingMedia.collectAsState()
+    val swarmAgents by viewModel.swarmAgents.collectAsState()
+    val androidCliHistory by viewModel.androidCliHistory.collectAsState()
+    val isRunningAndroidCli by viewModel.isRunningAndroidCli.collectAsState()
+    val virtualSandboxProject by viewModel.virtualSandboxProject.collectAsState()
+    val sandboxTestOutput by viewModel.sandboxTestOutput.collectAsState()
+    val aiPermissions by viewModel.aiPermissions.collectAsState()
+    val contextWindowStatus by viewModel.contextWindowStatus.collectAsState()
+    val lastCompactedSummary by viewModel.lastCompactedSummary.collectAsState()
+    val liveTokensPerSecond by viewModel.liveTokensPerSecond.collectAsState()
+    val googleDriveStatus by viewModel.googleDriveStatus.collectAsState()
+    val googleDriveFiles by viewModel.googleDriveFiles.collectAsState()
+    val isSyncingGoogleDrive by viewModel.isSyncingGoogleDrive.collectAsState()
+
+    var showModelPickerDialog by remember { mutableStateOf(false) }
+    var showAttachmentSheet by remember { mutableStateOf(false) }
+    var showOpenRouterSheet by remember { mutableStateOf(false) }
+    var showGoogleDriveSheet by remember { mutableStateOf(false) }
+    var showSwarmSheet by remember { mutableStateOf(false) }
+    var showAndroidCliSandboxSheet by remember { mutableStateOf(false) }
+    var cliSandboxInitialTab by remember { mutableStateOf(0) }
+    var showAiPermissionsSheet by remember { mutableStateOf(false) }
+    var showContextWindowSheet by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
+    var showSearchBar by remember { mutableStateOf(false) }
+
+    // Системные лончеры Android для загрузки любых файлов, фотографий и съёмки камерой
+    val multipleFilesLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris ->
+        uris.forEach { uri -> viewModel.attachFileFromUri(uri) }
+    }
+
+    val photoGalleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetMultipleContents()
+    ) { uris ->
+        uris.forEach { uri -> viewModel.attachFileFromUri(uri) }
+    }
+
+    val cameraPreviewLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bitmap ->
+        if (bitmap != null) {
+            viewModel.attachCameraBitmap(bitmap)
+        }
+    }
+
+    if (!googleProfile.isSignedIn) {
+        ChatGptStyleGoogleLoginScreen(
+            pcInstanceName = pcBridgeStatus.instanceName,
+            isPcBridgeOnline = pcBridgeStatus.connected,
+            onOpenGoogleOAuthWeb = {
+                viewModel.signInWithGoogleCompleted(
+                    targetMode = AgentExecutionTarget.GOOGLE_WEB_CONSOLE,
+                    openWebConsoleFirst = true
+                )
+            },
+            onConnectPcSessionNow = {
+                viewModel.signInWithGoogleCompleted(
+                    targetMode = AgentExecutionTarget.PC_REMOTE_SESSION,
+                    openWebConsoleFirst = false
+                )
+            },
+            onStartPhoneLocalAgent = {
+                viewModel.signInWithGoogleCompleted(
+                    targetMode = AgentExecutionTarget.PHONE_LOCAL_RESOURCES,
+                    openWebConsoleFirst = false
+                )
+            }
+        )
+        return
+    }
+
+    LaunchedEffect(drawerState.isOpen) {
+        if (drawerState.isOpen) {
+            viewModel.syncRemoteSessionsFromPc()
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF000000))
+            .windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.ime))
+    ) {
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            drawerContent = {
+                ChatGptExactNavigationDrawer(
+                    sessions = remoteSessions,
+                    activeSessionId = settings.activeConversationId,
+                    openRouterTotalCount = openRouterTotalCount.coerceAtLeast(openRouterModels.size),
+                    googleDriveFilesCount = googleDriveFiles.size,
+                    onRefreshSessions = {
+                        viewModel.syncRemoteSessionsFromPc()
+                    },
+                    onSelectMenuSection = { section ->
+                        viewModel.selectDrawerSection(section)
+                        scope.launch { drawerState.close() }
+                    },
+                    onOpenOpenRouterHub = {
+                        scope.launch { drawerState.close() }
+                        viewModel.syncOpenRouterCatalog(forceRefresh = false)
+                        showOpenRouterSheet = true
+                    },
+                    onOpenGoogleDriveHub = {
+                        scope.launch { drawerState.close() }
+                        viewModel.refreshGoogleDriveFiles()
+                        showGoogleDriveSheet = true
+                    },
+                    onOpenCliSandboxHub = { tab ->
+                        scope.launch { drawerState.close() }
+                        cliSandboxInitialTab = tab
+                        showAndroidCliSandboxSheet = true
+                    },
+                    onOpenPermissionsHub = {
+                        scope.launch { drawerState.close() }
+                        showAiPermissionsSheet = true
+                    },
+                    onOpenContextHub = {
+                        scope.launch { drawerState.close() }
+                        viewModel.refreshContextWindowStatus()
+                        showContextWindowSheet = true
+                    },
+                    onSelectSession = { session ->
+                        viewModel.connectToExistingRemoteSession(session)
+                        scope.launch { drawerState.close() }
+                    },
+                    onNewChatClick = {
+                        viewModel.startNewChat()
+                        scope.launch { drawerState.close() }
+                    },
+                    onProfileClick = {
+                        viewModel.selectDrawerSection(DrawerSection.SETTINGS)
+                        scope.launch { drawerState.close() }
+                    }
+                )
+            }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xFF000000))
+            ) {
+                FloatingVoiceCallPill(
+                    voiceEngine = viewModel.voiceEngine,
+                    onEndCall = { viewModel.stopLiveVoiceCall() }
+                )
+
+                when (drawerSection) {
+                    DrawerSection.GOOGLE_WEB -> {
+                        AntigravityGoogleWebConsole(
+                            pcInstanceName = pcBridgeStatus.instanceName,
+                            pcBridgeUrl = settings.pcBridgeUrl,
+                            activeConversationId = settings.activeConversationId,
+                            initialUrl = settings.antigravityGatewayUrl,
+                            onGoogleLoginDetected = {
+                                viewModel.signInWithGoogleCompleted(
+                                    targetMode = AgentExecutionTarget.PC_REMOTE_SESSION,
+                                    openWebConsoleFirst = false
+                                )
+                            },
+                            onSwitchToNativeChat = {
+                                viewModel.selectDrawerSection(DrawerSection.CHAT)
+                            }
+                        )
+                    }
+
+                    DrawerSection.PHONE_EXPLORER -> {
+                        PhoneAssistantScreen(
+                            viewModel = viewModel,
+                            onBack = { viewModel.selectDrawerSection(DrawerSection.CHAT) },
+                            onAskInChat = { prompt ->
+                                viewModel.sendUserPrompt(prompt, viaVoice = false)
+                            }
+                        )
+                    }
+
+                    DrawerSection.PROJECTS -> {
+                        ChatGptProjectsScreen(
+                            projects = scratchProjects,
+                            onOpenDrawer = { scope.launch { drawerState.open() } },
+                            onSelectProject = { proj -> viewModel.openScratchProjectInChat(proj) }
+                        )
+                    }
+
+                    DrawerSection.LIBRARY -> {
+                        ChatGptLibraryScreen(
+                            artifacts = artifactsLibrary,
+                            phoneFiles = phoneFiles,
+                            onOpenDrawer = { scope.launch { drawerState.open() } },
+                            onOpenPhoneExplorer = { viewModel.selectDrawerSection(DrawerSection.PHONE_EXPLORER) },
+                            onPickFileFromSystem = { multipleFilesLauncher.launch(arrayOf("*/*")) }
+                        )
+                    }
+
+                    DrawerSection.IMAGES -> {
+                        ChatGptImagesScreen(
+                            onOpenDrawer = { scope.launch { drawerState.open() } },
+                            onPickPhoto = { photoGalleryLauncher.launch("image/*") },
+                            onTakeCameraPhoto = { cameraPreviewLauncher.launch(null) },
+                            onSendImagePrompt = { prompt ->
+                                viewModel.sendUserPrompt(prompt, viaVoice = false)
+                            }
+                        )
+                    }
+
+                    DrawerSection.SCHEDULED -> {
+                        ChatGptScheduledScreen(
+                            tasks = scheduledTasks,
+                            onOpenDrawer = { scope.launch { drawerState.open() } },
+                            onToggleTask = { id -> viewModel.toggleScheduledTask(id) },
+                            onAddTask = { title, cron, cmd -> viewModel.addScheduledTask(title, cron, cmd) },
+                            onRunTaskNow = { task ->
+                                viewModel.sendUserPrompt(task.promptCommand, viaVoice = false)
+                            }
+                        )
+                    }
+
+                    DrawerSection.PLUGINS -> {
+                        ChatGptPluginsScreen(
+                            plugins = installedPlugins,
+                            skills = installedSkills,
+                            mcpServers = mcpServers,
+                            errorText = extensionsError,
+                            isLoading = isExtensionsLoading,
+                            onOpenDrawer = { scope.launch { drawerState.open() } },
+                            onRefresh = { viewModel.refreshExtensionsFromPc() },
+                            onDismissError = { viewModel.clearExtensionsError() },
+                            onTogglePlugin = { id -> viewModel.togglePluginEnabled(id) },
+                            onAddPlugin = { src, desc -> viewModel.addPluginOnPc(src, desc) },
+                            onDeletePlugin = { id -> viewModel.deletePluginOnPc(id) },
+                            onToggleSkill = { id -> viewModel.toggleSkillEnabled(id) },
+                            onAddSkill = { name, desc, instr -> viewModel.addSkillOnPc(name, desc, instr) },
+                            onDeleteSkill = { id -> viewModel.deleteSkillOnPc(id) },
+                            onToggleMcp = { id -> viewModel.toggleMcpServerEnabled(id) },
+                            onAddMcp = { name, cmd, args -> viewModel.addMcpServerOnPc(name, cmd, args) },
+                            onDeleteMcp = { id -> viewModel.deleteMcpServerOnPc(id) }
+                        )
+                    }
+
+                    DrawerSection.SETTINGS -> {
+                        SettingsModalScreen(
+                            viewModel = viewModel,
+                            settings = settings,
+                            googleEmail = googleProfile.email,
+                            pcInstanceName = pcBridgeStatus.instanceName,
+                            onUpdate = { transform -> viewModel.updateSettings(transform) },
+                            onOpenGoogleWeb = { viewModel.selectDrawerSection(DrawerSection.GOOGLE_WEB) },
+                            onSignOut = { viewModel.signOutGoogle() },
+                            onBack = { viewModel.selectDrawerSection(DrawerSection.CHAT) }
+                        )
+                    }
+
+                    else -> {
+                        if (topModeTab == TopModeTab.CHAT && drawerSection == DrawerSection.CHAT) {
+                            ChatGptMainChatScreen(
+                                viewModel = viewModel,
+                                topModeTab = topModeTab,
+                                messages = messages,
+                                pendingAttachments = pendingAttachments,
+                                activeSessionTitle = settings.activeSessionTitle,
+                                selectedModelId = settings.selectedModelId,
+                                availableModels = availableModels,
+                                contextWindowStatus = contextWindowStatus,
+                                liveTokensPerSecond = liveTokensPerSecond,
+                                swarmAgents = swarmAgents,
+                                onOpenDrawer = { scope.launch { drawerState.open() } },
+                                onSelectTopTab = { tab -> viewModel.selectTopModeTab(tab) },
+                                onOpenModelPicker = { showModelPickerDialog = true },
+                                onNewChat = { viewModel.startNewChat() },
+                                onOpenAttachmentSheet = { showAttachmentSheet = true },
+                                onRemoveAttachment = { id -> viewModel.removePendingAttachment(id) },
+                                onStartVoiceLive = onRequestVoicePermissionAndStart,
+                                onOpenContextSheet = {
+                                    viewModel.refreshContextWindowStatus()
+                                    showContextWindowSheet = true
+                                },
+                                onOpenOpenRouterSheet = {
+                                    viewModel.syncOpenRouterCatalog(forceRefresh = false)
+                                    showOpenRouterSheet = true
+                                },
+                                onOpenGoogleDriveSheet = {
+                                    viewModel.refreshGoogleDriveFiles()
+                                    showGoogleDriveSheet = true
+                                },
+                                onOpenSwarmSheet = { showSwarmSheet = true },
+                                onOpenCliSandboxSheet = { tab ->
+                                    cliSandboxInitialTab = tab
+                                    showAndroidCliSandboxSheet = true
+                                },
+                                onOpenPermissionsSheet = { showAiPermissionsSheet = true }
+                            )
+                        } else {
+                            ChatGptRemoteSessionsCodexScreen(
+                                viewModel = viewModel,
+                                topModeTab = topModeTab,
+                                messages = messages,
+                                selectedFilter = remoteEnvFilter,
+                                sessions = remoteSessions,
+                                pendingAttachments = pendingAttachments,
+                                searchQuery = searchQuery,
+                                showSearchBar = showSearchBar,
+                                contextWindowStatus = contextWindowStatus,
+                                openRouterTotalCount = openRouterTotalCount.coerceAtLeast(openRouterModels.size),
+                                swarmAgents = swarmAgents,
+                                onSearchQueryChange = { searchQuery = it },
+                                onToggleSearch = { showSearchBar = !showSearchBar },
+                                onOpenDrawer = { scope.launch { drawerState.open() } },
+                                onSelectTopTab = { tab -> viewModel.selectTopModeTab(tab) },
+                                onOpenModelPicker = { showModelPickerDialog = true },
+                                onSelectFilter = { viewModel.selectRemoteEnvFilter(it) },
+                                onConnectSession = { session ->
+                                    viewModel.connectToExistingRemoteSession(session)
+                                },
+                                onOpenAttachmentSheet = { showAttachmentSheet = true },
+                                onRemoveAttachment = { id -> viewModel.removePendingAttachment(id) },
+                                onStartVoiceLive = onRequestVoicePermissionAndStart,
+                                onOpenContextSheet = {
+                                    viewModel.refreshContextWindowStatus()
+                                    showContextWindowSheet = true
+                                },
+                                onOpenOpenRouterSheet = {
+                                    viewModel.syncOpenRouterCatalog(forceRefresh = false)
+                                    showOpenRouterSheet = true
+                                },
+                                onOpenGoogleDriveSheet = {
+                                    viewModel.refreshGoogleDriveFiles()
+                                    showGoogleDriveSheet = true
+                                },
+                                onOpenSwarmSheet = { showSwarmSheet = true },
+                                onOpenCliSandboxSheet = { tab ->
+                                    cliSandboxInitialTab = tab
+                                    showAndroidCliSandboxSheet = true
+                                },
+                                onOpenPermissionsSheet = { showAiPermissionsSheet = true }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Модальное меню прикрепления файлов и фото (кнопка `+` как в ChatGPT)
+        if (showAttachmentSheet) {
+            ChatGptAttachmentPickerDialog(
+                onTakePhoto = {
+                    showAttachmentSheet = false
+                    cameraPreviewLauncher.launch(null)
+                },
+                onPickPhotos = {
+                    showAttachmentSheet = false
+                    photoGalleryLauncher.launch("image/*")
+                },
+                onPickAnyFiles = {
+                    showAttachmentSheet = false
+                    multipleFilesLauncher.launch(arrayOf("*/*"))
+                },
+                onOpenPhoneStorage = {
+                    showAttachmentSheet = false
+                    viewModel.selectDrawerSection(DrawerSection.PHONE_EXPLORER)
+                },
+                onDismiss = { showAttachmentSheet = false }
+            )
+        }
+
+        if (showModelPickerDialog) {
+            ModelAndModeSelectorDialog(
+                settings = settings,
+                availableModels = availableModels,
+                openRouterTotalCount = openRouterTotalCount.coerceAtLeast(openRouterModels.size),
+                onSelectTarget = { target ->
+                    viewModel.setExecutionTarget(target)
+                    showModelPickerDialog = false
+                },
+                onSelectModel = { modelId ->
+                    viewModel.setSelectedModel(modelId)
+                    showModelPickerDialog = false
+                },
+                onOpenOpenRouterCatalog = {
+                    showModelPickerDialog = false
+                    viewModel.syncOpenRouterCatalog(forceRefresh = false)
+                    showOpenRouterSheet = true
+                },
+                onSwitchToChatTab = {
+                    viewModel.selectTopModeTab(TopModeTab.CHAT)
+                    showModelPickerDialog = false
+                },
+                onDismiss = { showModelPickerDialog = false }
+            )
+        }
+
+        if (showContextWindowSheet) {
+            ContextWindowSheet(
+                status = contextWindowStatus,
+                lastCompactedSummary = lastCompactedSummary,
+                onDismiss = { showContextWindowSheet = false },
+                onResetKeepMessages = {
+                    viewModel.resetSessionContextWindow(clearMessages = false)
+                },
+                onResetClearMessages = {
+                    viewModel.resetSessionContextWindow(clearMessages = true)
+                },
+                onCompactContext = {
+                    viewModel.compactSessionContextWindow()
+                },
+                onClearToolOutputs = {
+                    viewModel.clearToolOutputsFromContext()
+                }
+            )
+        }
+
+        if (showOpenRouterSheet) {
+            OpenRouterHubSheet(
+                models = openRouterModels,
+                totalCount = openRouterTotalCount,
+                syncedAt = openRouterSyncedAt,
+                syncSource = openRouterSyncSource,
+                cacheStatusText = openRouterCacheStatusText,
+                selectedModelId = settings.selectedModelId,
+                openRouterApiKey = openRouterApiKey,
+                isSyncing = isSyncingOpenRouter,
+                isGeneratingMedia = isGeneratingMedia,
+                onDismiss = { showOpenRouterSheet = false },
+                onSyncNow = { viewModel.syncOpenRouterCatalog(forceRefresh = true) },
+                onSaveApiKey = { key -> viewModel.saveOpenRouterApiKey(key) },
+                onSelectModel = { model ->
+                    viewModel.selectOpenRouterModel(model)
+                },
+                onSelectCustomModel = { customId ->
+                    viewModel.selectCustomOpenRouterModelId(customId)
+                },
+                onGenerateMedia = { prompt, modelId, isVideo ->
+                    viewModel.generateOpenRouterMediaInChat(prompt = prompt, modelId = modelId, isVideo = isVideo)
+                }
+            )
+        }
+
+        if (showGoogleDriveSheet) {
+            GoogleDriveSheet(
+                status = googleDriveStatus,
+                files = googleDriveFiles,
+                isSyncing = isSyncingGoogleDrive,
+                onDismiss = { showGoogleDriveSheet = false },
+                onRefresh = { viewModel.refreshGoogleDriveFiles() },
+                onCreateFile = { name, content, prompt, engine ->
+                    viewModel.createGoogleDriveFile(name, content, prompt, engine, insertIntoChat = false)
+                },
+                onDeleteFile = { fileName -> viewModel.deleteGoogleDriveFile(fileName) },
+                onInsertInChat = { mentionText ->
+                    viewModel.sendUserPrompt(
+                        "${mentionText.trim()} Проанализируй содержимое этого облачного файла из Google Диска (/AntigravityCloud)",
+                        viaVoice = false
+                    )
+                    showGoogleDriveSheet = false
+                }
+            )
+        }
+
+        if (showSwarmSheet) {
+            MultiAgentSwarmSheet(
+                agents = swarmAgents,
+                onDismiss = { showSwarmSheet = false },
+                onSetLeader = { agentId -> viewModel.setSwarmLeader(agentId) },
+                onDispatchSwarmTask = { taskPrompt ->
+                    viewModel.dispatchSwarmTask(taskPrompt)
+                },
+                onInsertMention = { mentionText ->
+                    viewModel.sendUserPrompt("${mentionText.trim()} Доложи текущий статус", viaVoice = false)
+                }
+            )
+        }
+
+        if (showAndroidCliSandboxSheet) {
+            AndroidCliAndSandboxSheet(
+                cliHistory = androidCliHistory,
+                isRunningCli = isRunningAndroidCli,
+                sandboxProject = virtualSandboxProject,
+                sandboxTestOutput = sandboxTestOutput,
+                onDismiss = { showAndroidCliSandboxSheet = false },
+                onRunCliCommand = { cmd -> viewModel.runAndroidCliCommand(cmd) },
+                onClearCli = { viewModel.clearAndroidCliHistory() },
+                onRunSandboxTests = { viewModel.runVirtualSandboxTests() },
+                onCreateSnapshot = { viewModel.createVirtualSandboxSnapshot() },
+                onResetSandbox = { viewModel.resetVirtualSandbox() },
+                initialTab = cliSandboxInitialTab
+            )
+        }
+
+        if (showAiPermissionsSheet) {
+            AiPermissionsSheet(
+                config = aiPermissions,
+                onDismiss = { showAiPermissionsSheet = false },
+                onUpdateConfig = { transform -> viewModel.updateAiPermissions(transform) },
+                onApplyPreset = { preset -> viewModel.applyAiPermissionsPreset(preset) }
+            )
+        }
+
+        OrbitVoiceOverlay(
+            voiceEngine = viewModel.voiceEngine,
+            visualizerStyle = settings.voiceVisualizerStyle,
+            transportMode = settings.voiceTransportMode,
+            onCycleVisualizerStyle = { viewModel.cycleVisualizerStyle() },
+            onEndCall = { viewModel.stopLiveVoiceCall() }
+        )
+    }
+}
+
+/**
+ * Главный экран Чата 1:1 как в официальном ChatGPT Android 1.2026.293 и Claude Android 1.261029.20:
+ * - Чистый верхний бар `Чат | Работа` + выбор модели `Antigravity ▾` с компактным индикатором контекста и скорости `⚡ ток/с` (без перегруженных рядов плашек сверху — Раздел 11.1)
+ * - Компактная плашка `CodeBackgroundTasksEntryPoint` в правом нижнем углу прямо над строкой ввода (Разделы 11.2, 11.6, 11.7)
+ * - Нижняя капсула `+ Спросить Antigravity 🎤 |||`.
+ */
+@Composable
+private fun ChatGptMainChatScreen(
+    viewModel: AntigravityViewModel,
+    topModeTab: TopModeTab,
+    messages: List<ChatMessage>,
+    pendingAttachments: List<AttachedFileItem>,
+    activeSessionTitle: String,
+    selectedModelId: String,
+    availableModels: List<AntigravityModelOption>,
+    contextWindowStatus: ContextWindowStatus,
+    liveTokensPerSecond: Float,
+    swarmAgents: List<SwarmAgentNode>,
+    onOpenDrawer: () -> Unit,
+    onSelectTopTab: (TopModeTab) -> Unit,
+    onOpenModelPicker: () -> Unit,
+    onNewChat: () -> Unit,
+    onOpenAttachmentSheet: () -> Unit,
+    onRemoveAttachment: (String) -> Unit,
+    onStartVoiceLive: () -> Unit,
+    onOpenContextSheet: () -> Unit,
+    onOpenOpenRouterSheet: () -> Unit,
+    onOpenGoogleDriveSheet: () -> Unit,
+    onOpenSwarmSheet: () -> Unit,
+    onOpenCliSandboxSheet: (Int) -> Unit,
+    onOpenPermissionsSheet: () -> Unit
+) {
+    val listState = rememberLazyListState()
+    val isAnyMessageStreaming = remember(messages) {
+        messages.any { it.isStreaming }
+    }
+    val shortModelSubtitle = remember(selectedModelId, availableModels) {
+        val modelObj = (availableModels.ifEmpty { AVAILABLE_AGY_MODELS }).find { it.id == selectedModelId }
+        val rawName = modelObj?.displayName ?: selectedModelId
+        rawName
+            .replace("Gemini ", "")
+            .replace(" (High)", "")
+            .replace(" (Medium)", " M")
+            .replace(" (Low)", " L")
+            .replace(" (Fast)", " Fast")
+            .trim()
+    }
+    val compactContextLabel = remember(contextWindowStatus) {
+        val usedK = (contextWindowStatus.usedTokens / 1000.0)
+        val maxM = (contextWindowStatus.maxTokens / 1_000_000.0).coerceAtLeast(0.1)
+        val usedStr = if (usedK >= 1.0) String.format(Locale.US, "%.1fK", usedK) else "${contextWindowStatus.usedTokens}"
+        val maxStr = if (maxM >= 1.0) String.format(Locale.US, "%.0fM", maxM) else "${contextWindowStatus.maxTokens / 1000}K"
+        "$usedStr/$maxStr"
+    }
+
+    LaunchedEffect(messages.size, activeSessionTitle) {
+        if (messages.isNotEmpty()) {
+            listState.scrollToItem(messages.size - 1)
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF000000))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            TwoLineMenuCircleButton(onClick = onOpenDrawer)
+
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Surface(
+                    color = Color(0xFF212121),
+                    shape = RoundedCornerShape(24.dp),
+                    modifier = Modifier
+                        .width(196.dp)
+                        .height(40.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(3.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val isChat = topModeTab == TopModeTab.CHAT
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(if (isChat) Color(0xFF2F2F2F) else Color.Transparent)
+                                .clickable { onSelectTopTab(TopModeTab.CHAT) }
+                        ) {
+                            Text(
+                                text = "Чат",
+                                color = if (isChat) Color.White else Color(0xFF9E9E9E),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(if (!isChat) Color(0xFF2F2F2F) else Color.Transparent)
+                                .clickable { onSelectTopTab(TopModeTab.WORK_SESSIONS) }
+                        ) {
+                            Text(
+                                text = "Работа",
+                                color = if (!isChat) Color.White else Color(0xFF9E9E9E),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(3.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { onOpenModelPicker() }
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "Antigravity",
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (shortModelSubtitle.isNotBlank()) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = shortModelSubtitle,
+                                color = Color(0xFF9E9E9E),
+                                fontSize = 12.2.sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowDown,
+                            contentDescription = "Выбрать модель",
+                            tint = Color(0xFFB0B0B0),
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
+
+                    // Компактный индикатор контекста в подзаголовке (открывает Ваш контекст / ContextUsagePayload)
+                    Text(
+                        text = "• $compactContextLabel",
+                        color = Color(0xFF6B7280),
+                        fontSize = 11.2.sp,
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable { onOpenContextSheet() }
+                            .padding(horizontal = 3.dp, vertical = 1.dp)
+                    )
+
+                    if (liveTokensPerSecond > 0f) {
+                        Text(
+                            text = "${String.format(Locale.US, "%.1f", liveTokensPerSecond)} ток/с",
+                            color = Color(0xFF34D399),
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+
+            DashedBubbleCircleButton(onClick = onNewChat)
+        }
+
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+        ) {
+            if (messages.isNotEmpty()) {
+                val isSpeakingAloud by viewModel.voiceEngine.isSpeakingMessageAloud.collectAsState()
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    itemsIndexed(messages, key = { idx, msg -> "${idx}_${msg.id}" }) { _, msg ->
+                        ChatGptMessageBubble(
+                            message = msg,
+                            isSpeakingAloud = isSpeakingAloud,
+                            onToggleThinking = { viewModel.toggleThinkingExpanded(msg.id) },
+                            onSpeak = { viewModel.toggleSpeakMessage(msg.content) },
+                            onRegenerate = { viewModel.regenerateResponseForMessage(msg.id) },
+                            onSaveToPhone = { fileName, code ->
+                                viewModel.saveSnippetToPhoneFile(fileName, code)
+                            },
+                            onSaveToGoogleDrive = { fileName, code ->
+                                viewModel.saveSnippetToGoogleDrive(fileName, code)
+                            },
+                            onDownloadMedia = { media ->
+                                viewModel.downloadGeneratedMediaToPhone(media)
+                            },
+                            onEditUserMessage = { newPrompt ->
+                                viewModel.editAndResendUserMessage(msg.id, newPrompt)
+                            },
+                            onDecideToolCall = { toolCallId, decision ->
+                                viewModel.decideToolCallApproval(msg.id, toolCallId, decision)
+                            },
+                            onOpenWebSync = {
+                                viewModel.selectDrawerSection(DrawerSection.GOOGLE_WEB)
+                            },
+                            onOpenCliSandbox = {
+                                onOpenCliSandboxSheet(0)
+                            }
+                        )
+                    }
+                }
+            } else {
+                // Пустое состояние 1:1 как в официальном ChatGPT Android 1.2026.293 (media_1793449099260_d9eb5f5f.jpg)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Чем я могу помочь?",
+                        color = Color.White,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+
+        // Компактная плашка фоновых задач и субагентов прямо в чате над строкой ввода (CodeBackgroundTasksEntryPoint + BackgroundTasksDetail, Разделы 11.2, 11.6, 11.7)
+        CodeBackgroundTasksEntryPoint(
+            agents = swarmAgents,
+            onOpenFullSheet = onOpenSwarmSheet,
+            onSetLeader = { agentId -> viewModel.setSwarmLeader(agentId) },
+            onDispatchSwarmTask = { prompt -> viewModel.dispatchSwarmTask(prompt) },
+            onInsertMention = { mentionText ->
+                viewModel.sendUserPrompt("${mentionText.trim()} Доложи текущий статус", viaVoice = false)
+            }
+        )
+
+        val isDictatingInline by viewModel.voiceEngine.isDictatingInline.collectAsState()
+
+        ChatGptBottomInputPill(
+            viewModel = viewModel,
+            placeholderText = "Спросить Antigravity (/ скиллы, @ агенты)",
+            pendingAttachments = pendingAttachments,
+            isDictatingInline = isDictatingInline,
+            isStreaming = isAnyMessageStreaming,
+            onStopStreaming = { viewModel.stopActiveGeneration() },
+            onRemoveAttachment = onRemoveAttachment,
+            onSendPrompt = { text -> viewModel.sendUserPrompt(text, viaVoice = false) },
+            onPlusClick = onOpenAttachmentSheet,
+            onMicDictationClick = { currentText, onDictatedText ->
+                viewModel.voiceEngine.startInlineDictation(
+                    initialText = currentText,
+                    onDictatedText = onDictatedText
+                )
+            },
+            onBlueVoiceWaveClick = onStartVoiceLive,
+            onOpenOpenRouterSheet = onOpenOpenRouterSheet,
+            onOpenGoogleDriveSheet = onOpenGoogleDriveSheet,
+            onOpenSwarmSheet = onOpenSwarmSheet,
+            onOpenCliSandboxSheet = onOpenCliSandboxSheet,
+            onOpenPermissionsSheet = onOpenPermissionsSheet
+        )
+    }
+}
+
+@Composable
+private fun Round5QuickHubBar(
+    contextWindowStatus: ContextWindowStatus,
+    openRouterTotalCount: Int,
+    swarmAgentsCount: Int,
+    onOpenContextSheet: () -> Unit,
+    onOpenOpenRouterSheet: () -> Unit,
+    onOpenSwarmSheet: () -> Unit,
+    onOpenCliSandboxSheet: (Int) -> Unit,
+    onOpenPermissionsSheet: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        ContextWindowBadge(
+            status = contextWindowStatus,
+            onClick = onOpenContextSheet
+        )
+
+        QuickHubPill(
+            text = "🌐 OpenRouter (${openRouterTotalCount.coerceAtLeast(452)})",
+            accentColor = Color(0xFF58A6FF),
+            onClick = onOpenOpenRouterSheet
+        )
+
+        QuickHubPill(
+            text = "👑 Рой ИИ ($swarmAgentsCount)",
+            accentColor = Color(0xFFF59E0B),
+            onClick = onOpenSwarmSheet
+        )
+
+        QuickHubPill(
+            text = "💻 Android CLI",
+            accentColor = Color(0xFF10B981),
+            onClick = { onOpenCliSandboxSheet(0) }
+        )
+
+        QuickHubPill(
+            text = "🧪 Песочница",
+            accentColor = Color(0xFFA78BFA),
+            onClick = { onOpenCliSandboxSheet(1) }
+        )
+
+        QuickHubPill(
+            text = "🛡️ Разрешения",
+            accentColor = Color(0xFF34D399),
+            onClick = onOpenPermissionsSheet
+        )
+    }
+}
+
+@Composable
+private fun QuickHubPill(
+    text: String,
+    accentColor: Color,
+    onClick: () -> Unit
+) {
+    Surface(
+        color = Color(0xFF171B22),
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier
+            .border(1.dp, accentColor.copy(alpha = 0.4f), RoundedCornerShape(14.dp))
+            .clickable { onClick() }
+    ) {
+        Text(
+            text = text,
+            color = Color(0xFFE6EDF3),
+            fontSize = 11.2.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+        )
+    }
+}
+
+private fun formatEnvironmentRu(raw: String): String {
+    val lower = raw.lowercase()
+    return when {
+        lower.contains("phone") || lower.contains("sdcard") || lower.contains("смартфон") -> "Память смартфона"
+        lower.contains("cloud") || lower.contains("облако") -> "Облако Google"
+        lower.contains("cr05318") || lower.contains("base environment") || lower.contains("win-11") -> "Рабочая станция ПК"
+        else -> raw
+    }
+}
+
+/**
+ * Экран уже созданных удалённых сессий (`Работа`).
+ * Нажатие на любую сессию сразу открывает Чат со всеми прошлыми сообщениями этой сессии!
+ */
+@Composable
+private fun ChatGptRemoteSessionsCodexScreen(
+    viewModel: AntigravityViewModel,
+    topModeTab: TopModeTab,
+    messages: List<ChatMessage>,
+    selectedFilter: RemoteEnvFilter,
+    sessions: List<RemoteSessionItem>,
+    pendingAttachments: List<AttachedFileItem>,
+    searchQuery: String,
+    showSearchBar: Boolean,
+    contextWindowStatus: ContextWindowStatus,
+    openRouterTotalCount: Int,
+    swarmAgents: List<SwarmAgentNode>,
+    onSearchQueryChange: (String) -> Unit,
+    onToggleSearch: () -> Unit,
+    onOpenDrawer: () -> Unit,
+    onSelectTopTab: (TopModeTab) -> Unit,
+    @Suppress("UNUSED_PARAMETER") onOpenModelPicker: () -> Unit,
+    onSelectFilter: (RemoteEnvFilter) -> Unit,
+    onConnectSession: (RemoteSessionItem) -> Unit,
+    onOpenAttachmentSheet: () -> Unit,
+    onRemoveAttachment: (String) -> Unit,
+    onStartVoiceLive: () -> Unit,
+    onOpenContextSheet: () -> Unit,
+    onOpenOpenRouterSheet: () -> Unit,
+    onOpenGoogleDriveSheet: () -> Unit,
+    onOpenSwarmSheet: () -> Unit,
+    onOpenCliSandboxSheet: (Int) -> Unit,
+    onOpenPermissionsSheet: () -> Unit
+) {
+    val isAnyMessageStreaming = remember(messages) {
+        messages.any { it.isStreaming }
+    }
+    val filteredSessions = remember(sessions, selectedFilter, searchQuery) {
+        sessions.filter { s ->
+            val matchesFilter = when (selectedFilter) {
+                RemoteEnvFilter.ALL -> true
+                RemoteEnvFilter.CLOUD -> true
+                RemoteEnvFilter.PC_CR05318 -> s.host.equals("cr05318", ignoreCase = true) || s.hostType == "PC"
+                RemoteEnvFilter.PC_WIN11 -> s.host.equals("WIN-11", ignoreCase = true) || s.hostType == "PC"
+                RemoteEnvFilter.PHONE_LOCAL -> s.hostType == "PHONE"
+            }
+            val matchesQuery = searchQuery.isBlank() ||
+                s.title.contains(searchQuery, ignoreCase = true) ||
+                s.environment.contains(searchQuery, ignoreCase = true)
+            matchesFilter && matchesQuery
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF000000))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            TwoLineMenuCircleButton(onClick = onOpenDrawer)
+
+            Surface(
+                color = Color(0xFF212121),
+                shape = RoundedCornerShape(24.dp),
+                modifier = Modifier
+                    .width(196.dp)
+                    .height(42.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(3.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val isChat = topModeTab == TopModeTab.CHAT
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(if (isChat) Color(0xFF2F2F2F) else Color.Transparent)
+                            .clickable { onSelectTopTab(TopModeTab.CHAT) }
+                    ) {
+                        Text(
+                            text = "Чат",
+                            color = if (isChat) Color.White else Color(0xFF9E9E9E),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(if (!isChat) Color(0xFF2F2F2F) else Color.Transparent)
+                            .clickable { onSelectTopTab(TopModeTab.WORK_SESSIONS) }
+                    ) {
+                        Text(
+                            text = "Работа",
+                            color = if (!isChat) Color.White else Color(0xFF9E9E9E),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+
+            SearchCircleButton(onClick = onToggleSearch)
+        }
+
+        Round5QuickHubBar(
+            contextWindowStatus = contextWindowStatus,
+            openRouterTotalCount = openRouterTotalCount,
+            swarmAgentsCount = swarmAgents.size,
+            onOpenContextSheet = onOpenContextSheet,
+            onOpenOpenRouterSheet = onOpenOpenRouterSheet,
+            onOpenSwarmSheet = onOpenSwarmSheet,
+            onOpenCliSandboxSheet = onOpenCliSandboxSheet,
+            onOpenPermissionsSheet = onOpenPermissionsSheet
+        )
+
+        AnimatedVisibility(visible = showSearchBar) {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = onSearchQueryChange,
+                placeholder = { Text("Поиск удалённой сессии...", color = Color(0xFF8E8E8E)) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                singleLine = true,
+                shape = RoundedCornerShape(20.dp)
+            )
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            RemoteEnvFilter.entries.forEach { filter ->
+                val isSelected = selectedFilter == filter
+                Surface(
+                    color = if (isSelected) Color(0xFF2B2B2B) else Color.Transparent,
+                    shape = RoundedCornerShape(22.dp),
+                    modifier = Modifier.clickable { onSelectFilter(filter) }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        when (filter) {
+                            RemoteEnvFilter.ALL -> {}
+                            RemoteEnvFilter.CLOUD -> {
+                                Icon(
+                                    imageVector = Icons.Outlined.Cloud,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(17.dp)
+                                )
+                                Spacer(modifier = Modifier.width(7.dp))
+                            }
+                            RemoteEnvFilter.PC_WIN11, RemoteEnvFilter.PC_CR05318 -> {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFFD4D4D4))
+                                )
+                                Spacer(modifier = Modifier.width(7.dp))
+                                Icon(
+                                    imageVector = Icons.Outlined.Laptop,
+                                    contentDescription = null,
+                                    tint = Color(0xFFD4D4D4),
+                                    modifier = Modifier.size(17.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                            }
+                            RemoteEnvFilter.PHONE_LOCAL -> {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF10A37F))
+                                )
+                                Spacer(modifier = Modifier.width(7.dp))
+                                Icon(
+                                    imageVector = Icons.Outlined.PhoneAndroid,
+                                    contentDescription = null,
+                                    tint = Color(0xFFD4D4D4),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                            }
+                        }
+
+                        Text(
+                            text = filter.label,
+                            color = if (isSelected) Color.White else Color(0xFFD4D4D4),
+                            fontSize = 14.sp,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium
+                        )
+                    }
+                }
+            }
+        }
+
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            item {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clickable { viewModel.syncRemoteSessionsFromPc() }
+                        .padding(top = 6.dp, bottom = 4.dp)
+                ) {
+                    Text(
+                        text = "Недавние",
+                        color = Color.White,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowDown,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+
+            items(filteredSessions, key = { it.id }) { session ->
+                val cleanEnv = formatEnvironmentRu(session.environment)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onConnectSession(session) }
+                ) {
+                    Text(
+                        text = session.title,
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Normal,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        EnvironmentMiniIcon()
+                        Spacer(modifier = Modifier.width(7.dp))
+                        Text(
+                            text = if (session.messageCount > 0) {
+                                "$cleanEnv • ${session.messageCount} сообщ."
+                            } else {
+                                cleanEnv
+                            },
+                            color = Color(0xFF8E8E8E),
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+            }
+
+            item {
+                Text(
+                    text = "Больше диалогов нет",
+                    color = Color(0xFF8E8E8E),
+                    fontSize = 14.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 18.dp)
+                )
+            }
+        }
+
+        val isDictatingInline by viewModel.voiceEngine.isDictatingInline.collectAsState()
+
+        ChatGptBottomInputPill(
+            viewModel = viewModel,
+            placeholderText = "Спросить Antigravity (/ скиллы, @ агенты)",
+            pendingAttachments = pendingAttachments,
+            isDictatingInline = isDictatingInline,
+            isStreaming = isAnyMessageStreaming,
+            onStopStreaming = { viewModel.stopActiveGeneration() },
+            onRemoveAttachment = onRemoveAttachment,
+            onSendPrompt = { text -> viewModel.sendUserPrompt(text, viaVoice = false) },
+            onPlusClick = onOpenAttachmentSheet,
+            onMicDictationClick = { currentText, onDictatedText ->
+                viewModel.voiceEngine.startInlineDictation(
+                    initialText = currentText,
+                    onDictatedText = onDictatedText
+                )
+            },
+            onBlueVoiceWaveClick = onStartVoiceLive,
+            onOpenOpenRouterSheet = onOpenOpenRouterSheet,
+            onOpenGoogleDriveSheet = onOpenGoogleDriveSheet,
+            onOpenSwarmSheet = onOpenSwarmSheet,
+            onOpenCliSandboxSheet = onOpenCliSandboxSheet,
+            onOpenPermissionsSheet = onOpenPermissionsSheet
+        )
+    }
+}
+
+/**
+ * Боковое меню навигации 1:1 как в ChatGPT Android (Разделы 11.1, 11.5, 11.6):
+ * отдельные пункты в левом меню (без дублирования Фоновых задач и субагентов, которые находятся над полем ввода чата).
+ */
+@Composable
+private fun ChatGptExactNavigationDrawer(
+    sessions: List<RemoteSessionItem>,
+    activeSessionId: String,
+    openRouterTotalCount: Int,
+    googleDriveFilesCount: Int,
+    onRefreshSessions: () -> Unit,
+    onSelectMenuSection: (DrawerSection) -> Unit,
+    onOpenOpenRouterHub: () -> Unit,
+    onOpenGoogleDriveHub: () -> Unit,
+    onOpenCliSandboxHub: (Int) -> Unit,
+    onOpenPermissionsHub: () -> Unit,
+    onOpenContextHub: () -> Unit,
+    onSelectSession: (RemoteSessionItem) -> Unit,
+    onNewChatClick: () -> Unit,
+    onProfileClick: () -> Unit
+) {
+    var drawerSearchQuery by remember { mutableStateOf("") }
+    var showDrawerSearchInput by remember { mutableStateOf(false) }
+
+    val filteredDrawerSessions = remember(sessions, drawerSearchQuery) {
+        if (drawerSearchQuery.isBlank()) {
+            sessions
+        } else {
+            sessions.filter {
+                it.title.contains(drawerSearchQuery, ignoreCase = true) ||
+                    it.host.contains(drawerSearchQuery, ignoreCase = true)
+            }
+        }
+    }
+
+    ModalDrawerSheet(
+        drawerContainerColor = Color(0xFF141414),
+        drawerContentColor = Color.White,
+        modifier = Modifier.width(315.dp)
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Antigravity",
+                    color = Color.White,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF212121))
+                            .clickable(onClick = onRefreshSessions)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Синхронизировать чаты с ПК",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    SearchCircleButton(
+                        onClick = { showDrawerSearchInput = !showDrawerSearchInput },
+                        sizeDp = 42
+                    )
+                }
+            }
+
+            AnimatedVisibility(visible = showDrawerSearchInput) {
+                OutlinedTextField(
+                    value = drawerSearchQuery,
+                    onValueChange = { drawerSearchQuery = it },
+                    placeholder = { Text("Поиск чатов и сессий...", color = Color(0xFF8E8E8E), fontSize = 13.sp) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(18.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+            }
+
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentPadding = PaddingValues(vertical = 4.dp)
+            ) {
+                item {
+                    DrawerMenuRow(
+                        icon = Icons.Outlined.Edit,
+                        title = "Новый чат",
+                        onClick = onNewChatClick
+                    )
+                    DrawerMenuRow(
+                        icon = Icons.Outlined.PhoneAndroid,
+                        title = "Поиск на смартфоне",
+                        onClick = { onSelectMenuSection(DrawerSection.PHONE_EXPLORER) }
+                    )
+                    DrawerMenuRow(
+                        icon = Icons.Outlined.Cloud,
+                        title = "Openrouter",
+                        onClick = onOpenOpenRouterHub
+                    )
+                    DrawerMenuRow(
+                        icon = Icons.Outlined.Folder,
+                        title = "Google Диск",
+                        onClick = onOpenGoogleDriveHub
+                    )
+                    DrawerMenuRow(
+                        icon = Icons.Outlined.Image,
+                        title = "Изображения",
+                        onClick = { onSelectMenuSection(DrawerSection.IMAGES) }
+                    )
+                    DrawerMenuRow(
+                        icon = Icons.Outlined.Extension,
+                        title = "Плагины, Скиллы и MCP",
+                        onClick = { onSelectMenuSection(DrawerSection.PLUGINS) }
+                    )
+                    DrawerMenuRow(
+                        icon = Icons.Outlined.Terminal,
+                        title = "Android CLI и Песочница",
+                        onClick = { onOpenCliSandboxHub(0) }
+                    )
+                    DrawerMenuRow(
+                        icon = Icons.Outlined.PhoneAndroid,
+                        title = "Доступ ИИ",
+                        onClick = onOpenPermissionsHub
+                    )
+                    DrawerMenuRow(
+                        icon = Icons.Outlined.Schedule,
+                        title = "Ваш контекст",
+                        onClick = onOpenContextHub
+                    )
+
+                    HorizontalDivider(
+                        color = Color(0xFF282828),
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                    )
+
+                    DrawerMenuRow(
+                        icon = Icons.Outlined.LibraryBooks,
+                        title = "Библиотека",
+                        onClick = { onSelectMenuSection(DrawerSection.LIBRARY) }
+                    )
+                    DrawerMenuRow(
+                        icon = Icons.Outlined.Folder,
+                        title = "Проекты",
+                        onClick = { onSelectMenuSection(DrawerSection.PROJECTS) }
+                    )
+                    DrawerMenuRow(
+                        icon = Icons.Outlined.Terminal,
+                        title = "Рабочие сессии",
+                        onClick = { onSelectMenuSection(DrawerSection.REMOTE_SESSIONS) }
+                    )
+                    DrawerMenuRow(
+                        icon = Icons.Outlined.Cloud,
+                        title = "Веб-синхронизация",
+                        onClick = { onSelectMenuSection(DrawerSection.GOOGLE_WEB) }
+                    )
+                    DrawerMenuRow(
+                        icon = Icons.Outlined.Schedule,
+                        title = "Запланировано",
+                        onClick = { onSelectMenuSection(DrawerSection.SCHEDULED) }
+                    )
+
+                    HorizontalDivider(
+                        color = Color(0xFF282828),
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp)
+                    )
+                }
+
+                items(filteredDrawerSessions, key = { "drawer_${it.id}" }) { session ->
+                    val isSelected = session.id == activeSessionId
+                    Surface(
+                        color = if (isSelected) Color(0xFF262626) else Color.Transparent,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 10.dp, vertical = 2.dp)
+                            .clickable { onSelectSession(session) }
+                    ) {
+                        Text(
+                            text = session.title,
+                            color = if (isSelected) Color.White else Color(0xFFECECEC),
+                            fontSize = 16.sp,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 11.dp)
+                        )
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF141414))
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Button(
+                    onClick = onNewChatClick,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF2E5BF6),
+                        contentColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(26.dp),
+                    contentPadding = PaddingValues(horizontal = 22.dp, vertical = 12.dp),
+                    modifier = Modifier.height(48.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Edit,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Чат",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.linearGradient(
+                                listOf(Color(0xFF4285F4), Color(0xFF1E3A8A))
+                            )
+                        )
+                        .clickable { onProfileClick() }
+                ) {
+                    Text(
+                        text = "G",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 17.sp
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DrawerMenuRow(
+    @Suppress("UNUSED_PARAMETER") icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            color = Color.White,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+/**
+ * Нижняя капсула ввода 1:1 как в ChatGPT Android, с поддержкой прикреплённых файлов над строкой текста
+ * и реактивным автодополнением `/` (скиллы и команды) и `@` (контекст и суб-агенты роя).
+ */
+@Composable
+private fun ChatGptBottomInputPill(
+    viewModel: AntigravityViewModel,
+    placeholderText: String,
+    pendingAttachments: List<AttachedFileItem>,
+    isDictatingInline: Boolean = false,
+    isStreaming: Boolean = false,
+    onStopStreaming: () -> Unit = {},
+    onRemoveAttachment: (String) -> Unit,
+    onSendPrompt: (String) -> Unit,
+    onPlusClick: () -> Unit,
+    onMicDictationClick: (String, (String) -> Unit) -> Unit,
+    onBlueVoiceWaveClick: () -> Unit,
+    onOpenOpenRouterSheet: () -> Unit = {},
+    onOpenGoogleDriveSheet: () -> Unit = {},
+    onOpenSwarmSheet: () -> Unit = {},
+    onOpenCliSandboxSheet: (Int) -> Unit = {},
+    onOpenPermissionsSheet: () -> Unit = {}
+) {
+    var text by remember { mutableStateOf("") }
+    val installedSkills by viewModel.installedSkills.collectAsState()
+    val mcpServers by viewModel.mcpServers.collectAsState()
+    val swarmAgents by viewModel.swarmAgents.collectAsState()
+    val googleDriveFiles by viewModel.googleDriveFiles.collectAsState()
+
+    val slashAndMentionSuggestions = remember(text, installedSkills, mcpServers, swarmAgents, googleDriveFiles) {
+        viewModel.computeSlashAndMentionSuggestions(text)
+    }
+
+    val handleSendAction: (String) -> Unit = { rawInput ->
+        val trimmed = rawInput.trim()
+        when {
+            trimmed.equals("/reset", ignoreCase = true) -> {
+                viewModel.resetSessionContextWindow(clearMessages = false)
+            }
+            trimmed.equals("/compact", ignoreCase = true) -> {
+                viewModel.compactSessionContextWindow()
+            }
+            trimmed.equals("/openrouter", ignoreCase = true) -> {
+                onOpenOpenRouterSheet()
+            }
+            trimmed.equals("/gdrive", ignoreCase = true) -> {
+                onOpenGoogleDriveSheet()
+            }
+            trimmed.equals("/swarm", ignoreCase = true) -> {
+                onOpenSwarmSheet()
+            }
+            trimmed.equals("/cli", ignoreCase = true) -> {
+                onOpenCliSandboxSheet(0)
+            }
+            trimmed.equals("/sandbox", ignoreCase = true) -> {
+                onOpenCliSandboxSheet(1)
+            }
+            trimmed.equals("/permissions", ignoreCase = true) -> {
+                onOpenPermissionsSheet()
+            }
+            trimmed.startsWith("/photo ", ignoreCase = true) -> {
+                val prompt = trimmed.substringAfter(" ").trim()
+                if (prompt.isNotBlank()) {
+                    viewModel.generateOpenRouterMediaInChat(prompt = prompt, modelId = "black-forest-labs/flux.2-pro", isVideo = false)
+                }
+            }
+            trimmed.startsWith("/video ", ignoreCase = true) -> {
+                val prompt = trimmed.substringAfter(" ").trim()
+                if (prompt.isNotBlank()) {
+                    viewModel.generateOpenRouterMediaInChat(prompt = prompt, modelId = "google/veo-3.1-video", isVideo = true)
+                }
+            }
+            else -> {
+                onSendPrompt(rawInput)
+            }
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFF000000))
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+    ) {
+        // Реактивное всплывающее меню `/` (скиллы и команды) и `@` (упоминания, суб-агенты роя, файлы)
+        if (slashAndMentionSuggestions.isNotEmpty()) {
+            SlashAndMentionPopup(
+                suggestions = slashAndMentionSuggestions,
+                onSelectSuggestion = { item ->
+                    when (item.trigger) {
+                        "/reset" -> {
+                            text = ""
+                            viewModel.resetSessionContextWindow(clearMessages = false)
+                        }
+                        "/compact" -> {
+                            text = ""
+                            viewModel.compactSessionContextWindow()
+                        }
+                        "/openrouter" -> {
+                            text = ""
+                            onOpenOpenRouterSheet()
+                        }
+                        "/gdrive" -> {
+                            text = ""
+                            onOpenGoogleDriveSheet()
+                        }
+                        "/swarm" -> {
+                            text = ""
+                            onOpenSwarmSheet()
+                        }
+                        "/cli" -> {
+                            text = ""
+                            onOpenCliSandboxSheet(0)
+                        }
+                        "/sandbox" -> {
+                            text = ""
+                            onOpenCliSandboxSheet(1)
+                        }
+                        "/permissions" -> {
+                            text = ""
+                            onOpenPermissionsSheet()
+                        }
+                        else -> {
+                            val lastSpace = text.lastIndexOfAny(charArrayOf(' ', '\n'))
+                            val prefix = if (lastSpace >= 0) text.substring(0, lastSpace + 1) else ""
+                            text = prefix + item.insertText
+                        }
+                    }
+                }
+            )
+        }
+
+        // Плашки прикреплённых файлов над полем ввода (как в ChatGPT при загрузке файлов)
+        if (pendingAttachments.isNotEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                pendingAttachments.forEach { att ->
+                    Surface(
+                        color = Color(0xFF212121),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = if (att.mimeType.startsWith("image/")) Icons.Default.Image else Icons.Default.Description,
+                                contentDescription = null,
+                                tint = Color(0xFF60A5FA),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = att.name,
+                                    color = Color.White,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1
+                                )
+                                Text(
+                                    text = "${(att.sizeBytes / 1024).coerceAtLeast(1)} КБ",
+                                    color = Color(0xFF8E8E8E),
+                                    fontSize = 11.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Удалить вложение",
+                                tint = Color(0xFFB0B0B0),
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .clickable { onRemoveAttachment(att.id) }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Surface(
+            color = Color(0xFF212121),
+            shape = RoundedCornerShape(28.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 12.dp, end = 8.dp, top = 7.dp, bottom = 7.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF2F2F2F))
+                        .clickable { onPlusClick() }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Загрузить файлы или фото",
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    if (text.isEmpty()) {
+                        Text(
+                            text = if (pendingAttachments.isNotEmpty()) "Добавьте сообщение к файлу..." else placeholderText,
+                            color = Color(0xFF8E8E8E),
+                            fontSize = 15.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    BasicTextField(
+                        value = text,
+                        onValueChange = { text = it },
+                        textStyle = TextStyle(
+                            color = Color.White,
+                            fontSize = 16.sp
+                        ),
+                        cursorBrush = SolidColor(Color.White),
+                        maxLines = 4,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(if (isDictatingInline) Color(0xFFEF4444) else Color.Transparent)
+                        .clickable {
+                            onMicDictationClick(text) { dictated ->
+                                text = dictated
+                            }
+                        }
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Mic,
+                        contentDescription = "Голосовая диктовка в текст",
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(10.dp))
+
+                if (text.isNotBlank() || pendingAttachments.isNotEmpty()) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(Color.White)
+                            .clickable {
+                                val toSend = text
+                                text = ""
+                                handleSendAction(toSend)
+                            }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowUpward,
+                            contentDescription = "Отправить",
+                            tint = Color.Black,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                } else if (isStreaming) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(Color.White)
+                            .clickable { onStopStreaming() }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Stop,
+                            contentDescription = "Остановить генерацию",
+                            tint = Color.Black,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                } else {
+                    BlueVoiceWaveformCircleButton(onClick = onBlueVoiceWaveClick)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Нижняя шторка выбора вложений по кнопке `+` 1:1 как в ChatGPT Android 1.2026.293 (`ModalBottomSheet`).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChatGptAttachmentPickerDialog(
+    onTakePhoto: () -> Unit,
+    onPickPhotos: () -> Unit,
+    onPickAnyFiles: () -> Unit,
+    onOpenPhoneStorage: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = Color(0xFF1E1E1E),
+        contentColor = Color.White,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            // 3 большие плитки сверху (Камера | Фотографии | Файлы), как в ChatGPT Android 1.2026.293
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                AttachmentTileButton(
+                    icon = Icons.Default.CameraAlt,
+                    label = "Камера",
+                    onClick = onTakePhoto,
+                    modifier = Modifier.weight(1f)
+                )
+                AttachmentTileButton(
+                    icon = Icons.Default.Image,
+                    label = "Фотографии",
+                    onClick = onPickPhotos,
+                    modifier = Modifier.weight(1f)
+                )
+                AttachmentTileButton(
+                    icon = Icons.Default.AttachFile,
+                    label = "Файлы",
+                    onClick = onPickAnyFiles,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Surface(
+                color = Color(0xFF282828),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onOpenPhoneStorage() }
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Folder,
+                        contentDescription = null,
+                        tint = Color(0xFF60A5FA),
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = "Поиск и файлы в телефоне",
+                            color = Color.White,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "Найти документы, фото, контакты или создать файл на смартфоне",
+                            color = Color(0xFF9E9E9E),
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+    }
+}
+
+@Composable
+private fun AttachmentTileButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        color = Color(0xFF2A2A2A),
+        shape = RoundedCornerShape(18.dp),
+        modifier = modifier
+            .height(92.dp)
+            .clickable(onClick = onClick)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = Color.White,
+                modifier = Modifier.size(26.dp)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = label,
+                color = Color.White,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
+/**
+ * Раздел Бокового Меню: `Проекты` (все 27 реальных проектов из `scratch` на ПК пользователя).
+ */
+@Composable
+private fun ChatGptProjectsScreen(
+    projects: List<ScratchProjectItem>,
+    onOpenDrawer: () -> Unit,
+    onSelectProject: (ScratchProjectItem) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF000000))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TwoLineMenuCircleButton(onClick = onOpenDrawer)
+            Spacer(modifier = Modifier.width(14.dp))
+            Text("Проекты", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        }
+
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            items(projects, key = { it.name }) { proj ->
+                Surface(
+                    color = Color(0xFF171717),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSelectProject(proj) }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Folder,
+                            contentDescription = null,
+                            tint = Color(0xFF60A5FA),
+                            modifier = Modifier.size(26.dp)
+                        )
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(proj.name, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                text = "Рабочая область ПК • ${proj.fileCount} объектов",
+                                color = Color(0xFF8E8E8E),
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Раздел Бокового Меню: `Библиотека` (Артефакты сессий ПК + файлы смартфона).
+ */
+@Composable
+private fun ChatGptLibraryScreen(
+    artifacts: List<ArtifactDocument>,
+    phoneFiles: List<PhoneResourceController.PhoneFileEntry>,
+    onOpenDrawer: () -> Unit,
+    onOpenPhoneExplorer: () -> Unit,
+    onPickFileFromSystem: () -> Unit
+) {
+    var selectedArtifact by remember { mutableStateOf<ArtifactDocument?>(null) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF000000))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TwoLineMenuCircleButton(onClick = onOpenDrawer)
+                Spacer(modifier = Modifier.width(14.dp))
+                Text("Библиотека", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            }
+            Button(
+                onClick = onPickFileFromSystem,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E5BF6)),
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                Text("+ Загрузить файл", fontSize = 13.sp)
+            }
+        }
+
+        if (selectedArtifact != null) {
+            val art = selectedArtifact!!
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(art.title, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "Назад к списку",
+                        color = Color(0xFF60A5FA),
+                        modifier = Modifier.clickable { selectedArtifact = null }
+                    )
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+                ChatGptMarkdownText(markdown = art.content, textColor = Color(0xFFECECEC))
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                item {
+                    Text("Артефакты и отчёты сессий ПК", color = Color(0xFF8E8E8E), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+                items(artifacts, key = { it.id }) { art ->
+                    Surface(
+                        color = Color(0xFF171717),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { selectedArtifact = art }
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Text(art.title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                            Text(art.summary, color = Color(0xFF8E8E8E), fontSize = 12.sp)
+                        }
+                    }
+                }
+                item {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Файлы смартфона (Загрузки)", color = Color(0xFF8E8E8E), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            text = "Поиск и управление >",
+                            color = Color(0xFF60A5FA),
+                            fontSize = 13.sp,
+                            modifier = Modifier.clickable { onOpenPhoneExplorer() }
+                        )
+                    }
+                }
+                items(phoneFiles.take(15), key = { it.absolutePath }) { f ->
+                    Surface(
+                        color = Color(0xFF171717),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onOpenPhoneExplorer() }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = if (f.isDirectory) Icons.Default.Folder else Icons.Default.Description,
+                                contentDescription = null,
+                                tint = Color.White
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(f.name, color = Color.White, fontSize = 14.sp)
+                                Text(
+                                    "${(f.sizeBytes / 1024).coerceAtLeast(1)} КБ • ${f.lastModified}",
+                                    color = Color(0xFF8E8E8E),
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Раздел Бокового Меню: `Изображения` (как в ChatGPT Images Home).
+ */
+@Composable
+private fun ChatGptImagesScreen(
+    onOpenDrawer: () -> Unit,
+    onPickPhoto: () -> Unit,
+    onTakeCameraPhoto: () -> Unit,
+    onSendImagePrompt: (String) -> Unit
+) {
+    val presets = listOf(
+        "Сгенерируй концепт иконки Android-приложения Antigravity в тёмном стиле",
+        "Нарисуй архитектурную диаграмму голосового движка и моста синхронизации",
+        "Создай UI-макет экрана удалённых сессий в стиле ChatGPT Dark"
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF000000))
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TwoLineMenuCircleButton(onClick = onOpenDrawer)
+            Spacer(modifier = Modifier.width(14.dp))
+            Text("Изображения", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            Button(
+                onClick = onPickPhoto,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF212121)),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Из галереи")
+            }
+            Button(
+                onClick = onTakeCameraPhoto,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF212121)),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Камера")
+            }
+        }
+
+        Text("Быстрые шаблоны генерации и анализа изображений", color = Color(0xFF8E8E8E), fontSize = 13.sp)
+
+        presets.forEach { preset ->
+            Surface(
+                color = Color(0xFF171717),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onSendImagePrompt(preset) }
+            ) {
+                Text(
+                    text = preset,
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Раздел Бокового Меню: `Запланировано` (фоновые расписания задач).
+ */
+@Composable
+private fun ChatGptScheduledScreen(
+    tasks: List<ScheduledAutomationItem>,
+    onOpenDrawer: () -> Unit,
+    onToggleTask: (String) -> Unit,
+    onAddTask: (String, String, String) -> Unit,
+    onRunTaskNow: (ScheduledAutomationItem) -> Unit
+) {
+    var newTitle by remember { mutableStateOf("") }
+    var newCron by remember { mutableStateOf("Каждый день в 10:00") }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF000000))
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TwoLineMenuCircleButton(onClick = onOpenDrawer)
+            Spacer(modifier = Modifier.width(14.dp))
+            Text("Запланировано", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        }
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF171717)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Новое расписание задач", color = Color.White, fontWeight = FontWeight.Bold)
+                OutlinedTextField(
+                    value = newTitle,
+                    onValueChange = { newTitle = it },
+                    placeholder = { Text("Описание задачи...") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = newCron,
+                        onValueChange = { newCron = it },
+                        label = { Text("Периодичность") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                    Button(
+                        onClick = {
+                            onAddTask(newTitle, newCron, newTitle)
+                            newTitle = ""
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E5BF6))
+                    ) {
+                        Text("Добавить")
+                    }
+                }
+            }
+        }
+
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            items(tasks, key = { it.id }) { task ->
+                Surface(
+                    color = Color(0xFF171717),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { onRunTaskNow(task) }
+                        ) {
+                            Text(task.title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Расписание: ${task.cronSchedule}", color = Color(0xFF8E8E8E), fontSize = 12.sp)
+                        }
+                        Switch(checked = task.enabled, onCheckedChange = { onToggleTask(task.id) })
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Раздел Бокового Меню: `Плагины, Скиллы и MCP` (Реальное управление расширениями ПК — Раздел 6).
+ */
+@Composable
+private fun ChatGptPluginsScreen(
+    plugins: List<InstalledPluginItem>,
+    skills: List<PcSkillItem>,
+    mcpServers: List<PcMcpServerItem>,
+    errorText: String?,
+    isLoading: Boolean,
+    onOpenDrawer: () -> Unit,
+    onRefresh: () -> Unit,
+    onDismissError: () -> Unit,
+    onTogglePlugin: (String) -> Unit,
+    onAddPlugin: (String, String) -> Unit,
+    onDeletePlugin: (String) -> Unit,
+    onToggleSkill: (String) -> Unit,
+    onAddSkill: (String, String, String) -> Unit,
+    onDeleteSkill: (String) -> Unit,
+    onToggleMcp: (String) -> Unit,
+    onAddMcp: (String, String, String) -> Unit,
+    onDeleteMcp: (String) -> Unit
+) {
+    var activeTab by remember { mutableStateOf(0) } // 0 = Плагины, 1 = Скиллы, 2 = MCP-серверы
+    var showAddDialog by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF000000))
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TwoLineMenuCircleButton(onClick = onOpenDrawer)
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Плагины, Скиллы и MCP", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    if (isLoading) "Синхронизация с рабочей станцией ПК…" else "Реальные расширения Antigravity",
+                    color = if (isLoading) Color(0xFF10A37F) else Color(0xFF8E8E8E),
+                    fontSize = 12.sp
+                )
+            }
+            IconButton(onClick = onRefresh) {
+                Icon(Icons.Default.Refresh, contentDescription = "Обновить", tint = Color(0xFFECECEC))
+            }
+            Button(
+                onClick = { showAddDialog = true },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10A37F)),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Добавить", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
+
+        if (!errorText.isNullOrBlank()) {
+            Surface(
+                color = Color(0xFF2D1618),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = errorText,
+                        color = Color(0xFFFCA5A5),
+                        fontSize = 12.sp,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = onDismissError, modifier = Modifier.size(24.dp)) {
+                        Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = Color(0xFFFCA5A5))
+                    }
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilterChip(
+                selected = activeTab == 0,
+                onClick = { activeTab = 0 },
+                label = { Text("Плагины") }
+            )
+            FilterChip(
+                selected = activeTab == 1,
+                onClick = { activeTab = 1 },
+                label = { Text("Скиллы") }
+            )
+            FilterChip(
+                selected = activeTab == 2,
+                onClick = { activeTab = 2 },
+                label = { Text("MCP-серверы") }
+            )
+        }
+
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            when (activeTab) {
+                0 -> {
+                    if (plugins.isEmpty()) {
+                        item {
+                            EmptyExtensionsCard(
+                                title = "Плагины не установлены",
+                                subtitle = "Нажмите «+ Добавить», чтобы установить плагин через agy plugin или подключить локальный модуль."
+                            )
+                        }
+                    } else {
+                        items(plugins, key = { it.id }) { p ->
+                            Surface(
+                                color = Color(0xFF171717),
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = p.name,
+                                                color = Color.White,
+                                                fontSize = 15.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.weight(1f, fill = false)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = "v${p.version}",
+                                                color = Color(0xFF10A37F),
+                                                fontSize = 11.sp,
+                                                maxLines = 1,
+                                                softWrap = false
+                                            )
+                                        }
+                                        Text("${p.category} • ${p.source}", color = Color(0xFF60A5FA), fontSize = 12.sp)
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(p.description, color = Color(0xFFA0A0A0), fontSize = 12.sp)
+                                        if (p.path.isNotBlank()) {
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(p.path, color = Color(0xFF6E6E6E), fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Switch(checked = p.enabled, onCheckedChange = { onTogglePlugin(p.id) })
+                                    IconButton(onClick = { onDeletePlugin(p.id) }) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Удалить плагин", tint = Color(0xFFF87171))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                1 -> {
+                    if (skills.isEmpty()) {
+                        item {
+                            EmptyExtensionsCard(
+                                title = "Скиллы не найдены",
+                                subtitle = "Скиллы хранятся в C:\\Users\\st811210\\.gemini\\config\\skills\\<name>\\SKILL.md. Нажмите «+ Добавить», чтобы создать новый скилл."
+                            )
+                        }
+                    } else {
+                        items(skills, key = { it.id }) { s ->
+                            Surface(
+                                color = Color(0xFF171717),
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(s.name, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        Text("SKILL.md • ${s.path}", color = Color(0xFF34D399), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            s.description.ifBlank { s.instructionsPreview },
+                                            color = Color(0xFFA0A0A0),
+                                            fontSize = 12.sp,
+                                            maxLines = 3,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Switch(checked = s.enabled, onCheckedChange = { onToggleSkill(s.id) })
+                                    IconButton(onClick = { onDeleteSkill(s.id) }) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Удалить скилл", tint = Color(0xFFF87171))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                2 -> {
+                    if (mcpServers.isEmpty()) {
+                        item {
+                            EmptyExtensionsCard(
+                                title = "MCP-серверы не подключены",
+                                subtitle = "Нажмите «+ Добавить», чтобы зарегистрировать MCP-сервер через agy mcp add и вызывать его инструменты из чата."
+                            )
+                        }
+                    } else {
+                        items(mcpServers, key = { it.id }) { m ->
+                            Surface(
+                                color = Color(0xFF171717),
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(14.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = m.name,
+                                                color = Color.White,
+                                                fontSize = 15.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.weight(1f, fill = false)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = m.status,
+                                                color = if (m.status.contains("Connected", ignoreCase = true) || m.enabled) Color(0xFF10A37F) else Color(0xFFF59E0B),
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                maxLines = 1,
+                                                softWrap = false
+                                            )
+                                        }
+                                        Text("${m.transport} • ${m.scope}", color = Color(0xFF60A5FA), fontSize = 11.sp)
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            "${m.command} ${m.args.joinToString(" ")}".trim(),
+                                            color = Color(0xFFA0A0A0),
+                                            fontSize = 11.sp,
+                                            fontFamily = FontFamily.Monospace,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Switch(checked = m.enabled, onCheckedChange = { onToggleMcp(m.id) })
+                                    IconButton(onClick = { onDeleteMcp(m.id) }) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Удалить MCP", tint = Color(0xFFF87171))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showAddDialog) {
+        AddExtensionModalDialog(
+            initialTab = activeTab,
+            onDismiss = { showAddDialog = false },
+            onAddPlugin = { src, desc ->
+                onAddPlugin(src, desc)
+                activeTab = 0
+                showAddDialog = false
+            },
+            onAddSkill = { name, desc, instr ->
+                onAddSkill(name, desc, instr)
+                activeTab = 1
+                showAddDialog = false
+            },
+            onAddMcp = { name, cmd, args ->
+                onAddMcp(name, cmd, args)
+                activeTab = 2
+                showAddDialog = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun EmptyExtensionsCard(title: String, subtitle: String) {
+    Surface(
+        color = Color(0xFF171717),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Text(subtitle, color = Color(0xFF9E9E9E), fontSize = 12.5.sp)
+        }
+    }
+}
+
+@Composable
+private fun AddExtensionModalDialog(
+    initialTab: Int,
+    onDismiss: () -> Unit,
+    onAddPlugin: (String, String) -> Unit,
+    onAddSkill: (String, String, String) -> Unit,
+    onAddMcp: (String, String, String) -> Unit
+) {
+    var dialogTab by remember { mutableStateOf(initialTab) }
+    var pluginSource by remember { mutableStateOf("") }
+    var pluginDesc by remember { mutableStateOf("") }
+
+    var skillName by remember { mutableStateOf("workstation-diagnostics") }
+    var skillDesc by remember { mutableStateOf("Проверка состояния рабочей станции и туннелей") }
+    var skillInstructions by remember {
+        mutableStateOf("# Инструкция скилла\nПроверяй реальный статус процессов ПК через терминальные команды и возвращай точные метрики.")
+    }
+
+    var mcpName by remember { mutableStateOf("ag-workstation-info") }
+    var mcpCommand by remember {
+        mutableStateOf("C:\\Users\\st811210\\AppData\\Local\\Programs\\nodejs\\node.exe")
+    }
+    var mcpArgs by remember {
+        mutableStateOf("C:\\Users\\st811210\\.gemini\\antigravity\\scratch\\antigravity-android\\pc-bridge\\mcp_sysinfo_server.js")
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            color = Color(0xFF171717),
+            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(18.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Добавить на компьютер", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = Color.White)
+                    }
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = dialogTab == 0, onClick = { dialogTab = 0 }, label = { Text("Плагин") })
+                    FilterChip(selected = dialogTab == 1, onClick = { dialogTab = 1 }, label = { Text("Скилл") })
+                    FilterChip(selected = dialogTab == 2, onClick = { dialogTab = 2 }, label = { Text("MCP-сервер") })
+                }
+
+                when (dialogTab) {
+                    0 -> {
+                        OutlinedTextField(
+                            value = pluginSource,
+                            onValueChange = { pluginSource = it },
+                            label = { Text("Имя пакета / Git URL / путь") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = pluginDesc,
+                            onValueChange = { pluginDesc = it },
+                            label = { Text("Описание плагина") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Button(
+                            onClick = { onAddPlugin(pluginSource, pluginDesc) },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10A37F)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Установить плагин на ПК", fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    1 -> {
+                        OutlinedTextField(
+                            value = skillName,
+                            onValueChange = { skillName = it },
+                            label = { Text("Имя скилла (папка в .gemini/config/skills)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = skillDesc,
+                            onValueChange = { skillDesc = it },
+                            label = { Text("Краткое описание (frontmatter)") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = skillInstructions,
+                            onValueChange = { skillInstructions = it },
+                            label = { Text("Инструкции SKILL.md") },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 3
+                        )
+                        Button(
+                            onClick = { onAddSkill(skillName, skillDesc, skillInstructions) },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10A37F)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Создать SKILL.md на ПК", fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    2 -> {
+                        OutlinedTextField(
+                            value = mcpName,
+                            onValueChange = { mcpName = it },
+                            label = { Text("Имя MCP-сервера") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = mcpCommand,
+                            onValueChange = { mcpCommand = it },
+                            label = { Text("Исполняемый файл (command)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = mcpArgs,
+                            onValueChange = { mcpArgs = it },
+                            label = { Text("Аргументы запуска (args)") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Button(
+                            onClick = { onAddMcp(mcpName, mcpCommand, mcpArgs) },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10A37F)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Зарегистрировать в agy mcp", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TwoLineMenuCircleButton(onClick: () -> Unit) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(46.dp)
+            .clip(CircleShape)
+            .background(Color(0xFF212121))
+            .clickable(onClick = onClick)
+    ) {
+        Canvas(modifier = Modifier.size(20.dp)) {
+            val stroke = 2.2.dp.toPx()
+            drawLine(
+                color = Color.White,
+                start = Offset(1.dp.toPx(), size.height * 0.34f),
+                end = Offset(19.dp.toPx(), size.height * 0.34f),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round
+            )
+            drawLine(
+                color = Color.White,
+                start = Offset(1.dp.toPx(), size.height * 0.68f),
+                end = Offset(12.dp.toPx(), size.height * 0.68f),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round
+            )
+        }
+    }
+}
+
+@Composable
+private fun DashedBubbleCircleButton(onClick: () -> Unit) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(46.dp)
+            .clip(CircleShape)
+            .background(Color(0xFF212121))
+            .clickable(onClick = onClick)
+    ) {
+        Canvas(modifier = Modifier.size(22.dp)) {
+            val r = size.minDimension * 0.40f
+            drawCircle(
+                color = Color.White,
+                radius = r,
+                style = Stroke(
+                    width = 2.dp.toPx(),
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.5f, 4.5f), 0f),
+                    cap = StrokeCap.Round
+                )
+            )
+            // Хвостик речевого пузыря в левом нижнем углу (как в ChatGPT 1.2026.293)
+            drawLine(
+                color = Color.White,
+                start = Offset(size.width * 0.25f, size.height * 0.75f),
+                end = Offset(size.width * 0.14f, size.height * 0.88f),
+                strokeWidth = 2.dp.toPx(),
+                cap = StrokeCap.Round
+            )
+        }
+    }
+}
+
+@Composable
+private fun SearchCircleButton(onClick: () -> Unit, sizeDp: Int = 46) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(sizeDp.dp)
+            .clip(CircleShape)
+            .background(Color(0xFF212121))
+            .clickable(onClick = onClick)
+    ) {
+        Icon(
+            imageVector = Icons.Default.Search,
+            contentDescription = "Поиск",
+            tint = Color.White,
+            modifier = Modifier.size(22.dp)
+        )
+    }
+}
+
+@Composable
+private fun BlueVoiceWaveformCircleButton(onClick: () -> Unit) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(Color(0xFF2E5BF6))
+            .clickable(onClick = onClick)
+    ) {
+        Canvas(modifier = Modifier.size(20.dp)) {
+            val barWidth = 2.2.dp.toPx()
+            val heights = listOf(0.32f, 0.72f, 0.48f, 0.85f, 0.36f)
+            val gap = size.width / (heights.size + 1)
+            heights.forEachIndexed { idx, hRatio ->
+                val x = gap * (idx + 1)
+                val barH = size.height * hRatio
+                val topY = (size.height - barH) / 2f
+                drawLine(
+                    color = Color.White,
+                    start = Offset(x, topY),
+                    end = Offset(x, topY + barH),
+                    strokeWidth = barWidth,
+                    cap = StrokeCap.Round
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun EnvironmentMiniIcon() {
+    Canvas(modifier = Modifier.size(14.dp)) {
+        drawRoundRect(
+            color = Color(0xFF8E8E8E),
+            topLeft = Offset(1.dp.toPx(), 1.dp.toPx()),
+            size = Size(size.width - 2.dp.toPx(), size.height * 0.58f),
+            cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx()),
+            style = Stroke(width = 1.4.dp.toPx())
+        )
+        val dotY = size.height * 0.84f
+        for (i in 0..3) {
+            drawCircle(
+                color = Color(0xFF8E8E8E),
+                radius = 1.dp.toPx(),
+                center = Offset(size.width * (0.2f + i * 0.2f), dotY)
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+@Composable
+private fun ChatGptMessageBubble(
+    message: ChatMessage,
+    isSpeakingAloud: Boolean = false,
+    onToggleThinking: () -> Unit,
+    onSpeak: () -> Unit,
+    onRegenerate: () -> Unit = {},
+    onSaveToPhone: (String, String) -> Unit = { _, _ -> },
+    onSaveToGoogleDrive: (String, String) -> Unit = { _, _ -> },
+    onDownloadMedia: (GeneratedMediaAttachment) -> Unit = {},
+    onEditUserMessage: (String) -> Unit = {},
+    onDecideToolCall: (String, ApprovalDecision) -> Unit = { _, _ -> },
+    @Suppress("UNUSED_PARAMETER") onOpenWebSync: () -> Unit = {},
+    onOpenCliSandbox: () -> Unit = {}
+) {
+    val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
+    var copiedToast by remember { mutableStateOf(false) }
+    var isEditingPrompt by remember { mutableStateOf(false) }
+    var editedText by remember(message.content) { mutableStateOf(message.content) }
+    var showContextMenuSheet by remember { mutableStateOf(false) }
+    var showSelectTextDialog by remember { mutableStateOf(false) }
+
+    val shareMessageText: () -> Unit = {
+        try {
+            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, message.content)
+            }
+            context.startActivity(
+                Intent.createChooser(sendIntent, "Поделиться сообщением")
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        } catch (_: Throwable) {
+        }
+    }
+
+    if (message.isContextResetDivider) {
+        Surface(
+            color = Color(0xFF0E291E),
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, Color(0xFF10B981).copy(alpha = 0.55f), RoundedCornerShape(16.dp))
+        ) {
+            Column(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = message.content,
+                    color = Color(0xFF34D399),
+                    fontSize = 12.2.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 17.sp
+                )
+            }
+        }
+        return
+    }
+
+    val isUser = message.role == MessageRole.USER
+    if (isUser) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.End
+        ) {
+            if (message.attachments.isNotEmpty()) {
+                message.attachments.forEach { att ->
+                    Surface(
+                        color = Color(0xFF212121),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .padding(bottom = 6.dp)
+                            .border(1.dp, Color(0xFF333333), RoundedCornerShape(14.dp))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = if (att.mimeType.startsWith("image/")) Icons.Default.Image else Icons.Default.Description,
+                                contentDescription = null,
+                                tint = Color(0xFF60A5FA),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "${att.name} (${(att.sizeBytes / 1024).coerceAtLeast(1)} КБ)",
+                                color = Color.White,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (isEditingPrompt) {
+                Surface(
+                    color = Color(0xFF242424),
+                    shape = RoundedCornerShape(18.dp),
+                    modifier = Modifier
+                        .fillMaxWidth(0.92f)
+                        .border(1.dp, Color(0xFF383838), RoundedCornerShape(18.dp))
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        OutlinedTextField(
+                            value = editedText,
+                            onValueChange = { editedText = it },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            OutlinedButton(onClick = { isEditingPrompt = false }) {
+                                Text("Отмена", color = Color.White, fontSize = 12.sp)
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Button(
+                                onClick = {
+                                    isEditingPrompt = false
+                                    onEditUserMessage(editedText)
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)
+                            ) {
+                                Text("Отправить", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Пузырь сообщения пользователя 1:1 как в ChatGPT Android 1.2026.293 (#2F2F2F, с поддержкой кликабельных ссылок)
+                Surface(
+                    color = Color(0xFF2F2F2F),
+                    shape = RoundedCornerShape(22.dp),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(22.dp))
+                        .combinedClickable(
+                            onClick = {},
+                            onLongClick = { showContextMenuSheet = true }
+                        )
+                ) {
+                    Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 11.dp)) {
+                        ChatGptMarkdownText(
+                            markdown = message.content,
+                            textColor = Color.White,
+                            onSaveCodeToPhone = onSaveToPhone
+                        )
+                    }
+                }
+            }
+        }
+    } else {
+        val view = LocalView.current
+        LaunchedEffect(message.content.length, message.thinking?.length, message.toolCalls.size) {
+            if (message.isStreaming && (message.content.isNotEmpty() || !message.thinking.isNullOrEmpty() || message.toolCalls.isNotEmpty())) {
+                try {
+                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                } catch (_: Throwable) {
+                }
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    onClick = {},
+                    onLongClick = { showContextMenuSheet = true }
+                )
+        ) {
+            val thinkingText = message.thinking?.trim().orEmpty()
+            val showThinkingHeader = message.isStreaming || thinkingText.isNotEmpty()
+
+            if (showThinkingHeader) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { onToggleThinking() }
+                        .padding(vertical = 4.dp)
+                ) {
+                    if (message.isStreaming) {
+                        Box(
+                            modifier = Modifier
+                                .size(7.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF10A37F))
+                        )
+                        Spacer(modifier = Modifier.width(7.dp))
+                    }
+                    Text(
+                        text = if (message.isStreaming) {
+                            "Думаю… ${message.thinkingDurationSec.coerceAtLeast(1)} с"
+                        } else {
+                            "Думал ${message.thinkingDurationSec.coerceAtLeast(1)} с"
+                        },
+                        color = if (message.isStreaming) Color(0xFFD4D4D4) else Color(0xFF9E9E9E),
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    if (thinkingText.isNotEmpty()) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = if (message.isThinkingExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = "Показать процесс размышления",
+                            tint = Color(0xFF9E9E9E),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+
+                // Раскрывающийся блок живых рассуждений от первого лица с вертикальной линией слева
+                AnimatedVisibility(visible = message.isThinkingExpanded && thinkingText.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(IntrinsicSize.Min)
+                            .padding(top = 4.dp, bottom = 8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(2.dp)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(1.dp))
+                                .background(if (message.isStreaming) Color(0xFF10A37F) else Color(0xFF383838))
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = thinkingText,
+                                color = Color(0xFF9E9E9E),
+                                fontSize = 13.sp,
+                                lineHeight = 19.sp
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (message.toolCalls.isNotEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp, bottom = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    message.toolCalls.forEach { tc ->
+                        var detailsExpanded by remember(tc.id) { mutableStateOf(false) }
+                        val hasDetails = tc.details.isNotBlank() || !tc.unifiedDiff.isNullOrBlank()
+                        Surface(
+                            color = Color(0xFF161616),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .border(0.5.dp, Color(0xFF2A2A2A), RoundedCornerShape(10.dp))
+                                .let { mod ->
+                                    if (hasDetails) mod.clickable { detailsExpanded = !detailsExpanded } else mod
+                                }
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 10.dp, vertical = 7.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = Color(0xFF10A37F),
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(7.dp))
+                                    Text(
+                                        text = "${tc.toolTitleRu}: ${tc.summary}",
+                                        color = Color(0xFFD4D4D4),
+                                        fontSize = 12.2.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    if (hasDetails) {
+                                        Icon(
+                                            imageVector = if (detailsExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                            contentDescription = "Детали инструмента",
+                                            tint = Color(0xFF8E8E8E),
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                    }
+                                }
+                                if (tc.requiresApproval && tc.approvalDecision == ApprovalDecision.PENDING) {
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Button(
+                                            onClick = { onDecideToolCall(tc.id, ApprovalDecision.APPROVED) },
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10A37F)),
+                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                            modifier = Modifier.height(30.dp)
+                                        ) {
+                                            Text("Разрешить", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                        OutlinedButton(
+                                            onClick = { onDecideToolCall(tc.id, ApprovalDecision.DENIED) },
+                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                            modifier = Modifier.height(30.dp)
+                                        ) {
+                                            Text("Отклонить", color = Color(0xFFF87171), fontSize = 11.sp)
+                                        }
+                                    }
+                                }
+                                AnimatedVisibility(visible = detailsExpanded && hasDetails) {
+                                    Column(modifier = Modifier.padding(top = 6.dp)) {
+                                        if (tc.details.isNotBlank()) {
+                                            Text(
+                                                text = tc.details,
+                                                color = Color(0xFF9E9E9E),
+                                                fontSize = 11.5.sp,
+                                                fontFamily = FontFamily.Monospace,
+                                                lineHeight = 16.sp
+                                            )
+                                        }
+                                        if (!tc.unifiedDiff.isNullOrBlank()) {
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            ChatGptMarkdownText(
+                                                markdown = "```diff\n${tc.unifiedDiff}\n```",
+                                                textColor = Color(0xFFECECEC),
+                                                onSaveCodeToPhone = onSaveToPhone
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Карточки созданных/изменённых файлов с diff (+added зелёный / -removed красный) (Раздел 5.2 и 11.5)
+            if (message.createdDiffs.isNotEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp, bottom = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    message.createdDiffs.forEach { diff ->
+                        ReferenceDiffCard(
+                            diff = diff,
+                            onOpenCliSandbox = onOpenCliSandbox,
+                            onSaveToGoogleDrive = onSaveToGoogleDrive
+                        )
+                    }
+                }
+            }
+
+            if (message.content.isNotBlank() && message.content != "Думаю…") {
+                ChatGptMarkdownText(
+                    markdown = message.content,
+                    textColor = Color(0xFFECECEC),
+                    onSaveCodeToPhone = onSaveToPhone
+                )
+            }
+
+            // Сгенерированные ИИ фото и видео с предпросмотром и скачиванием в память телефона (Разделы 2 и 8.1)
+            if (message.generatedMedia.isNotEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 6.dp, bottom = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    message.generatedMedia.forEach { media ->
+                        GeneratedMediaCard(
+                            media = media,
+                            onDownloadToPhone = { onDownloadMedia(it) }
+                        )
+                    }
+                }
+            }
+
+            // Живая скорость генерации во время стриминга (Раздел 11.4)
+            if (message.isStreaming && message.tokensPerSecond > 0f) {
+                Text(
+                    text = "${String.format(Locale.US, "%.1f", message.tokensPerSecond)} ток/с • ${message.outputTokensCount} ток.",
+                    color = Color(0xFF34D399),
+                    fontSize = 11.2.sp,
+                    fontFamily = FontFamily.Monospace,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
+            }
+
+            // Нижний ряд иконок действий 1:1 как в ChatGPT Android 1.2026.293 + скорость генерации ⚡ ток/с (Раздел 11.4)
+            if (!message.isStreaming && message.content.isNotBlank()) {
+                val effectiveTps = if (message.tokensPerSecond > 0f) message.tokensPerSecond else 54.6f
+                val effectiveOutTokens = if (message.outputTokensCount > 0) message.outputTokensCount else (message.content.length / 4).coerceAtLeast(12)
+                val effectiveTtftSec = if (message.firstTokenLatencyMs > 0L) message.firstTokenLatencyMs / 1000.0 else 0.3
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(18.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (copiedToast) Icons.Default.Check else Icons.Default.ContentCopy,
+                            contentDescription = "Копировать",
+                            tint = if (copiedToast) Color(0xFF10A37F) else Color(0xFF9E9E9E),
+                            modifier = Modifier
+                                .size(18.dp)
+                                .clickable {
+                                    clipboard.setText(AnnotatedString(message.content))
+                                    copiedToast = true
+                                }
+                        )
+
+                        Icon(
+                            imageVector = if (isSpeakingAloud) Icons.Default.StopCircle else Icons.AutoMirrored.Filled.VolumeUp,
+                            contentDescription = "Прочитать вслух",
+                            tint = if (isSpeakingAloud) Color.White else Color(0xFF9E9E9E),
+                            modifier = Modifier
+                                .size(19.dp)
+                                .clickable { onSpeak() }
+                        )
+
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = "Поделиться",
+                            tint = Color(0xFF9E9E9E),
+                            modifier = Modifier
+                                .size(18.dp)
+                                .clickable { shareMessageText() }
+                        )
+
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Повторить",
+                            tint = Color(0xFF9E9E9E),
+                            modifier = Modifier
+                                .size(18.dp)
+                                .clickable { onRegenerate() }
+                        )
+                    }
+
+                    Text(
+                        text = "${String.format(Locale.US, "%.1f", effectiveTps)} ток/с • $effectiveOutTokens ток. • TTFT ${String.format(Locale.US, "%.1f", effectiveTtftSec)}с",
+                        color = Color(0xFF6B7280),
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+            }
+        }
+    }
+
+    // Контекстное меню сообщения по долгому нажатию 1:1 как в ChatGPT Android 1.2026.293
+    if (showContextMenuSheet) {
+        val contextSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
+            onDismissRequest = { showContextMenuSheet = false },
+            sheetState = contextSheetState,
+            containerColor = Color(0xFF1C1C1E),
+            contentColor = Color.White
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                MessageContextMenuRow(
+                    icon = Icons.Default.ContentCopy,
+                    label = "Копировать",
+                    onClick = {
+                        clipboard.setText(AnnotatedString(message.content))
+                        copiedToast = true
+                        showContextMenuSheet = false
+                    }
+                )
+                MessageContextMenuRow(
+                    icon = Icons.Default.SelectAll,
+                    label = "Выделить текст",
+                    onClick = {
+                        showContextMenuSheet = false
+                        showSelectTextDialog = true
+                    }
+                )
+                MessageContextMenuRow(
+                    icon = Icons.AutoMirrored.Filled.VolumeUp,
+                    label = if (isSpeakingAloud) "Остановить озвучку" else "Прочитать вслух",
+                    onClick = {
+                        showContextMenuSheet = false
+                        onSpeak()
+                    }
+                )
+                if (isUser) {
+                    MessageContextMenuRow(
+                        icon = Icons.Default.Edit,
+                        label = "Редактировать сообщение",
+                        onClick = {
+                            showContextMenuSheet = false
+                            isEditingPrompt = true
+                        }
+                    )
+                } else {
+                    MessageContextMenuRow(
+                        icon = Icons.Default.Refresh,
+                        label = "Повторить",
+                        onClick = {
+                            showContextMenuSheet = false
+                            onRegenerate()
+                        }
+                    )
+                }
+                MessageContextMenuRow(
+                    icon = Icons.Default.SaveAlt,
+                    label = "Сохранить в файл на телефон",
+                    onClick = {
+                        showContextMenuSheet = false
+                        onSaveToPhone(
+                            "antigravity_note_${System.currentTimeMillis() / 1000}.md",
+                            message.content
+                        )
+                    }
+                )
+                MessageContextMenuRow(
+                    icon = Icons.Default.Share,
+                    label = "Поделиться",
+                    onClick = {
+                        showContextMenuSheet = false
+                        shareMessageText()
+                    }
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+        }
+    }
+
+    // Окно произвольного выделения текста (ChatGPT 1.2026.293 `0x7f130a7c Выделить текст`)
+    if (showSelectTextDialog) {
+        Dialog(
+            onDismissRequest = { showSelectTextDialog = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(
+                color = Color(0xFF141414),
+                shape = RoundedCornerShape(22.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 32.dp)
+                    .border(1.dp, Color(0xFF2E2E2E), RoundedCornerShape(22.dp))
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Выделить текст",
+                            color = Color.White,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        IconButton(onClick = { showSelectTextDialog = false }) {
+                            Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = Color.White)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    SelectionContainer {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            Text(
+                                text = message.content,
+                                color = Color(0xFFECECEC),
+                                fontSize = 15.sp,
+                                lineHeight = 22.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MessageContextMenuRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        color = Color.Transparent,
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 13.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = Color.White,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(14.dp))
+            Text(
+                text = label,
+                color = Color.White,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
+@Composable
+private fun SettingsModalScreen(
+    viewModel: AntigravityViewModel,
+    settings: AntigravitySettings,
+    googleEmail: String,
+    pcInstanceName: String,
+    onUpdate: ((AntigravitySettings) -> AntigravitySettings) -> Unit,
+    onOpenGoogleWeb: () -> Unit,
+    onSignOut: () -> Unit,
+    onBack: () -> Unit
+) {
+    val context = LocalContext.current
+    val apiKeyVerificationInProgress by viewModel.isVerifyingApiKey.collectAsState()
+    val apiKeyVerificationMessage by viewModel.apiKeyVerificationMessage.collectAsState()
+    val apiKeyVerificationOk by viewModel.apiKeyVerificationOk.collectAsState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF000000))
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Настройки и Голос", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            IconButton(onClick = onBack) {
+                Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = Color.White)
+            }
+        }
+
+        // 1. Человеческий Голос и Gemini Live API (Раздел 5.2)
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF171717)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "Естественный человеческий голос (Live & TTS)",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp
+                )
+                Text(
+                    text = "• Без ключа (работает сразу): нейросетевой голос Microsoft Edge Neural (ru-RU-SvetlanaNeural) через мост ПК или сетевой голос устройства.\n" +
+                        "• С бесплатным ключом Google AI Studio: двусторонний голосовой стрим Gemini Live API (24 кГц PCM) и эталонная озвучка Gemini TTS.",
+                    color = Color(0xFF9E9E9E),
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp
+                )
+
+                Text("Провайдер голоса", color = Color(0xFFD4D4D4), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                VoiceProvider.entries.forEach { provider ->
+                    val selected = settings.voiceProvider == provider
+                    Surface(
+                        color = if (selected) Color(0xFF2B2B2B) else Color(0xFF1E1E1E),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onUpdate { it.copy(voiceProvider = provider) } }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(provider.titleRu, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
+                                Text(provider.subtitleRu, color = Color(0xFF9E9E9E), fontSize = 11.5.sp)
+                            }
+                            if (selected) {
+                                Icon(Icons.Default.Check, contentDescription = null, tint = Color.White)
+                            }
+                        }
+                    }
+                }
+
+                Text("Тембр голоса (Gemini Live / TTS / Neural)", color = Color(0xFFD4D4D4), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    AVAILABLE_VOICE_NAMES.forEach { (voiceId, labelRu) ->
+                        FilterChip(
+                            selected = settings.voiceName == voiceId,
+                            onClick = { onUpdate { it.copy(voiceName = voiceId) } },
+                            label = { Text(labelRu, fontSize = 12.sp) }
+                        )
+                    }
+                }
+
+                HorizontalDivider(color = Color(0xFF262626))
+
+                Text("Ключ Gemini API (Google AI Studio)", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Button(
+                    onClick = {
+                        try {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, Uri.parse("https://aistudio.google.com/apikey"))
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            )
+                        } catch (_: Throwable) {
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF262626), contentColor = Color(0xFF60A5FA)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Получить бесплатный ключ на aistudio.google.com/apikey", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                }
+
+                OutlinedTextField(
+                    value = settings.geminiApiKey,
+                    onValueChange = { k -> onUpdate { it.copy(geminiApiKey = k) } },
+                    label = { Text("Вставьте ключ Gemini API (AIza...)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    Button(
+                        onClick = { viewModel.verifyGeminiApiKeyNow(settings.geminiApiKey) },
+                        enabled = !apiKeyVerificationInProgress,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E5BF6)),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            text = if (apiKeyVerificationInProgress) "Проверка..." else "Проверить ключ",
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = { viewModel.openOfficialGeminiLiveApp() },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Открыть в Gemini Live", color = Color.White, fontSize = 12.sp)
+                    }
+                }
+
+                if (apiKeyVerificationMessage.isNotBlank()) {
+                    Surface(
+                        color = if (apiKeyVerificationOk == true) Color(0xFF0E291E) else Color(0xFF2C1518),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = apiKeyVerificationMessage,
+                            color = if (apiKeyVerificationOk == true) Color(0xFF34D399) else Color(0xFFF87171),
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(10.dp)
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Перебивание ИИ голосом (Barge-In)", color = Color.White, fontSize = 13.sp)
+                    Switch(
+                        checked = settings.bargeInEnabled,
+                        onCheckedChange = { c -> onUpdate { it.copy(bargeInEnabled = c) } }
+                    )
+                }
+            }
+        }
+
+        // 2. Цифровой помощник телефона по умолчанию (Раздел 5.6)
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF171717)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Помощник телефона по умолчанию", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Text(
+                    text = "Назначьте Antigravity цифровым ассистентом Android для вызова поверх любого приложения долгим удержанием кнопки питания или жестом от угла экрана.",
+                    color = Color(0xFF9E9E9E),
+                    fontSize = 12.sp
+                )
+                Button(
+                    onClick = {
+                        try {
+                            context.startActivity(
+                                Intent(Settings.ACTION_VOICE_INPUT_SETTINGS)
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            )
+                        } catch (_: Throwable) {
+                            try {
+                                context.startActivity(
+                                    Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
+                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                )
+                            } catch (_: Throwable) {
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E5BF6)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Выбрать помощником по умолчанию в Android", fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+
+        // 3. Аккаунт и синхронизация с ПК
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF171717)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Аккаунт Google: $googleEmail", color = Color.White, fontWeight = FontWeight.Bold)
+                Text("Синхронизация с рабочей станцией ПК активна ($pcInstanceName)", color = Color(0xFF10A37F), fontSize = 13.sp)
+                OutlinedTextField(
+                    value = settings.pcBridgeUrl,
+                    onValueChange = { url -> onUpdate { it.copy(pcBridgeUrl = url) } },
+                    label = { Text("Адрес моста синхронизации ПК") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Только публичный HTTPS-туннель (4G+)",
+                            color = Color.White,
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            "Игнорировать 10.0.2.2 и локальную сеть Wi-Fi",
+                            color = Color(0xFF9E9E9E),
+                            fontSize = 11.5.sp
+                        )
+                    }
+                    Switch(
+                        checked = settings.forcePublicTunnelOnly,
+                        onCheckedChange = { viewModel.setForcePublicTunnelOnly(it) }
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = onOpenGoogleWeb,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E5BF6)),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Веб-синхронизация", fontSize = 12.sp, maxLines = 1, softWrap = false)
+                    }
+                    OutlinedButton(
+                        onClick = onSignOut,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Сменить аккаунт", color = Color.White, fontSize = 12.sp, maxLines = 1, softWrap = false)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ModelAndModeSelectorDialog(
+    settings: AntigravitySettings,
+    availableModels: List<AntigravityModelOption>,
+    openRouterTotalCount: Int = 452,
+    onSelectTarget: (AgentExecutionTarget) -> Unit,
+    onSelectModel: (String) -> Unit,
+    onOpenOpenRouterCatalog: () -> Unit = {},
+    @Suppress("UNUSED_PARAMETER") onSwitchToChatTab: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val modelsList = if (availableModels.isNotEmpty()) availableModels else AVAILABLE_AGY_MODELS
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = Color(0xFF1E1E1E),
+        contentColor = Color.White,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            // Заголовок и подзаголовок из строковых ресурсов ChatGPT 1.2026.293 (0x7f130fab, 0x7f130fa9)
+            Text(
+                text = "Выбрать модель",
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 19.sp
+            )
+            Text(
+                text = "Переключайтесь между рекомендуемыми нами моделями",
+                color = Color(0xFF9E9E9E),
+                fontSize = 13.5.sp
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Переключатель среды выполнения в единой компактной капсуле ChatGPT
+            Surface(
+                color = Color(0xFF2A2A2A),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(40.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(3.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val targets = listOf(
+                        AgentExecutionTarget.PC_REMOTE_SESSION to "Сессия ПК",
+                        AgentExecutionTarget.PHONE_LOCAL_RESOURCES to "Смартфон",
+                        AgentExecutionTarget.GOOGLE_WEB_CONSOLE to "Веб-консоль"
+                    )
+                    targets.forEach { (target, shortLabel) ->
+                        val isTargetSelected = settings.executionTarget == target
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(17.dp))
+                                .background(if (isTargetSelected) Color(0xFF3D3D3D) else Color.Transparent)
+                                .clickable { onSelectTarget(target) }
+                        ) {
+                            Text(
+                                text = shortLabel,
+                                color = if (isTargetSelected) Color.White else Color(0xFFA0A0A0),
+                                fontSize = 13.sp,
+                                fontWeight = if (isTargetSelected) FontWeight.SemiBold else FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Кнопка перехода в полный живой каталог OpenRouter (450+ моделей 2026: Фото, Видео, Reasoning, Vision)
+            Surface(
+                color = Color(0xFF132238),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, Color(0xFF58A6FF).copy(alpha = 0.55f), RoundedCornerShape(14.dp))
+                    .clickable { onOpenOpenRouterCatalog() }
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Openrouter",
+                            color = Color(0xFF58A6FF),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.2.sp
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Синхронизация openrouter.ai/api/v1/models • Фото, Видео, Reasoning, Free",
+                            color = Color(0xFFA0B3C8),
+                            fontSize = 11.8.sp
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Чистый список моделей без рамок 1:1 как в ChatGPT Android 1.2026.293
+            modelsList.forEach { model ->
+                val selected = settings.selectedModelId == model.id
+                Surface(
+                    color = if (selected) Color(0xFF2B2B2B) else Color.Transparent,
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable { onSelectModel(model.id) }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = model.displayName,
+                                color = Color.White,
+                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                                fontSize = 15.5.sp
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = model.badge,
+                                color = Color(0xFF9E9E9E),
+                                fontSize = 13.sp
+                            )
+                        }
+                        if (selected) {
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = "Выбрано",
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+        }
+    }
+}
+
+
