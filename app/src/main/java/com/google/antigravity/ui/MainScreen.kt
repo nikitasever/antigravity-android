@@ -53,6 +53,7 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudOff
@@ -159,6 +160,7 @@ import com.google.antigravity.model.MessageRole
 import com.google.antigravity.model.OpenRouterCategory
 import com.google.antigravity.model.PcMcpServerItem
 import com.google.antigravity.model.PcSkillItem
+import com.google.antigravity.model.describeMcpStatus
 import com.google.antigravity.model.RemoteEnvFilter
 import com.google.antigravity.model.RemoteSessionItem
 import com.google.antigravity.model.ScratchProjectItem
@@ -215,6 +217,8 @@ fun MainScreen(
     val installedPlugins by viewModel.installedPlugins.collectAsState()
     val installedSkills by viewModel.installedSkills.collectAsState()
     val mcpServers by viewModel.mcpServers.collectAsState()
+    val mcpToolResult by viewModel.mcpToolResult.collectAsState()
+    val isMcpToolCallRunning by viewModel.isMcpToolCallRunning.collectAsState()
     val extensionsError by viewModel.extensionsError.collectAsState()
     val isExtensionsLoading by viewModel.isExtensionsLoading.collectAsState()
     val pendingAttachments by viewModel.pendingAttachments.collectAsState()
@@ -630,7 +634,12 @@ fun MainScreen(
                             onDeleteSkill = { id -> viewModel.deleteSkillOnPc(id) },
                             onToggleMcp = { id -> viewModel.toggleMcpServerEnabled(id) },
                             onAddMcp = { name, cmd, args -> viewModel.addMcpServerOnPc(name, cmd, args) },
-                            onDeleteMcp = { id -> viewModel.deleteMcpServerOnPc(id) }
+                            onDeleteMcp = { id -> viewModel.deleteMcpServerOnPc(id) },
+                            onCheckMcp = { id -> viewModel.checkMcpServer(id) },
+                            onCallMcpTool = { id, tool -> viewModel.callMcpTool(id, tool) },
+                            mcpToolResult = mcpToolResult,
+                            isMcpToolCallRunning = isMcpToolCallRunning,
+                            onDismissToolResult = { viewModel.dismissMcpToolResult() }
                         )
                     }
 
@@ -2474,10 +2483,17 @@ private fun ChatGptPluginsScreen(
     onDeleteSkill: (String) -> Unit,
     onToggleMcp: (String) -> Unit,
     onAddMcp: (String, String, String) -> Unit,
-    onDeleteMcp: (String) -> Unit
+    onDeleteMcp: (String) -> Unit,
+    onCheckMcp: (String) -> Unit,
+    onCallMcpTool: (String, String) -> Unit,
+    mcpToolResult: String?,
+    isMcpToolCallRunning: Boolean,
+    onDismissToolResult: () -> Unit
 ) {
     var activeTab by remember { mutableIntStateOf(0) } // 0 = Плагины, 1 = Скиллы, 2 = MCP-серверы
     var showAddDialog by remember { mutableStateOf(false) }
+    // Этап 3: диалог живого вызова MCP-инструментов (tools/call).
+    var mcpToolCallServer by remember { mutableStateOf<PcMcpServerItem?>(null) }
 
     Column(
         modifier = Modifier
@@ -2697,13 +2713,20 @@ private fun ChatGptPluginsScreen(
                                                 modifier = Modifier.weight(1f, fill = false)
                                             )
                                             Spacer(modifier = Modifier.width(8.dp))
+                                            // Этап 3: честный статус рукопожатия.
+                                            // connected — только после initialize →
+                                            // initialized → tools/list.
                                             Text(
-                                                text = m.status,
-                                                color = if (m.status.contains("Connected", ignoreCase = true) || m.enabled) Color(0xFF10A37F) else Color(0xFFF59E0B),
+                                                text = describeMcpStatus(m.status),
+                                                color = when (m.status) {
+                                                    "connected" -> Color(0xFF10A37F)
+                                                    "failed" -> Color(0xFFF87171)
+                                                    "disabled" -> Color(0xFF6B7280)
+                                                    else -> Color(0xFFF59E0B)
+                                                },
                                                 fontSize = 11.sp,
                                                 fontWeight = FontWeight.SemiBold,
-                                                maxLines = 1,
-                                                softWrap = false
+                                                maxLines = 1
                                             )
                                         }
                                         Text("${m.transport} • ${m.scope}", color = Color(0xFF60A5FA), fontSize = 11.sp)
@@ -2716,8 +2739,49 @@ private fun ChatGptPluginsScreen(
                                             maxLines = 2,
                                             overflow = TextOverflow.Ellipsis
                                         )
+                                        if (m.tools.isNotEmpty()) {
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                "Инструменты (${m.tools.size}): ${m.tools.take(4).joinToString(", ")}",
+                                                color = Color(0xFF10A37F),
+                                                fontSize = 11.sp,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        if (m.error.isNotBlank()) {
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                m.error,
+                                                color = Color(0xFFF87171),
+                                                fontSize = 11.sp,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        if (m.probedAt.isNotBlank()) {
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                "Проверен: ${m.probedAt}",
+                                                color = Color(0xFF6B7280),
+                                                fontSize = 10.sp,
+                                                maxLines = 1
+                                            )
+                                        }
                                     }
                                     Spacer(modifier = Modifier.width(6.dp))
+                                    // Живая проверка: полное MCP-рукопожатие.
+                                    IconButton(onClick = { onCheckMcp(m.id) }) {
+                                        Icon(Icons.Default.Refresh, contentDescription = "Проверить MCP-соединение", tint = Color(0xFF60A5FA))
+                                    }
+                                    // Вызов инструмента — только по живому списку.
+                                    IconButton(onClick = { mcpToolCallServer = m }, enabled = m.tools.isNotEmpty()) {
+                                        Icon(
+                                            Icons.Default.PlayArrow,
+                                            contentDescription = "Вызвать инструмент MCP",
+                                            tint = if (m.tools.isNotEmpty()) Color(0xFF10A37F) else Color(0xFF4B5563)
+                                        )
+                                    }
                                     Switch(checked = m.enabled, onCheckedChange = { onToggleMcp(m.id) })
                                     IconButton(onClick = { onDeleteMcp(m.id) }) {
                                         Icon(Icons.Default.Delete, contentDescription = "Удалить MCP", tint = Color(0xFFF87171))
@@ -2751,6 +2815,74 @@ private fun ChatGptPluginsScreen(
                 showAddDialog = false
             }
         )
+    }
+
+    // Этап 3: вызов реальных MCP-инструментов по живому списку tools/list.
+    mcpToolCallServer?.let { server ->
+        Dialog(onDismissRequest = { mcpToolCallServer = null; onDismissToolResult() }) {
+            Surface(
+                color = Color(0xFF171717),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 520.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "Инструменты ${server.name}",
+                            color = Color.White,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(onClick = { mcpToolCallServer = null; onDismissToolResult() }) {
+                            Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = Color(0xFFA0A0A0))
+                        }
+                    }
+                    if (server.tools.isEmpty()) {
+                        Text(
+                            "Список инструментов не получен: сначала выполните «Проверить» (живое MCP-рукопожатие).",
+                            color = Color(0xFFF59E0B),
+                            fontSize = 12.sp
+                        )
+                    } else {
+                        Text(
+                            "Инструменты из живого tools/list:",
+                            color = Color(0xFF60A5FA),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        server.tools.forEach { tool ->
+                            Button(
+                                onClick = { onCallMcpTool(server.id, tool) },
+                                enabled = !isMcpToolCallRunning,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10A37F))
+                            ) {
+                                Text(
+                                    tool,
+                                    color = Color.White,
+                                    fontSize = 13.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                    mcpToolResult?.let { result ->
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("Результат:", color = Color(0xFF60A5FA), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Text(result, color = Color(0xFFE5E5E5), fontSize = 12.sp)
+                    }
+                }
+            }
+        }
     }
 }
 

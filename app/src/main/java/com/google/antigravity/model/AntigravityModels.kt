@@ -130,8 +130,23 @@ data class PcMcpServerItem(
     val enabled: Boolean = true,
     val status: String = "enabled",
     val tools: List<String> = emptyList(),
-    val error: String = ""
+    val error: String = "",
+    /** Время последнего реального MCP-рукопожатия (этап 3), ISO-8601. */
+    val probedAt: String = ""
 )
+
+/**
+ * Человекочитаемый статус MCP-сервера (Этап 3). «connected» означает только
+ * реальное успешное рукопожатие initialize → initialized → tools/list;
+ * «configured» — включён в конфиге, но ещё не проверялся.
+ */
+fun describeMcpStatus(status: String): String = when (status.trim().lowercase()) {
+    "connected" -> "подключён (рукопожатие выполнено)"
+    "configured" -> "настроен (не проверен)"
+    "failed" -> "проверка не пройдена"
+    "disabled" -> "отключён"
+    else -> status
+}
 
 enum class AgentExecutionTarget(val shortLabel: String, val titleRu: String, val subtitleRu: String) {
     PC_REMOTE_SESSION(

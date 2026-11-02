@@ -106,8 +106,9 @@ test('managePlugin create явно создаёт локальный пакет 
     assert.ok(manifest.created, 'зафиксировано время создания');
 });
 
-// Статус MCP: настроен ≠ подключён; имена инструментов не выдумываются по
-// имени сервера — единственное честное исключение: собственный sysinfo.
+// Статус MCP: настроен ≠ подключён; имена инструментов не выдумываются ни по
+// имени сервера, ни по статической декларации. Этап 3: tools — только из
+// живого tools/list после реального рукопожатия.
 test('listMcpServers не называет сконфигурированный сервер подключённым и не выдумывает tools', async () => {
     const stdout = [
         'NAME        MODE    STATUS   COMMAND',
@@ -133,12 +134,67 @@ test('listMcpServers не называет сконфигурированный 
         const oldsrv = servers.find(s => s.id === 'oldsrv');
         // Массивы создаются в vm-контексте с чужим prototype — сравниваем по значению.
         assert.equal(sysinfo.status, 'configured', 'включённый сервер — «настроен», не «подключён»');
-        assert.equal(sysinfo.tools.join(','), 'get_workstation_pulse',
-            'инструмент берётся только из декларации нашего sysinfo-сервера');
+        assert.equal(sysinfo.tools.join(','), '',
+            'без живого tools/list инструменты не выдумываются даже для sysinfo');
         assert.equal(rea.status, 'configured');
         assert.equal(rea.tools.join(','), '', 'имена инструментов rea не выдумываются без handshake');
         assert.equal(oldsrv.status, 'disabled', 'отключённый остаётся отключённым');
     } finally {
         fs.rmSync(tmp, { recursive: true, force: true });
     }
+});
+
+// Этап 3: connected выставляется только после успешного полного рукопожатия;
+// при отказе — failed с причиной и без выдуманных инструментов.
+test('mergeMcpLiveState вносит живой статус рукопожатия, а не конфигурацию', async () => {
+    const live = new Map();
+    const mergeMcpLiveState = extractFunction('mergeMcpLiveState', { mcpLiveState: live });
+    const stdout = 'sysinfo     stdio   enabled  node pc-bridge/mcp_sysinfo_server.js\n';
+    const listMcpServers = extractFunction('listMcpServers', {
+        fs, path,
+        runAgySubcommand: async () => ({ ok: true, stdout, stderr: '' }),
+        GEMINI_SETTINGS_FILE: path.join(os.tmpdir(), 'stage0-no-settings.json'),
+        splitCommandAndArgs: s => {
+            const parts = s.split(/\s+/);
+            return { command: parts[0], args: parts.slice(1) };
+        },
+        mergeMcpLiveState
+    });
+
+    // Успешное рукопожатие: initialize → initialized → tools/list прошли.
+    live.set('sysinfo', {
+        id: 'sysinfo',
+        status: 'connected',
+        tools: ['get_workstation_pulse'],
+        serverInfo: { name: 'antigravity-sysinfo-mcp', version: '1.0.0' },
+        protocolVersion: '2025-06-18',
+        capabilities: { tools: {} },
+        error: '',
+        errorCode: null,
+        probedAt: '2026-11-02T00:00:00.000Z'
+    });
+    let servers = await listMcpServers();
+    assert.equal(servers[0].status, 'connected');
+    assert.equal(servers[0].tools.join(','), 'get_workstation_pulse', 'tools — из живого tools/list');
+    assert.equal(servers[0].serverInfo.name, 'antigravity-sysinfo-mcp');
+
+    // Отказ рукопожатия: failed, tools пусты, причина видна.
+    live.set('sysinfo', {
+        id: 'sysinfo',
+        status: 'failed',
+        tools: [],
+        error: 'Тайм-аут 350 мс: initialize',
+        errorCode: 'handshake_timeout',
+        probedAt: '2026-11-02T00:00:01.000Z'
+    });
+    servers = await listMcpServers();
+    assert.equal(servers[0].status, 'failed');
+    assert.equal(servers[0].tools.join(','), '', 'при отказе инструменты не выдумываются');
+    assert.match(servers[0].error, /Тайм-аут/);
+
+    // Проверки не было — честно «настроен», без инструментов.
+    live.delete('sysinfo');
+    servers = await listMcpServers();
+    assert.equal(servers[0].status, 'configured');
+    assert.equal(servers[0].tools.join(','), '');
 });

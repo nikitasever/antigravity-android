@@ -471,6 +471,11 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
 
     private val _mcpServers = MutableStateFlow<List<PcMcpServerItem>>(emptyList())
     val mcpServers: StateFlow<List<PcMcpServerItem>> = _mcpServers.asStateFlow()
+    // Этап 3: результат живого вызова MCP-инструмента (tools/call) для UI.
+    private val _mcpToolResult = MutableStateFlow<String?>(null)
+    val mcpToolResult: StateFlow<String?> = _mcpToolResult.asStateFlow()
+    private val _isMcpToolCallRunning = MutableStateFlow(false)
+    val isMcpToolCallRunning: StateFlow<Boolean> = _isMcpToolCallRunning.asStateFlow()
 
     private val _extensionsError = MutableStateFlow<String?>(null)
     val extensionsError: StateFlow<String?> = _extensionsError.asStateFlow()
@@ -1664,7 +1669,18 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
         val current = _mcpServers.value.firstOrNull { it.id == id }
         val nextEnabled = !(current?.enabled ?: true)
         _mcpServers.update { list ->
-            list.map { if (it.id == id) it.copy(enabled = nextEnabled, status = if (nextEnabled) "connected" else "disabled") else it }
+            list.map {
+                if (it.id == id) {
+                    // Этап 3: статус connected выставляется только после реального
+                    // MCP-рукопожатия (checkMcpServer). Включение — лишь «настроен».
+                    it.copy(
+                        enabled = nextEnabled,
+                        status = if (nextEnabled) "configured" else "disabled",
+                        tools = if (nextEnabled) it.tools else emptyList(),
+                        error = ""
+                    )
+                } else it
+            }
         }
         viewModelScope.launch {
             val (updated, err) = backendClient.manageMcpServer(
@@ -1676,6 +1692,41 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
             if (updated.isNotEmpty()) _mcpServers.value = updated
             if (err != null) _extensionsError.value = err
         }
+    }
+
+    // Этап 3: реальная проверка MCP-сервера (initialize → initialized →
+    // tools/list). connected и список инструментов — только из живого ответа.
+    fun checkMcpServer(id: String) {
+        viewModelScope.launch {
+            _isExtensionsLoading.value = true
+            val (updated, err) = backendClient.probeMcpServer(
+                pcBridgeUrl = _settings.value.pcBridgeUrl,
+                name = id
+            )
+            if (updated.isNotEmpty()) _mcpServers.value = updated
+            _extensionsError.value = err
+            _isExtensionsLoading.value = false
+        }
+    }
+
+    // Этап 3: реальный вызов MCP-инструмента (tools/call) через мост.
+    fun callMcpTool(id: String, tool: String) {
+        viewModelScope.launch {
+            _isMcpToolCallRunning.value = true
+            _mcpToolResult.value = "Вызов $tool…"
+            val (result, err) = backendClient.callMcpTool(
+                pcBridgeUrl = _settings.value.pcBridgeUrl,
+                name = id,
+                tool = tool
+            )
+            _mcpToolResult.value = result ?: (err ?: "Вызов инструмента не выполнен")
+            if (err != null) _extensionsError.value = err
+            _isMcpToolCallRunning.value = false
+        }
+    }
+
+    fun dismissMcpToolResult() {
+        _mcpToolResult.value = null
     }
 
     fun addMcpServerOnPc(name: String, command: String, argsRaw: String) {

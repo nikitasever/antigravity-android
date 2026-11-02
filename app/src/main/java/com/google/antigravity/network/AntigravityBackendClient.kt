@@ -772,6 +772,79 @@ class AntigravityBackendClient(
         }
     }
 
+    // Этап 3: живое MCP-рукопожатие (initialize → initialized → tools/list).
+    // Статус connected приходит только после успешной проверки; секреты
+    // (env/headers/токены) редактируются на стороне моста и сюда не попадают.
+    suspend fun probeMcpServer(
+        pcBridgeUrl: String,
+        name: String,
+        timeoutMs: Long = 20000L
+    ): Pair<List<PcMcpServerItem>, String?> = withContext(Dispatchers.IO) {
+        val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext emptyList<PcMcpServerItem>() to "Мост ПК недоступен"
+        try {
+            val payload = JSONObject().apply {
+                put("action", "probe")
+                put("id", name)
+                put("name", name)
+                put("timeoutMs", timeoutMs)
+            }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+            val req = Request.Builder().url("$base/api/mcp").post(payload).build()
+            clientForUrl(base).newCall(req).useCancellable { resp ->
+                val json = JSONObject(resp.body?.string() ?: "{}")
+                val err = if (!json.optBoolean("ok", true)) json.optString("error", "Проверка MCP-сервера не выполнена") else null
+                return@withContext parseMcpJson(json) to err
+            }
+        } catch (e: Throwable) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
+            emptyList<PcMcpServerItem>() to e.localizedMessage
+        }
+    }
+
+    // Этап 3: реальный вызов MCP-инструмента (tools/call) на указанном сервере.
+    suspend fun callMcpTool(
+        pcBridgeUrl: String,
+        name: String,
+        tool: String,
+        argumentsJson: String = "{}"
+    ): Pair<String?, String?> = withContext(Dispatchers.IO) {
+        val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext null to "Мост ПК недоступен"
+        try {
+            val args = try { JSONObject(argumentsJson.ifBlank { "{}" }) } catch (_: Throwable) { JSONObject() }
+            val payload = JSONObject().apply {
+                put("action", "call")
+                put("id", name)
+                put("name", name)
+                put("tool", tool)
+                put("arguments", args)
+            }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+            val req = Request.Builder().url("$base/api/mcp").post(payload).build()
+            clientForUrl(base).newCall(req).useCancellable { resp ->
+                val json = JSONObject(resp.body?.string() ?: "{}")
+                if (!json.optBoolean("ok", false)) {
+                    return@withContext null to json.optString("error", "Вызов инструмента не выполнен")
+                }
+                val result = json.optJSONObject("result")
+                val texts = StringBuilder()
+                val content = result?.optJSONArray("content")
+                if (content != null) {
+                    for (i in 0 until content.length()) {
+                        val item = content.optJSONObject(i) ?: continue
+                        if (item.optString("type") == "text") {
+                            if (texts.isNotEmpty()) texts.append('\n')
+                            texts.append(item.optString("text", ""))
+                        }
+                    }
+                }
+                val isError = result?.optBoolean("isError", false) ?: false
+                val body = texts.toString().ifBlank { "Инструмент выполнен без текстового результата" }
+                return@withContext (if (isError) "Ошибка инструмента:\n$body" else body) to null
+            }
+        } catch (e: Throwable) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
+            null to e.localizedMessage
+        }
+    }
+
     private fun parseMcpJson(json: JSONObject): List<PcMcpServerItem> {
         val arr = json.optJSONArray("mcpServers") ?: return emptyList()
         val out = mutableListOf<PcMcpServerItem>()
@@ -795,12 +868,14 @@ class AntigravityBackendClient(
                 PcMcpServerItem(
                     id = obj.optString("id", "mcp_$i"),
                     name = obj.optString("name", "MCP"),
+                    transport = obj.optString("transport", "stdio"),
                     command = obj.optString("command", ""),
                     args = argsList,
                     enabled = obj.optBoolean("enabled", true),
-                    status = obj.optString("status", "ready"),
+                    status = obj.optString("status", "configured"),
                     tools = toolsList,
-                    error = obj.optString("error", "")
+                    error = obj.optString("error", ""),
+                    probedAt = obj.optString("probedAt", "")
                 )
             )
         }

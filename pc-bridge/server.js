@@ -1,5 +1,7 @@
 const http = require('http');
 const { readJsonBody } = require('./lib/read-json-body');
+const extensionRegistry = require('./lib/extension-registry');
+const mcpClientLib = require('./lib/mcp-client');
 const https = require('https');
 const { spawn, exec } = require('child_process');
 const fs = require('fs');
@@ -22,6 +24,12 @@ const BRAIN_DIR = path.join(IDE_BASE_DIR, 'brain');
 const SCRATCH_DIR = path.join(IDE_BASE_DIR, 'scratch');
 const DEFAULT_WORKSPACE = 'C:\\Users\\st811210\\.gemini\\antigravity\\scratch\\antigravity-android';
 const UPLOADS_DIR = path.join(DEFAULT_WORKSPACE, 'uploads');
+const REGISTRY_INDEX_PATH = path.join(UPLOADS_DIR, 'extensions-registry.json');
+// Этап 3: живые MCP-подключения. Статус «connected» и список инструментов
+// берутся ТОЛЬКО из реального рукопожатия initialize → initialized →
+// tools/list; без проверки сервер честно «настроен», без выдуманных имён.
+const mcpClientManager = new mcpClientLib.McpClientManager();
+const mcpLiveState = new Map();
 const CHAT_FAST_WORKSPACE = path.join(UPLOADS_DIR, 'chat-fast');
 const AGENT_SYSTEM_PROMPT_FILE = path.join(DEFAULT_WORKSPACE, 'pc-bridge', 'agent_system_prompt.md');
 const BRIDGE_REQUESTS_LOG = path.join(DEFAULT_WORKSPACE, 'pc-bridge', 'bridge_requests.log');
@@ -2501,6 +2509,40 @@ function splitCommandAndArgs(commandOrUrl) {
     };
 }
 
+// Этап 3: сырьё записи MCP-сервера (env/headers для авторизации). Значения
+// остаются в памяти процесса и не попадают в логи и ответы API.
+function findRawMcpEntry(name) {
+    for (const file of [MCP_CONFIG_FILE, GEMINI_SETTINGS_FILE]) {
+        try {
+            const cfg = JSON.parse(fs.readFileSync(file, 'utf8'));
+            const map = (cfg && cfg.mcpServers) || {};
+            if (map[name] && typeof map[name] === 'object') {
+                return { file, cfg: map[name] };
+            }
+        } catch (_) {}
+    }
+    return null;
+}
+
+// Слияние живого статуса MCP-проверки в карточку сервера. connected — только
+// после успешного полного рукопожатия; при отказе — failed с причиной, tools
+// остаются пустыми (ничего не угадывается).
+function mergeMcpLiveState(server) {
+    const live = (typeof mcpLiveState !== 'undefined' && mcpLiveState && typeof mcpLiveState.get === 'function')
+        ? mcpLiveState.get(server.id)
+        : null;
+    if (!live) return server;
+    server.status = live.status === 'connected' ? 'connected' : 'failed';
+    server.tools = Array.isArray(live.tools) ? live.tools.slice() : [];
+    server.serverInfo = live.serverInfo || null;
+    server.protocolVersion = live.protocolVersion || '';
+    server.capabilities = live.capabilities || null;
+    server.error = live.error || '';
+    server.errorCode = live.errorCode || '';
+    server.probedAt = live.probedAt || '';
+    return server;
+}
+
 async function listMcpServers() {
     const res = await runAgySubcommand(['mcp', 'list']);
     const servers = [];
@@ -2517,14 +2559,8 @@ async function listMcpServers() {
                 const enabled = match[3].toLowerCase() === 'enabled';
                 const commandOrUrl = match[4].trim();
                 const parsedCmd = splitCommandAndArgs(commandOrUrl);
-                // Этап 0: инструменты не придумываются по имени сервера. Единственное
-                // честное исключение — собственный sysinfo-сервер: его tools/list
-                // объявляет get_workstation_pulse в mcp_sysinfo_server.js.
-                const tools = commandOrUrl.includes('mcp_sysinfo_server.js')
-                    ? ['get_workstation_pulse']
-                    : [];
                 seen.add(name);
-                servers.push({
+                const server = {
                     id: name,
                     name,
                     transport,
@@ -2532,12 +2568,15 @@ async function listMcpServers() {
                     command: parsedCmd.command,
                     args: parsedCmd.args,
                     commandOrUrl,
-                    tools,
-                    // «Включён в конфиге» ≠ «подключён». Реальный handshake и tools/list
-                    // добавляются в Этапе 3; здесь статус готовности честно ограничен
-                    // наблюдаемым фактом (конфигурация).
+                    // Этап 3: имена инструментов не выдумываются ни по имени
+                    // сервера, ни по декларации — только живой tools/list.
+                    tools: [],
+                    // «Включён в конфиге» ≠ «подключён». connected появляется
+                    // только после реального MCP-рукопожатия (см. mergeMcpLiveState).
                     status: enabled ? 'configured' : 'disabled'
-                });
+                };
+                if (typeof mergeMcpLiveState === 'function') mergeMcpLiveState(server);
+                servers.push(server);
             }
         }
     }
@@ -2551,10 +2590,7 @@ async function listMcpServers() {
                 const cmd = cfg.url || [cfg.command, ...(Array.isArray(cfg.args) ? cfg.args : [])].filter(Boolean).join(' ');
                 const enabled = !Boolean(cfg.disabled);
                 const parsedCmd = splitCommandAndArgs(cmd);
-                const tools = cmd.includes('mcp_sysinfo_server.js')
-                    ? ['get_workstation_pulse']
-                    : [];
-                servers.push({
+                const server = {
                     id: name,
                     name,
                     transport: cfg.url ? 'http' : 'stdio',
@@ -2562,9 +2598,11 @@ async function listMcpServers() {
                     command: cfg.command || parsedCmd.command,
                     args: Array.isArray(cfg.args) ? cfg.args : parsedCmd.args,
                     commandOrUrl: cmd,
-                    tools,
+                    tools: [],
                     status: enabled ? 'configured' : 'disabled'
-                });
+                };
+                if (typeof mergeMcpLiveState === 'function') mergeMcpLiveState(server);
+                servers.push(server);
             }
         }
     } catch (_) {}
@@ -2581,6 +2619,86 @@ async function manageMcpServer(payload) {
     if (!name) {
         return { ok: false, error: 'Не указано имя MCP-сервера', mcpServers: await listMcpServers() };
     }
+
+    // --- Этап 3: живое MCP-рукопожатие и вызовы инструментов -----------------
+    // probe/check: полный цикл initialize → initialized → tools/list; статус
+    // connected выставляется только при его успехе. call: реальный tools/call.
+    // Авторизация (env/headers/токен) пробрасывается из конфига в транспорт;
+    // секреты не попадают в логи и ответы (redactSecrets в mcp-client).
+    if (action === 'probe' || action === 'check' || action === 'test') {
+        const raw = findRawMcpEntry(name);
+        if (!raw) {
+            return { ok: false, error: `MCP-сервер не найден в конфигурации: ${name}`, mcpServers: await listMcpServers() };
+        }
+        const descriptor = mcpClientLib.buildMcpDescriptor(name, raw.cfg);
+        const timeoutMs = Number(payload.timeoutMs) > 0 ? Number(payload.timeoutMs) : undefined;
+        const probe = await mcpClientManager.probe(descriptor, timeoutMs
+            ? { handshakeTimeoutMs: Math.min(timeoutMs, 60000), requestTimeoutMs: Math.min(timeoutMs, 120000) }
+            : {});
+        mcpLiveState.set(name, probe);
+        appendBridgeRequestLog({ type: 'mcp-probe', name, ok: probe.ok, status: probe.status, errorCode: probe.errorCode || null });
+        return {
+            ok: probe.ok,
+            error: probe.ok ? '' : probe.error,
+            probe,
+            mcpServers: await listMcpServers()
+        };
+    }
+
+    if (action === 'call' || action === 'call_tool' || action === 'tool') {
+        const toolName = String(payload.tool || payload.toolName || '').trim();
+        if (!toolName) {
+            return { ok: false, error: 'Не указано имя инструмента', mcpServers: await listMcpServers() };
+        }
+        const raw = findRawMcpEntry(name);
+        if (!raw) {
+            return { ok: false, error: `MCP-сервер не найден в конфигурации: ${name}`, mcpServers: await listMcpServers() };
+        }
+        const descriptor = mcpClientLib.buildMcpDescriptor(name, raw.cfg);
+        const args = (payload.arguments && typeof payload.arguments === 'object' && !Array.isArray(payload.arguments))
+            ? payload.arguments
+            : ((payload.args && typeof payload.args === 'object' && !Array.isArray(payload.args)) ? payload.args : {});
+        const callTimeoutMs = Number(payload.timeoutMs) > 0 ? Number(payload.timeoutMs) : undefined;
+        const call = await mcpClientManager.callTool(name, toolName, args, {
+            descriptor,
+            requestTimeoutMs: callTimeoutMs ? Math.min(callTimeoutMs, 300000) : undefined
+        });
+        // Синхронизация живого статуса: смерть процесса снимает connected.
+        if (call.ok) {
+            const live = mcpClientManager.getLive(name);
+            if (live) mcpLiveState.set(name, live);
+        } else if (['process_exit', 'connect_failed', 'closed', 'not_connected'].includes(call.errorCode)) {
+            mcpLiveState.set(name, {
+                id: name,
+                status: 'failed',
+                tools: [],
+                serverInfo: null,
+                protocolVersion: '',
+                capabilities: null,
+                error: call.error || 'Соединение с MCP-сервером потеряно',
+                errorCode: call.errorCode,
+                probedAt: new Date().toISOString()
+            });
+            await mcpClientManager.disconnect(name).catch(() => {});
+        }
+        appendBridgeRequestLog({ type: 'mcp-call', name, tool: toolName, ok: call.ok, errorCode: call.errorCode || null });
+        return {
+            ok: call.ok,
+            tool: toolName,
+            result: call.ok ? call.result : null,
+            error: call.ok ? '' : call.error,
+            errorCode: call.errorCode || null,
+            mcpServers: await listMcpServers()
+        };
+    }
+
+    if (action === 'disconnect' || action === 'stop') {
+        await mcpClientManager.disconnect(name);
+        mcpLiveState.delete(name);
+        appendBridgeRequestLog({ type: 'mcp-disconnect', name });
+        return { ok: true, mcpServers: await listMcpServers() };
+    }
+    // ------------------------------------------------------------------------
 
     if (action === 'add' || action === 'install' || action === 'create') {
         let rawCmd = String(payload.commandOrUrl || payload.command || payload.url || '').trim();
@@ -4682,6 +4800,34 @@ const server = http.createServer(async (req, res) => {
         });
     }
 
+    // Этап 2 (EXTENSIONS_INTEGRATION_PLAN.md): общий реестр расширений.
+    // Позиции инвентаря Этапа 1 подключаются по запросу ?inventory=1.
+    if (req.method === 'GET' && urlObj.pathname === '/api/extensions/registry') {
+        let inventory = null;
+        if (urlObj.searchParams.get('inventory') === '1') {
+            const invPath = path.join(DEFAULT_WORKSPACE, 'extensions-inventory.json');
+            if (fs.existsSync(invPath)) {
+                try { inventory = JSON.parse(fs.readFileSync(invPath, 'utf8')); } catch (_) {}
+            }
+        }
+        const registryData = extensionRegistry.buildRegistry({
+            registryIndexPath: REGISTRY_INDEX_PATH,
+            skillRoots: [
+                { dir: path.join(DEFAULT_WORKSPACE, '.agents', 'skills'), source: 'workspace', sourceProduct: 'Antigravity local' },
+                { dir: SKILLS_DIR, source: 'global', sourceProduct: 'Antigravity local' },
+                { dir: path.join(IDE_BASE_DIR, 'builtin', 'skills'), source: 'builtin', sourceProduct: 'Antigravity local' }
+            ],
+            pluginRoots: [PLUGINS_DIR, path.join(UPLOADS_DIR, 'plugin-staging')],
+            configPath: path.join(GEMINI_ROOT_DIR, 'config', 'config.json'),
+            mcpConfigPath: MCP_CONFIG_FILE,
+            settingsPath: GEMINI_SETTINGS_FILE,
+            cliPlugins: await listPlugins(),
+            cliMcp: await listMcpServers(),
+            inventory
+        });
+        return sendJson(res, 200, { ok: true, registry: registryData });
+    }
+
     if (req.method === 'GET' && urlObj.pathname === '/api/system-prompt') {
         return sendJson(res, 200, {
             ok: true,
@@ -4766,6 +4912,79 @@ const server = http.createServer(async (req, res) => {
 
             if (urlObj.pathname === '/api/mcp') {
                 const result = await manageMcpServer(payload);
+                return sendJson(res, result.ok ? 200 : 400, result);
+            }
+
+            // Этап 2: просмотр состава до установки, импорт, состояние, удаление
+            // и экспорт собственного набора через общий реестр.
+            if (urlObj.pathname === '/api/extensions/inspect') {
+                const sourcePath = String(payload.path || payload.sourcePath || '').trim();
+                if (!sourcePath) {
+                    return sendJson(res, 400, { ok: false, error: 'Не указан путь к пакету (каталог или ZIP)' });
+                }
+                const preview = extensionRegistry.inspectPackageSource({ sourcePath, kind: payload.kind || 'auto' });
+                return sendJson(res, preview.ok ? 200 : 400, preview);
+            }
+
+            if (urlObj.pathname === '/api/extensions/import') {
+                const sourcePath = String(payload.path || payload.sourcePath || '').trim();
+                if (!sourcePath) {
+                    return sendJson(res, 400, { ok: false, error: 'Не указан путь к пакету' });
+                }
+                const result = extensionRegistry.importPackage({
+                    sourcePath,
+                    kind: payload.kind || 'auto',
+                    targetRoot: payload.targetRoot ? String(payload.targetRoot) : PLUGINS_DIR,
+                    registryIndexPath: REGISTRY_INDEX_PATH,
+                    onCollision: ['refuse', 'replace', 'rename'].includes(payload.onCollision) ? payload.onCollision : 'refuse',
+                    sourceProduct: payload.sourceProduct ? String(payload.sourceProduct) : 'Antigravity local',
+                    publisher: payload.publisher ? String(payload.publisher) : 'локальный импорт',
+                    sourceUrl: payload.sourceUrl ? String(payload.sourceUrl) : null
+                });
+                invalidateAllIdleWorkers();
+                return sendJson(res, result.ok ? 200 : 400, result);
+            }
+
+            if (urlObj.pathname === '/api/extensions/state') {
+                const packageId = String(payload.id || payload.packageId || '').trim();
+                const enabled = payload.enabled !== false;
+                const result = extensionRegistry.setPackageEnabled({
+                    packageId,
+                    enabled,
+                    registryIndexPath: REGISTRY_INDEX_PATH,
+                    configPath: path.join(GEMINI_ROOT_DIR, 'config', 'config.json'),
+                    mcpConfigPath: MCP_CONFIG_FILE,
+                    settingsPath: GEMINI_SETTINGS_FILE,
+                    cli: true
+                });
+                // Единый источник состояния: действие реестра продублировано в
+                // agy CLI, чтобы оба источника сходились (тест-сценарий Этапа 2).
+                if (result.ok && result.entry && result.entry.kind === 'plugin') {
+                    const r = await runAgySubcommand(['plugin', enabled ? 'enable' : 'disable', result.entry.name]);
+                    result.cli = { ok: r.ok, output: r.stdout || r.stderr };
+                }
+                invalidateAllIdleWorkers();
+                return sendJson(res, result.ok ? 200 : 400, result);
+            }
+
+            if (urlObj.pathname === '/api/extensions/remove') {
+                const packageId = String(payload.id || payload.packageId || '').trim();
+                const result = extensionRegistry.removePackage({
+                    packageId,
+                    registryIndexPath: REGISTRY_INDEX_PATH,
+                    keepFiles: payload.keepFiles === true
+                });
+                invalidateAllIdleWorkers();
+                return sendJson(res, result.ok ? 200 : 400, result);
+            }
+
+            if (urlObj.pathname === '/api/extensions/export') {
+                const outPath = String(payload.outPath || path.join(UPLOADS_DIR, 'exports', `extensions-${Date.now()}.zip`));
+                const result = extensionRegistry.exportOwnSet({
+                    registryIndexPath: REGISTRY_INDEX_PATH,
+                    outPath,
+                    packageIds: Array.isArray(payload.packageIds) ? payload.packageIds : null
+                });
                 return sendJson(res, result.ok ? 200 : 400, result);
             }
 
