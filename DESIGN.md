@@ -58,6 +58,14 @@ Preserve existing rounded composer, controls, and sheets.
 
 ## Components
 
+SettingsModalScreen delegates to AppSettingsScreen, the single settings owner.
+Use grouped 16dp tonal surfaces, 16sp row labels and muted 13sp summaries. A fixed
+header owns close/back; details have independent scroll positions. Root settings
+show account, app, connections, data access and version. Technical configuration
+belongs in detail pages. Existing permission and OpenRouter sheets remain owners
+for those features. Connection claims use pcBridgeStatus, never a constant label.
+API keys are masked by default, and key-check feedback belongs to the checked key.
+
 Canonical owners are `ChatGptMainChatScreen`, `ChatGptExactNavigationDrawer`, and
 the shared sheets in `ui/components/Round5PanelsAndSheets.kt`. Extend those owners
 instead of creating parallel versions of the same interaction.

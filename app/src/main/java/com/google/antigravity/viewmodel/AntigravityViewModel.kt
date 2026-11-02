@@ -219,6 +219,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                 VoiceProvider.valueOf(prefs.getString("voice_provider", VoiceProvider.NEURAL_BRIDGE.name) ?: VoiceProvider.NEURAL_BRIDGE.name)
             }.getOrDefault(VoiceProvider.NEURAL_BRIDGE),
             voiceName = prefs.getString("voice_name", "Aoede") ?: "Aoede",
+            bargeInEnabled = prefs.getBoolean("barge_in_enabled", true),
             geminiApiKey = prefs.getString("gemini_api_key", "") ?: "",
             pcBridgeUrl = resolveInitialBridgeUrl(),
             forcePublicTunnelOnly = prefs.getBoolean("force_public_tunnel_only", false)
@@ -3236,6 +3237,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
             .putString("selected_model_id", s.selectedModelId)
             .putString("voice_provider", s.voiceProvider.name)
             .putString("voice_name", s.voiceName)
+            .putBoolean("barge_in_enabled", s.bargeInEnabled)
             .putString("gemini_api_key", s.geminiApiKey)
             .putBoolean("force_public_tunnel_only", s.forcePublicTunnelOnly)
             .apply()
