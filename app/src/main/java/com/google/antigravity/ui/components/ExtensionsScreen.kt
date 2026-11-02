@@ -718,6 +718,18 @@ private fun matchesQuery(query: String, vararg fields: String): Boolean {
     return fields.any { it.lowercase().contains(query) }
 }
 
+// QA-дефект Medium #2: залипший статус "connected" при ошибке связи с мостом
+// или err != null (error/errorCode заполнены) сбрасывается в "configured"
+// (требует проверки) — без свежего рукопожатия «подключён» не показывается.
+// internal — тестируется ExtensionsSecurityQaTest.
+internal fun effectiveMcpStatus(status: String, error: String, errorCode: String?): String {
+    val s = status.trim()
+    if (s.equals("connected", ignoreCase = true) && (error.isNotBlank() || !errorCode.isNullOrBlank())) {
+        return "configured"
+    }
+    return s
+}
+
 // ---------------------------------------------------------------------------
 // Человекочитаемый контент карточек (пункт 2): на витрине — нормальное
 // описание назначения инструмента по имени/категории. Сырой текст блокера,
@@ -1127,9 +1139,11 @@ private fun McpConnectionTableRow(
     onLogin: () -> Unit,
     onCallTool: () -> Unit
 ) {
-    val isConnected = server.status.equals("connected", ignoreCase = true)
-    val isFailed = server.status.equals("failed", ignoreCase = true) || server.error.isNotBlank()
-    val isDisabled = !server.enabled || server.status.equals("disabled", ignoreCase = true)
+    // Medium #2: залипший connected при ошибке сбрасывается в configured.
+    val effStatus = effectiveMcpStatus(server.status, server.error, server.errorCode)
+    val isConnected = effStatus.equals("connected", ignoreCase = true)
+    val isFailed = effStatus.equals("failed", ignoreCase = true) || server.error.isNotBlank()
+    val isDisabled = !server.enabled || effStatus.equals("disabled", ignoreCase = true)
 
     Column(
         modifier = Modifier
@@ -1183,7 +1197,7 @@ private fun McpConnectionTableRow(
                 val subLabel = when {
                     isConnected && server.tools.isNotEmpty() -> "${server.tools.size} инстр. • рукопожатие ОК"
                     isFailed && server.error.isNotBlank() -> server.error
-                    else -> describeMcpStatus(server.status)
+                    else -> describeMcpStatus(effStatus)
                 }
                 Text(
                     text = subLabel,
@@ -1918,7 +1932,7 @@ private fun McpDetailSheetContent(
     onDelete: () -> Unit,
     onClose: () -> Unit
 ) {
-    val isConnected = server.status.equals("connected", ignoreCase = true)
+    val isConnected = effectiveMcpStatus(server.status, server.error, server.errorCode).equals("connected", ignoreCase = true)
     val isFailed = server.status.equals("failed", ignoreCase = true) || server.error.isNotBlank()
 
     Column(
@@ -1940,7 +1954,7 @@ private fun McpDetailSheetContent(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "${if (isConnected) "✓" else if (isFailed) "⚠" else "•"} ${describeMcpStatus(server.status)}",
+                    text = "${if (isConnected) "✓" else if (isFailed) "⚠" else "•"} ${describeMcpStatus(effectiveMcpStatus(server.status, server.error, server.errorCode))}",
                     color = when {
                         isConnected -> AccentGreen
                         isFailed -> DangerRed

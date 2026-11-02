@@ -26,6 +26,45 @@ function sha256Of(buf) {
 }
 
 // ---------------------------------------------------------------------------
+// Валидация имени пакета (QA/Security, Critical #1): имя из manifest.name и
+// front matter попадает в пути файловой системы и в id реестра — поэтому
+// запрещены пустые строки, длина > 64, слэши, двоеточия, "..", символы вне
+// /^[a-z0-9][a-z0-9._-]*$/i, а raw обязан совпадать с path.basename(raw).
+// ---------------------------------------------------------------------------
+
+const PACKAGE_NAME_RE = /^[a-z0-9][a-z0-9._-]*$/i;
+const PACKAGE_NAME_MAX = 64;
+
+function validatePackageName(raw) {
+    const issues = [];
+    const name = String(raw == null ? '' : raw);
+    if (!name.trim()) issues.push('имя пакета пустое');
+    if (name.length > PACKAGE_NAME_MAX) issues.push(`имя пакета длиннее ${PACKAGE_NAME_MAX}: ${name.length}`);
+    if (/[\\/]/.test(name)) issues.push(`слэш в имени пакета запрещён: ${name}`);
+    if (/:/.test(name)) issues.push(`двоеточие в имени пакета запрещено: ${name}`);
+    if (name.includes('..')) issues.push(`подкаталог ".." в имени пакета запрещён: ${name}`);
+    if (name && !PACKAGE_NAME_RE.test(name)) issues.push(`недопустимые символы в имени пакета: ${name}`);
+    if (name !== path.basename(name)) issues.push(`имя пакета не является одиночным сегментом пути: ${name}`);
+    return { valid: issues.length === 0, name, issues };
+}
+
+// ---------------------------------------------------------------------------
+// Атомарная запись индекса (QA/Security, High #1): временный файл + rename,
+// чтобы параллельный читатель не увидел полузаписанный JSON. Плюс мьютекс
+// модификаций реестра в рамках процесса: state/import/remove выполняются
+// последовательно и не затирают записи друг друга.
+// ---------------------------------------------------------------------------
+
+let registryMutationChain = Promise.resolve();
+
+function withRegistryLock(fn) {
+    const run = registryMutationChain.then(() => fn());
+    // Следующая операция не должна зависеть от ошибки предыдущей.
+    registryMutationChain = run.then(() => undefined, () => undefined);
+    return run;
+}
+
+// ---------------------------------------------------------------------------
 // Индекс реестра — персистентная запись об импорте и явных действиях
 // пользователя (переживает перезапуск).
 // ---------------------------------------------------------------------------
@@ -45,7 +84,10 @@ function loadRegistryIndex(indexPath) {
 function saveRegistryIndex(indexPath, index) {
     index.updatedAt = new Date().toISOString();
     fs.mkdirSync(path.dirname(indexPath), { recursive: true });
-    fs.writeFileSync(indexPath, JSON.stringify(index, null, 2), 'utf8');
+    // Атомарная запись (High #1): временный файл в том же каталоге + rename.
+    const tmpPath = `${indexPath}.${process.pid}.${Date.now()}.tmp`;
+    fs.writeFileSync(tmpPath, JSON.stringify(index, null, 2), 'utf8');
+    fs.renameSync(tmpPath, indexPath);
     return index;
 }
 
@@ -246,7 +288,17 @@ function analyzeVirtualPackage(entries, rootName, getEntryData = e => e.data) {
 
 function readSourceEntries({ sourcePath, kind = 'auto', buffer = null, limits = {} }) {
     if (buffer || kind === 'zip') {
-        const buf = buffer || fs.readFileSync(sourcePath);
+        // QA/Security, Medium #3: размер архива проверяется ДО чтения файла в
+        // память (64 МБ) — гигантский файл не вызывает OOM и не блокирует loop.
+        const MAX_ARCHIVE_BYTES = 64 * 1024 * 1024;
+        let buf = buffer;
+        if (!buf) {
+            const st = fs.statSync(sourcePath);
+            if (st.size > MAX_ARCHIVE_BYTES) {
+                throw new Error(`архив больше лимита (${st.size} > ${MAX_ARCHIVE_BYTES}): ${sourcePath}`);
+            }
+            buf = fs.readFileSync(sourcePath);
+        }
         const zip = archive.readZipEntries(buf, limits);
         const verified = archive.verifyArchiveEntries(zip.entries, limits);
         const stripped = stripSingleRoot(verified.entries);
@@ -330,9 +382,23 @@ function importPackage({ sourcePath, kind = 'auto', buffer = null, targetRoot, r
     const index = loadRegistryIndex(registryIndexPath);
     const pkgKind = preview.packageKind === 'skill' ? 'skill' : 'plugin';
     // Идентичность: manifest плагина → имя навыка из front matter (спека Agent
-    // Skills) → имя каталога. Никаких выдуманных имён.
+    // Skills) → имя каталога. Никаких выдуманных имён. QA/Security, Critical #1:
+    // объявленное в manifest.name пустое имя — это ОШИБКА валидации, а не
+    // повод молча подменить его другим источником.
     const frontMatterName = preview.skills[0] && preview.skills[0].skill ? preview.skills[0].skill.name : null;
-    const name = (preview.manifest && preview.manifest.name) || (pkgKind === 'skill' ? frontMatterName : null) || preview.rootName || 'package';
+    const manifestDeclaredName = preview.manifest && typeof preview.manifest.name === 'string'
+        ? preview.manifest.name
+        : null;
+    const rawName = manifestDeclaredName !== null
+        ? manifestDeclaredName
+        : ((pkgKind === 'skill' ? frontMatterName : null) || preview.rootName || 'package');
+    // QA/Security, Critical #1: жёсткая валидация имени до каких-либо
+    // файловых операций — имя попадает в пути и в id реестра.
+    const nameCheck = validatePackageName(rawName);
+    if (!nameCheck.valid) {
+        return { ok: false, error: `Импорт отклонён: имя пакета не прошло валидацию: ${nameCheck.issues.join('; ')}`, preview };
+    }
+    const name = nameCheck.name;
     const id = `${pkgKind}:${name}`;
     fs.mkdirSync(targetRoot, { recursive: true });
     const existsOnDisk = fs.existsSync(path.join(targetRoot, name));
@@ -351,26 +417,39 @@ function importPackage({ sourcePath, kind = 'auto', buffer = null, targetRoot, r
         finalName = `${name}-${n}`;
     }
     const finalDir = path.join(targetRoot, finalName);
-    if (onCollision === 'replace' && (existsOnDisk || existsInIndex)) {
-        // Замена только собственного каталога пакета; соседи не затрагиваются.
-        if (existsOnDisk) fs.rmSync(finalDir, { recursive: true, force: true });
-    }
-    fs.mkdirSync(finalDir, { recursive: true });
 
-    const src = readSourceEntries({ sourcePath, kind, buffer, limits });
-    const byPath = new Map(src.entries.map(e => [e.path, e]));
-    const written = [];
-    for (const f of preview.files) {
-        const dest = path.join(finalDir, ...f.path.split('/'));
-        const resolvedDest = path.resolve(dest);
-        if (!resolvedDest.startsWith(path.resolve(finalDir))) {
-            return { ok: false, error: `Импорт отклонён: путь выходит за корень пакета: ${f.path}`, preview };
+    // QA/Security, Medium #4: распаковка идёт во временный staging-каталог и
+    // подключается rename-ом только после успешной записи всех файлов; прерывание
+    // не оставляет полузаписанного пакета и не трогает существующий каталог.
+    const stagingDir = path.join(targetRoot, `.staging-${finalName}-${process.pid}-${Date.now()}`);
+    fs.mkdirSync(stagingDir, { recursive: true });
+    let src;
+    try {
+        src = readSourceEntries({ sourcePath, kind, buffer, limits });
+        const byPath = new Map(src.entries.map(e => [e.path, e]));
+        const written = [];
+        for (const f of preview.files) {
+            const dest = path.join(stagingDir, ...f.path.split('/'));
+            const resolvedDest = path.resolve(dest);
+            if (!resolvedDest.startsWith(path.resolve(stagingDir))) {
+                throw new Error(`путь выходит за корень пакета: ${f.path}`);
+            }
+            fs.mkdirSync(path.dirname(resolvedDest), { recursive: true });
+            const entry = byPath.get(f.path);
+            const data = entry && entry.data ? entry.data : fs.readFileSync(path.resolve(sourcePath, ...f.path.split('/')));
+            fs.writeFileSync(resolvedDest, data);
+            written.push(f.path);
         }
-        fs.mkdirSync(path.dirname(resolvedDest), { recursive: true });
-        const entry = byPath.get(f.path);
-        const data = entry && entry.data ? entry.data : fs.readFileSync(path.resolve(sourcePath, ...f.path.split('/')));
-        fs.writeFileSync(resolvedDest, data);
-        written.push(f.path);
+        if (onCollision === 'replace' && (existsOnDisk || existsInIndex)) {
+            // Замена только собственного каталога пакета; соседи не затрагиваются.
+            if (existsOnDisk) fs.rmSync(finalDir, { recursive: true, force: true });
+        }
+        fs.renameSync(stagingDir, finalDir);
+        var writtenFiles = written;
+    } catch (err) {
+        // Полный откат staging-каталога: полузаписанный пакет не остаётся на диске.
+        try { fs.rmSync(stagingDir, { recursive: true, force: true }); } catch (_) {}
+        return { ok: false, error: `Импорт отклонён: запись пакета прервана: ${err.message}`, preview };
     }
 
     const entry = {
@@ -398,9 +477,9 @@ function importPackage({ sourcePath, kind = 'auto', buffer = null, targetRoot, r
     return {
         ok: true,
         entry,
-        writtenFiles: written,
+        writtenFiles,
         preview,
-        message: `Пакет «${finalName}» импортирован (${written.length} файлов). Состав: ${preview.compositionStatus}.`
+        message: `Пакет «${finalName}» импортирован (${writtenFiles.length} файлов). Состав: ${preview.compositionStatus}.`
     };
 }
 
@@ -784,6 +863,8 @@ module.exports = {
     REGISTRY_INDEX_VERSION,
     loadRegistryIndex,
     saveRegistryIndex,
+    validatePackageName,
+    withRegistryLock,
     resolvePackageState,
     mergeCatalogPositions,
     readSourceEntries,

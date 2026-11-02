@@ -29,6 +29,28 @@ const SCRATCH_DIR = path.join(IDE_BASE_DIR, 'scratch');
 const DEFAULT_WORKSPACE = 'C:\\Users\\st811210\\.gemini\\antigravity\\scratch\\antigravity-android';
 const UPLOADS_DIR = path.join(DEFAULT_WORKSPACE, 'uploads');
 const REGISTRY_INDEX_PATH = path.join(UPLOADS_DIR, 'extensions-registry.json');
+
+// QA/Security, Critical #1: пути пакетов (sourcePath/targetRoot/outPath)
+// разрешены ТОЛЬКО внутри разрешённых корней. Всё, что выходит за них
+// (path.resolve против .., абсолютные пути снаружи) — отказ 400.
+const ALLOWED_EXTENSION_ROOTS = [PLUGINS_DIR, UPLOADS_DIR, DEFAULT_WORKSPACE];
+
+function resolveInsideAllowedRoots(rawPath, field) {
+    const text = String(rawPath || '').trim();
+    if (!text) return { ok: false, error: `Не указан путь (${field})` };
+    const resolved = path.resolve(text);
+    const inside = ALLOWED_EXTENSION_ROOTS.some(root => {
+        const r = path.resolve(root);
+        return resolved === r || resolved.startsWith(r + path.sep);
+    });
+    if (!inside) {
+        return {
+            ok: false,
+            error: `Путь ${field} вне разрешённых корней (PLUGINS_DIR/UPLOADS_DIR/DEFAULT_WORKSPACE): ${resolved}`
+        };
+    }
+    return { ok: true, resolved };
+}
 // Этап 3: живые MCP-подключения. Статус «connected» и список инструментов
 // берутся ТОЛЬКО из реального рукопожатия initialize → initialized →
 // tools/list; без проверки сервер честно «настроен», без выдуманных имён.
@@ -2256,7 +2278,9 @@ async function executeAgyTurnStreaming(options, onEvent = () => {}) {
             };
 
             const turnTimeout = setTimeout(() => {
-                try { worker.child.kill(); } catch (_) {}
+                // QA/Security, High #2: убивается всё дерево процессов хода
+                // (taskkill /T /F на Windows), а не только прямой потомок.
+                try { killWorkerProcess(worker); } catch (_) {}
                 finishTurn(null, true);
             }, 240000);
 
@@ -2397,7 +2421,16 @@ function runAgySubcommand(args, timeoutMs = 12000) {
             let stdout = '';
             let stderr = '';
             const timer = setTimeout(() => {
-                try { child.kill(); } catch (_) {}
+                // QA/Security, High #2: таймаут убивает всё дерево процессов
+                // (taskkill /T /F на Windows, SIGKILL на POSIX); промис
+                // завершается этим же resolve гарантированно.
+                try {
+                    if (process.platform === 'win32') {
+                        spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
+                    } else {
+                        child.kill('SIGKILL');
+                    }
+                } catch (_) {}
                 resolve({ ok: false, stdout: stdout.trim(), stderr: 'Timeout executing agy ' + args.join(' ') });
             }, timeoutMs);
             child.stdout.on('data', d => { stdout += d.toString('utf8'); });
@@ -5385,7 +5418,9 @@ const server = http.createServer(async (req, res) => {
                 if (!sourcePath) {
                     return sendJson(res, 400, { ok: false, error: 'Не указан путь к пакету (каталог или ZIP)' });
                 }
-                const preview = extensionRegistry.inspectPackageSource({ sourcePath, kind: payload.kind || 'auto' });
+                const checked = resolveInsideAllowedRoots(sourcePath, 'sourcePath');
+                if (!checked.ok) return sendJson(res, 400, { ok: false, error: checked.error });
+                const preview = extensionRegistry.inspectPackageSource({ sourcePath: checked.resolved, kind: payload.kind || 'auto' });
                 return sendJson(res, preview.ok ? 200 : 400, preview);
             }
 
@@ -5394,16 +5429,21 @@ const server = http.createServer(async (req, res) => {
                 if (!sourcePath) {
                     return sendJson(res, 400, { ok: false, error: 'Не указан путь к пакету' });
                 }
-                const result = extensionRegistry.importPackage({
-                    sourcePath,
+                const checkedSrc = resolveInsideAllowedRoots(sourcePath, 'sourcePath');
+                if (!checkedSrc.ok) return sendJson(res, 400, { ok: false, error: checkedSrc.error });
+                const targetRootRaw = payload.targetRoot ? String(payload.targetRoot) : PLUGINS_DIR;
+                const checkedTarget = resolveInsideAllowedRoots(targetRootRaw, 'targetRoot');
+                if (!checkedTarget.ok) return sendJson(res, 400, { ok: false, error: checkedTarget.error });
+                const result = await extensionRegistry.withRegistryLock(() => extensionRegistry.importPackage({
+                    sourcePath: checkedSrc.resolved,
                     kind: payload.kind || 'auto',
-                    targetRoot: payload.targetRoot ? String(payload.targetRoot) : PLUGINS_DIR,
+                    targetRoot: checkedTarget.resolved,
                     registryIndexPath: REGISTRY_INDEX_PATH,
                     onCollision: ['refuse', 'replace', 'rename'].includes(payload.onCollision) ? payload.onCollision : 'refuse',
                     sourceProduct: payload.sourceProduct ? String(payload.sourceProduct) : 'Antigravity local',
                     publisher: payload.publisher ? String(payload.publisher) : 'локальный импорт',
                     sourceUrl: payload.sourceUrl ? String(payload.sourceUrl) : null
-                });
+                }));
                 invalidateAllIdleWorkers();
                 return sendJson(res, result.ok ? 200 : 400, result);
             }
@@ -5411,7 +5451,7 @@ const server = http.createServer(async (req, res) => {
             if (urlObj.pathname === '/api/extensions/state') {
                 const packageId = String(payload.id || payload.packageId || '').trim();
                 const enabled = payload.enabled !== false;
-                const result = extensionRegistry.setPackageEnabled({
+                const result = await extensionRegistry.withRegistryLock(() => extensionRegistry.setPackageEnabled({
                     packageId,
                     enabled,
                     registryIndexPath: REGISTRY_INDEX_PATH,
@@ -5419,7 +5459,7 @@ const server = http.createServer(async (req, res) => {
                     mcpConfigPath: MCP_CONFIG_FILE,
                     settingsPath: GEMINI_SETTINGS_FILE,
                     cli: true
-                });
+                }));
                 // Единый источник состояния: действие реестра продублировано в
                 // agy CLI, чтобы оба источника сходились (тест-сценарий Этапа 2).
                 if (result.ok && result.entry && result.entry.kind === 'plugin') {
@@ -5432,20 +5472,22 @@ const server = http.createServer(async (req, res) => {
 
             if (urlObj.pathname === '/api/extensions/remove') {
                 const packageId = String(payload.id || payload.packageId || '').trim();
-                const result = extensionRegistry.removePackage({
+                const result = await extensionRegistry.withRegistryLock(() => extensionRegistry.removePackage({
                     packageId,
                     registryIndexPath: REGISTRY_INDEX_PATH,
                     keepFiles: payload.keepFiles === true
-                });
+                }));
                 invalidateAllIdleWorkers();
                 return sendJson(res, result.ok ? 200 : 400, result);
             }
 
             if (urlObj.pathname === '/api/extensions/export') {
-                const outPath = String(payload.outPath || path.join(UPLOADS_DIR, 'exports', `extensions-${Date.now()}.zip`));
+                const outPathRaw = String(payload.outPath || path.join(UPLOADS_DIR, 'exports', `extensions-${Date.now()}.zip`));
+                const checkedOut = resolveInsideAllowedRoots(outPathRaw, 'outPath');
+                if (!checkedOut.ok) return sendJson(res, 400, { ok: false, error: checkedOut.error });
                 const result = extensionRegistry.exportOwnSet({
                     registryIndexPath: REGISTRY_INDEX_PATH,
-                    outPath,
+                    outPath: checkedOut.resolved,
                     packageIds: Array.isArray(payload.packageIds) ? payload.packageIds : null
                 });
                 return sendJson(res, result.ok ? 200 : 400, result);

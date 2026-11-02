@@ -200,6 +200,12 @@ function inspectEntryName(name) {
     if (/^[a-zA-Z]:[\\/]/.test(raw) || raw.startsWith('\\\\') || raw.startsWith('/')) {
         issues.push(`абсолютный путь запрещён: ${raw}`);
     }
+    // QA/Security, Medium #4: Windows drive-relative путь "C:foo" (без слэша
+    // после двоеточия) тоже запрещён — он разрешается относительно текущего
+    // диска процесса и обходит проверку абсолютных путей.
+    if (/^[a-zA-Z]:/.test(raw)) {
+        issues.push(`drive-relative путь запрещён: ${raw}`);
+    }
     const norm = raw.split('\\').join('/');
     if (raw.includes('\\')) issues.push(`обратный слэш в пути: ${raw}`);
     for (const seg of norm.split('/')) {

@@ -65,22 +65,41 @@ function createSubagentRunner({ executable, repository, workspaces, spawnProcess
                 });
                 child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
                 let output = '', errors = '', overflow = false;
-                const abort = () => killProcessTree(child, spawnProcess);
+                let settled = false;
+                let forceSettleTimer = null;
+                const settle = (fn) => {
+                    if (settled) return;
+                    settled = true;
+                    if (forceSettleTimer) clearTimeout(forceSettleTimer);
+                    signal.removeEventListener('abort', abort);
+                    fn();
+                };
+                // QA/Security, High #2: после убийства дерева 'close' может не
+                // прийти, если внучатий процесс удерживает унаследованный
+                // stdout-pipe — промис завершается принудительно.
+                const armForceSettle = () => {
+                    if (forceSettleTimer || settled) return;
+                    forceSettleTimer = setTimeout(() => {
+                        settle(() => reject(new Error('Процесс субагента остановлен принудительно (таймаут/отмена)')));
+                    }, 3000);
+                };
+                const abort = () => { killProcessTree(child, spawnProcess); armForceSettle(); };
                 signal.addEventListener('abort', abort, { once: true });
                 if (signal.aborted) abort();
                 child.stdout.on('data', chunk => {
                     if (overflow) return;
                     output += chunk;
-                    if (output.length > 256000) { overflow = true; output = ''; killProcessTree(child, spawnProcess); }
+                    if (output.length > 256000) { overflow = true; output = ''; killProcessTree(child, spawnProcess); armForceSettle(); }
                 });
                 child.stderr.on('data', chunk => { errors = (errors + chunk).slice(-2000); });
-                child.on('error', error => { signal.removeEventListener('abort', abort); reject(error); });
+                child.on('error', error => settle(() => reject(error)));
                 child.on('close', code => {
-                    signal.removeEventListener('abort', abort);
-                    if (signal.aborted) reject(new Error('Задача отменена'));
-                    else if (overflow) reject(new Error('Результат субагента слишком большой'));
-                    else if (code !== 0) reject(new Error(`CLI завершился с кодом ${code}: ${errors}`));
-                    else resolve(output.trim());
+                    settle(() => {
+                        if (signal.aborted) reject(new Error('Задача отменена'));
+                        else if (overflow) reject(new Error('Результат субагента слишком большой'));
+                        else if (code !== 0) reject(new Error(`CLI завершился с кодом ${code}: ${errors}`));
+                        else resolve(output.trim());
+                    });
                 });
             });
         } catch (error) { failure = error; }

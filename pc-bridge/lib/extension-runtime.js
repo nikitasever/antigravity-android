@@ -333,14 +333,22 @@ async function executeBrokerToolCall(ref, args, { catalog, callPcTool, allowedRe
 function toolResultToText(result) {
     if (!result) return 'Результат отсутствует.';
     if (result.ok) {
+        // QA/Security, High #3: вход — уже отредактированный рекурсивно объект
+        // (redactDeep в mcp-client); здесь он только проецируется в текст,
+        // включая structuredContent и прочие поля, а не только content[].text.
         const r = result.result;
+        const parts = [];
         if (r && Array.isArray(r.content)) {
-            const texts = r.content
-                .filter(c => c && typeof c.text === 'string')
-                .map(c => c.text);
-            return texts.join('\n') || 'Инструмент выполнен без текстового результата.';
+            for (const c of r.content) {
+                if (c && typeof c.text === 'string') parts.push(c.text);
+            }
         }
-        return JSON.stringify(r);
+        if (r && r.structuredContent != null) {
+            try { parts.push(JSON.stringify(r.structuredContent)); } catch (_) {}
+        }
+        if (parts.length > 0) return parts.join('\n');
+        if (r == null) return 'Инструмент выполнен без текстового результата.';
+        try { return JSON.stringify(r); } catch (_) { return 'Инструмент выполнен без текстового результата.'; }
     }
     return `ОШИБКА ИНСТРУМЕНТА (${result.code || 'tool_error'}): ${result.error || 'без описания'}`;
 }

@@ -600,7 +600,9 @@ function normalizePluginManifest(rawManifest, ctx = {}) {
     return {
         manifestFlavor: flavor,
         manifestPath: ctx.manifestPath ? String(ctx.manifestPath).split(path.sep).join('/') : null,
-        name: raw.name ? String(raw.name) : null,
+        // QA/Security, Critical #1: пустая строка сохраняется как пустая строка
+        // (а не превращается в null) — валидация имени обязана её отклонить.
+        name: raw.name != null ? String(raw.name) : null,
         displayName: raw.displayName ? String(raw.displayName) : null,
         version: raw.version ? String(raw.version) : null,
         description: raw.description ? String(raw.description) : (raw.description === '' ? '' : null),

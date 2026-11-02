@@ -60,16 +60,25 @@ function redactSecrets(text, secrets) {
 // Редактирование результата tools/call: текстовые блоки — данные сервера,
 // в них может попасть известный секрет (например, инструмент печатает env).
 function redactToolResult(result, secrets) {
-    if (!result || typeof result !== 'object' || !Array.isArray(result.content)) return result;
-    return {
-        ...result,
-        content: result.content.map(item => {
-            if (item && typeof item === 'object' && typeof item.text === 'string') {
-                return { ...item, text: redactSecrets(item.text, secrets) };
-            }
-            return item;
-        })
-    };
+    // QA/Security, High #3: рекурсивная маскировка ВСЕХ полей результата
+    // (content, structuredContent, image/resource, вложенные объекты/массивы).
+    return redactDeep(result, secrets);
+}
+
+// Рекурсивный обход произвольного JSON-подобного значения: строки маскируются
+// redactSecrets, объекты/массивы обходятся до листьев. Буферы/TypedArray не
+// трогаем (бинарные данные — не текст секретов).
+function redactDeep(value, secrets) {
+    if (value == null) return value;
+    if (typeof value === 'string') return redactSecrets(value, secrets);
+    if (typeof value === 'object') {
+        if (Buffer.isBuffer(value) || ArrayBuffer.isView(value)) return value;
+        if (Array.isArray(value)) return value.map(v => redactDeep(v, secrets));
+        const out = {};
+        for (const [k, v] of Object.entries(value)) out[k] = redactDeep(v, secrets);
+        return out;
+    }
+    return value;
 }
 
 function collectSecrets(descriptor) {
@@ -90,6 +99,38 @@ function collectSecrets(descriptor) {
         }
     }
     push(descriptor.authToken);
+    // QA/Security, High #3: секреты/токены в аргументах команды (после флагов
+    // --token / --access-token / --api-key / --password, в --header и в формате
+    // --flag=value) маскируются так же, как env/headers.
+    const args = Array.isArray(descriptor.args) ? descriptor.args.map(String) : [];
+    const SECRET_FLAG_RE = /^--?(?:token|access[-_]?token|api[-_]?key|apikey|auth[-_]?token|password|secret|client[-_]?secret)$/i;
+    const HEADER_ARG_RE = /^--?(?:header|headers|h)$/i;
+    for (let i = 0; i < args.length; i++) {
+        const arg = args[i];
+        const eq = arg.match(/^(--?[^=]+)=(.*)$/s);
+        if (eq) {
+            if (SECRET_FLAG_RE.test(eq[1].trim())) push(eq[2]);
+            continue;
+        }
+        if (SECRET_FLAG_RE.test(arg) && i + 1 < args.length) {
+            push(args[i + 1]);
+            i++;
+            continue;
+        }
+        if (HEADER_ARG_RE.test(arg) && i + 1 < args.length) {
+            const hv = args[i + 1];
+            push(hv);
+            const m = String(hv).match(/^\s*[^:]+:\s*(.+)$/s);
+            if (m) push(m[1].trim());
+            const bm = String(hv).match(/Bearer\s+(.+)$/i);
+            if (bm) push(bm[1].trim());
+            i++;
+            continue;
+        }
+        // Bearer-токен отдельным аргументом.
+        const bm = arg.match(/^Bearer\s+(.+)$/i);
+        if (bm) push(bm[1].trim());
+    }
     // Токены в URL (query/userinfo) тоже не должны утекать в тексты ошибок.
     if (descriptor.url) {
         try {
@@ -103,7 +144,8 @@ function collectSecrets(descriptor) {
 }
 
 // Безопасное описание дескриптора для API/журналов: без значений env/headers,
-// URL — без userinfo и query (там могут быть токены).
+// URL — без userinfo и query (там могут быть токены). QA/Security, High #3:
+// значения секретных аргументов команды (--token и т.п.) маскируются.
 function describeDescriptor(descriptor) {
     const d = descriptor && typeof descriptor === 'object' ? descriptor : {};
     let urlInfo = null;
@@ -120,11 +162,19 @@ function describeDescriptor(descriptor) {
             urlInfo = { invalid: true };
         }
     }
+    const secrets = collectSecrets(d);
+    const maskArgs = (arr) => arr.map(a => {
+        let out = String(a);
+        for (const s of secrets) {
+            if (s.length >= 4 && out.includes(s)) out = out.split(s).join('[скрыто]');
+        }
+        return out;
+    });
     return {
         id: d.id ? String(d.id) : '',
         transport: d.transport || 'stdio',
         command: d.command ? String(d.command) : '',
-        args: Array.isArray(d.args) ? d.args.map(String) : [],
+        args: Array.isArray(d.args) ? maskArgs(d.args.map(String)) : [],
         url: urlInfo,
         envKeys: Object.keys(d.env || {}),
         headerKeys: Object.keys(d.headers || {}),
@@ -963,6 +1013,11 @@ class McpClientManager {
         this.sessions = new Map();
         this.descriptors = new Map();
         this.live = new Map();
+        // QA/Security, Critical #2: очередь выполняющихся probe-операций по
+        // ключу сервера. Параллельные probe()/callTool()/disconnect() одного
+        // сервера ждут один общий промис и не оставляют осиротевших
+        // дочерних stdio-процессов.
+        this.inflight = new Map();
     }
 
     #key(idOrDescriptor) {
@@ -971,7 +1026,8 @@ class McpClientManager {
     }
 
     // Свежее рукопожатие при каждой проверке: initialize → initialized →
-    // tools/list. connected — только при успехе всего цикла.
+    // tools/list. connected — только при успехе всего цикла. Параллельные
+    // вызовы для одного сервера разделяют один и тот же промис (inflight).
     async probe(descriptor, options = {}) {
         const id = this.#key(descriptor);
         if (!id) {
@@ -983,7 +1039,24 @@ class McpClientManager {
                 tools: []
             };
         }
-        await this.disconnect(id);
+        const existing = this.inflight.get(id);
+        if (existing) return existing;
+
+        const run = this.#runProbe(id, descriptor, options);
+        this.inflight.set(id, run);
+        try {
+            return await run;
+        } finally {
+            if (this.inflight.get(id) === run) this.inflight.delete(id);
+        }
+    }
+
+    async #runProbe(id, descriptor, options) {
+        // Уборка предыдущей сессии БЕЗ ожидания inflight (мы и есть inflight).
+        const prev = this.sessions.get(id);
+        this.sessions.delete(id);
+        this.live.delete(id);
+        if (prev) await prev.close().catch(() => {});
         this.descriptors.set(id, descriptor);
         const client = new McpClient(descriptor, { ...this.clientOptions, ...options });
         const probedAt = new Date().toISOString();
@@ -1037,10 +1110,23 @@ class McpClientManager {
 
     // Вызов инструмента. Если живой сессии нет — сначала переподключение
     // (рукопожатие), затем ровно один вызов (без автоматического повтора —
-    // чтобы не выполнить побочный эффект дважды).
+    // чтобы не выполнить побочный эффект дважды). При живой сессии в стадии
+    // подключения (connecting) дожидается текущего подключения, а не стартует
+    // повторный probe (Critical #2).
     async callTool(id, name, args = {}, options = {}) {
         const key = this.#key(id);
         let client = this.sessions.get(key);
+        if (!client || client.state === 'connecting') {
+            // Идёт (или вот-вот начнётся) probe — дожидаемся его результата.
+            const inflight = this.inflight.get(key);
+            if (inflight) {
+                const probe = await inflight;
+                if (!probe.ok) {
+                    return { ok: false, error: probe.error || 'Соединение не установлено', errorCode: probe.errorCode || 'connect_failed' };
+                }
+                client = this.sessions.get(key);
+            }
+        }
         if (!client || client.state !== 'connected') {
             const descriptor = options.descriptor || this.descriptors.get(key);
             if (!descriptor) {
@@ -1054,8 +1140,8 @@ class McpClientManager {
         }
         try {
             const result = await client.callTool(name, args, options);
-            // Тексты результата приходят от сервера — вырезаем известные секреты
-            // (env/headers/токен) перед выдачей в API.
+            // Тексты результата приходят от сервера — рекурсивно вырезаем
+            // известные секреты (env/headers/токены из args) перед выдачей в API.
             return {
                 ok: true,
                 result: redactToolResult(result, client.secrets)
@@ -1068,6 +1154,13 @@ class McpClientManager {
 
     async disconnect(id) {
         const key = this.#key(id);
+        // Дожидаемся завершения выполняющегося probe, чтобы не осиротить
+        // дочерний stdio-процесс (Critical #2).
+        const inflight = this.inflight.get(key);
+        if (inflight) {
+            await inflight.catch(() => {});
+            if (this.inflight.get(key) === inflight) this.inflight.delete(key);
+        }
         const client = this.sessions.get(key);
         this.sessions.delete(key);
         this.live.delete(key);
@@ -1077,13 +1170,14 @@ class McpClientManager {
     }
 
     async closeAll() {
-        const ids = [...this.sessions.keys()];
+        const ids = [...new Set([...this.sessions.keys(), ...this.inflight.keys()])];
         for (const id of ids) {
             await this.disconnect(id).catch(() => {});
         }
         this.sessions.clear();
         this.descriptors.clear();
         this.live.clear();
+        this.inflight.clear();
     }
 }
 

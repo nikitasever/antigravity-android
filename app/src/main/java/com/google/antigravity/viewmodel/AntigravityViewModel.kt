@@ -493,6 +493,15 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     private val _isExtensionsLoading = MutableStateFlow(false)
     val isExtensionsLoading: StateFlow<Boolean> = _isExtensionsLoading.asStateFlow()
 
+    /**
+     * QA-дефект Medium #1: счётчик поколений запросов расширений. Каждая
+     * операция обновления/переключения/проверки получает свой номер; запоздавший
+     * ответ более старого запроса (например, старого refresh) не перезаписывает
+     * свежее состояние _mcpServers/_installedPlugins и не сбрасывает
+     * _isExtensionsLoading, пока выполняется более новый запрос.
+     */
+    private val extLoadSeq = com.google.antigravity.model.ExtLoadSequencer()
+
     private val _phoneCurrentDir = MutableStateFlow("")
     val phoneCurrentDir: StateFlow<String> = _phoneCurrentDir.asStateFlow()
 
@@ -1556,6 +1565,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun refreshExtensionsFromPc() {
+        val seq = extLoadSeq.next()
         viewModelScope.launch {
             _isExtensionsLoading.value = true
             val url = _settings.value.pcBridgeUrl
@@ -1564,13 +1574,17 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
             val (mcps, mErr) = backendClient.fetchMcpServers(url)
             val (catalog, cErr) = backendClient.fetchExtensionCatalog(url)
 
-            if (plugins.isNotEmpty() || pErr == null) _installedPlugins.value = plugins
-            if (skills.isNotEmpty() || sErr == null) _installedSkills.value = skills
-            if (mcps.isNotEmpty() || mErr == null) _mcpServers.value = mcps
-            if (catalog.isNotEmpty() || cErr == null) _extensionCatalog.value = catalog
+            // Medium #1: запоздавший ответ старого refresh не перезаписывает
+            // свежее состояние и не сбрасывает индикатор загрузки.
+            if (extLoadSeq.isCurrent(seq)) {
+                if (plugins.isNotEmpty() || pErr == null) _installedPlugins.value = plugins
+                if (skills.isNotEmpty() || sErr == null) _installedSkills.value = skills
+                if (mcps.isNotEmpty() || mErr == null) _mcpServers.value = mcps
+                if (catalog.isNotEmpty() || cErr == null) _extensionCatalog.value = catalog
 
-            _extensionsError.value = pErr ?: sErr ?: mErr ?: cErr
-            _isExtensionsLoading.value = false
+                _extensionsError.value = pErr ?: sErr ?: mErr ?: cErr
+                _isExtensionsLoading.value = false
+            }
         }
     }
 
@@ -1614,6 +1628,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     fun togglePluginEnabled(id: String) {
         val current = _installedPlugins.value.firstOrNull { it.id == id }
         val nextEnabled = !(current?.enabled ?: true)
+        val seq = extLoadSeq.next()
         _installedPlugins.update { list ->
             list.map { if (it.id == id) it.copy(enabled = nextEnabled) else it }
         }
@@ -1624,8 +1639,10 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                 idOrName = id,
                 enabled = nextEnabled
             )
-            if (updated.isNotEmpty()) _installedPlugins.value = updated
-            if (err != null) _extensionsError.value = err
+            if (extLoadSeq.isCurrent(seq)) {
+                if (updated.isNotEmpty()) _installedPlugins.value = updated
+                if (err != null) _extensionsError.value = err
+            }
         }
     }
 
@@ -1693,6 +1710,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     fun toggleSkillEnabled(id: String) {
         val current = _installedSkills.value.firstOrNull { it.id == id }
         val nextEnabled = !(current?.enabled ?: true)
+        val seq = extLoadSeq.next()
         _installedSkills.update { list ->
             list.map { if (it.id == id) it.copy(enabled = nextEnabled) else it }
         }
@@ -1703,8 +1721,10 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                 name = id,
                 enabled = nextEnabled
             )
-            if (updated.isNotEmpty()) _installedSkills.value = updated
-            if (err != null) _extensionsError.value = err
+            if (extLoadSeq.isCurrent(seq)) {
+                if (updated.isNotEmpty()) _installedSkills.value = updated
+                if (err != null) _extensionsError.value = err
+            }
         }
     }
 
@@ -1743,6 +1763,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     fun toggleMcpServerEnabled(id: String) {
         val current = _mcpServers.value.firstOrNull { it.id == id }
         val nextEnabled = !(current?.enabled ?: true)
+        val seq = extLoadSeq.next()
         _mcpServers.update { list ->
             list.map {
                 if (it.id == id) {
@@ -1764,23 +1785,30 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                 name = id,
                 enabled = nextEnabled
             )
-            if (updated.isNotEmpty()) _mcpServers.value = updated
-            if (err != null) _extensionsError.value = err
+            if (extLoadSeq.isCurrent(seq)) {
+                if (updated.isNotEmpty()) _mcpServers.value = updated
+                if (err != null) _extensionsError.value = err
+            }
         }
     }
 
     // Этап 3: реальная проверка MCP-сервера (initialize → initialized →
     // tools/list). connected и список инструментов — только из живого ответа.
     fun checkMcpServer(id: String) {
+        val seq = extLoadSeq.next()
         viewModelScope.launch {
             _isExtensionsLoading.value = true
             val (updated, err) = backendClient.probeMcpServer(
                 pcBridgeUrl = _settings.value.pcBridgeUrl,
                 name = id
             )
-            if (updated.isNotEmpty()) _mcpServers.value = updated
-            _extensionsError.value = err
-            _isExtensionsLoading.value = false
+            // Medium #1: ответ проверки применяется, только если за время
+            // рукопожатия не пришёл более новый запрос.
+            if (extLoadSeq.isCurrent(seq)) {
+                if (updated.isNotEmpty()) _mcpServers.value = updated
+                _extensionsError.value = err
+                _isExtensionsLoading.value = false
+            }
         }
     }
 

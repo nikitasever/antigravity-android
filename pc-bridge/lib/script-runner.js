@@ -226,19 +226,26 @@ function defaultSpawnScript({ command, args, cwd, env, timeoutMs, shell = false 
         let stderr = '';
         let timedOut = false;
         let settled = false;
+        let forceSettleTimer = null;
         const timer = setTimeout(() => {
             timedOut = true;
             try {
                 if (process.platform === 'win32') {
-                    spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true });
+                    spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
                 } else {
                     child.kill('SIGKILL');
                 }
             } catch (_) {}
+            // QA/Security, High #2: если внучатый процесс удерживает
+            // унаследованный stdout-pipe, 'close' может не прийти никогда —
+            // промис завершается принудительно через грейс-период.
+            forceSettleTimer = setTimeout(() => {
+                finish({ exitCode: null, stdout, stderr, timedOut: true, spawnError: null, forceSettled: true });
+            }, 2000);
         }, Math.max(1, timeoutMs));
         child.stdout.on('data', (d) => { stdout += d.toString('utf8'); });
         child.stderr.on('data', (d) => { stderr += d.toString('utf8'); });
-        const finish = (r) => { if (!settled) { settled = true; clearTimeout(timer); resolve(r); } };
+        const finish = (r) => { if (!settled) { settled = true; clearTimeout(timer); if (forceSettleTimer) clearTimeout(forceSettleTimer); resolve(r); } };
         child.on('error', (err) => finish({ exitCode: null, stdout, stderr, timedOut, spawnError: String(err && err.message || err) }));
         child.on('close', (code) => finish({ exitCode: code, stdout, stderr, timedOut, spawnError: null }));
     });

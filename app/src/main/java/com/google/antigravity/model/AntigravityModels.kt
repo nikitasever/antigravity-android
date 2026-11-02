@@ -169,6 +169,22 @@ data class PcSkillItem(
     val path: String = ""
 )
 
+/**
+ * QA-дефект Medium #1: счётчик поколений запросов расширений. Каждая операция
+ * обновления/переключения/проверки получает свой номер; запоздавший ответ
+ * более старого запроса (например, старого refresh) не перезаписывает свежее
+ * состояние и не сбрасывает индикатор загрузки.
+ */
+class ExtLoadSequencer {
+    private val seq = java.util.concurrent.atomic.AtomicInteger(0)
+
+    /** Начать новое поколение запроса (новее всех предыдущих). */
+    fun next(): Int = seq.incrementAndGet()
+
+    /** Применим ли ответ: с момента старта не появилось более нового запроса. */
+    fun isCurrent(generation: Int): Boolean = generation == seq.get()
+}
+
 data class PcMcpServerItem(
     val id: String,
     val name: String,
@@ -182,7 +198,11 @@ data class PcMcpServerItem(
     val tools: List<String> = emptyList(),
     val error: String = "",
     /** Время последнего реального MCP-рукопожатия (этап 3), ISO-8601. */
-    val probedAt: String = ""
+    val probedAt: String = "",
+    /** QA-дефект Medium #2: код ошибки последней операции (errorCode ответа). */
+    val errorCode: String? = null,
+    /** QA-дефект Medium #2: serverInfo успешного рукопожатия (имя/версия сервера). */
+    val serverInfo: String? = null
 )
 
 /**

@@ -785,9 +785,16 @@ class AntigravityBackendClient(
             }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
             val req = Request.Builder().url("$base/api/mcp").post(payload).build()
             clientForUrl(base).newCall(req).useCancellable { resp ->
+                // QA-дефект Medium #2: HTTP-статус проверяется до чтения тела;
+                // текст ошибки извлекается безопасно (с лимитом и без исключений).
+                if (!resp.isSuccessful) {
+                    val bodyText = runCatching { resp.body?.string() }.getOrNull().orEmpty()
+                    return@withContext emptyList<PcMcpServerItem>() to "Мост ПК вернул HTTP ${resp.code}: ${safeBridgeErrorText(bodyText)}"
+                }
                 val json = JSONObject(resp.body?.string() ?: "{}")
                 val err = if (!json.optBoolean("ok", true)) json.optString("error", "Ошибка операции с MCP-сервером") else null
-                return@withContext parseMcpJson(json) to err
+                val items = demoteUnverifiedConnected(parseMcpJson(json), err)
+                return@withContext items to err
             }
         } catch (e: Throwable) {
             if (e is kotlinx.coroutines.CancellationException) throw e;
@@ -813,9 +820,16 @@ class AntigravityBackendClient(
             }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
             val req = Request.Builder().url("$base/api/mcp").post(payload).build()
             clientForUrl(base).newCall(req).useCancellable { resp ->
+                // QA-дефект Medium #2: проверка resp.isSuccessful + безопасный
+                // текст ошибки; залипший connected при ошибке сбрасывается.
+                if (!resp.isSuccessful) {
+                    val bodyText = runCatching { resp.body?.string() }.getOrNull().orEmpty()
+                    return@withContext emptyList<PcMcpServerItem>() to "Мост ПК вернул HTTP ${resp.code}: ${safeBridgeErrorText(bodyText)}"
+                }
                 val json = JSONObject(resp.body?.string() ?: "{}")
                 val err = if (!json.optBoolean("ok", true)) json.optString("error", "Проверка MCP-сервера не выполнена") else null
-                return@withContext parseMcpJson(json) to err
+                val items = demoteUnverifiedConnected(parseMcpJson(json), err)
+                return@withContext items to err
             }
         } catch (e: Throwable) {
             if (e is kotlinx.coroutines.CancellationException) throw e;
@@ -868,42 +882,9 @@ class AntigravityBackendClient(
         }
     }
 
-    private fun parseMcpJson(json: JSONObject): List<PcMcpServerItem> {
-        val arr = json.optJSONArray("mcpServers") ?: return emptyList()
-        val out = mutableListOf<PcMcpServerItem>()
-        for (i in 0 until arr.length()) {
-            val obj = arr.getJSONObject(i)
-            val argsArr = obj.optJSONArray("args")
-            val argsList = mutableListOf<String>()
-            if (argsArr != null) {
-                for (j in 0 until argsArr.length()) {
-                    argsList.add(argsArr.optString(j, ""))
-                }
-            }
-            val toolsArr = obj.optJSONArray("tools")
-            val toolsList = mutableListOf<String>()
-            if (toolsArr != null) {
-                for (j in 0 until toolsArr.length()) {
-                    toolsList.add(toolsArr.optString(j, ""))
-                }
-            }
-            out.add(
-                PcMcpServerItem(
-                    id = obj.optString("id", "mcp_$i"),
-                    name = obj.optString("name", "MCP"),
-                    transport = obj.optString("transport", "stdio"),
-                    command = obj.optString("command", ""),
-                    args = argsList,
-                    enabled = obj.optBoolean("enabled", true),
-                    status = obj.optString("status", "configured"),
-                    tools = toolsList,
-                    error = obj.optString("error", ""),
-                    probedAt = obj.optString("probedAt", "")
-                )
-            )
-        }
-        return out
-    }
+    // QA-дефект Medium #2: парсинг списка MCP-серверов вынесен в top-level
+    // функцию parseMcpServerList (тестируется ExtensionsSecurityQaTest).
+    private fun parseMcpJson(json: JSONObject): List<PcMcpServerItem> = parseMcpServerList(json)
 
     // ---------------------------------------------------------------------------
     // Round 5: Live OpenRouter Models Hub + Photo & MP4 Video Generation (Sections 2 & 8.1)
@@ -3154,5 +3135,84 @@ internal fun parseExtensionCatalog(json: JSONObject): List<ExtensionCatalogItem>
         )
     }
     return out
+}
+
+// ---------------------------------------------------------------------------
+// QA-дефект Medium #2: разбор списка MCP-серверов, сброс залипшего
+// "connected" при ошибке и безопасный текст ошибки моста. Top-level internal —
+// тестируется ExtensionsSecurityQaTest без запуска сети.
+// ---------------------------------------------------------------------------
+
+/** Парсинг mcpServers из ответа моста; дополнительно — errorCode и serverInfo. */
+internal fun parseMcpServerList(json: JSONObject): List<PcMcpServerItem> {
+    val arr = json.optJSONArray("mcpServers") ?: return emptyList()
+    val out = mutableListOf<PcMcpServerItem>()
+    for (i in 0 until arr.length()) {
+        val obj = arr.getJSONObject(i)
+        val argsArr = obj.optJSONArray("args")
+        val argsList = mutableListOf<String>()
+        if (argsArr != null) {
+            for (j in 0 until argsArr.length()) {
+                argsList.add(argsArr.optString(j, ""))
+            }
+        }
+        val toolsArr = obj.optJSONArray("tools")
+        val toolsList = mutableListOf<String>()
+        if (toolsArr != null) {
+            for (j in 0 until toolsArr.length()) {
+                toolsList.add(toolsArr.optString(j, ""))
+            }
+        }
+        val serverInfoObj = obj.optJSONObject("serverInfo")
+        val serverInfoText = serverInfoObj?.let {
+            listOfNotNull(
+                it.optString("name", "").takeIf { n -> n.isNotBlank() },
+                it.optString("version", "").takeIf { v -> v.isNotBlank() }
+            ).joinToString(" ").takeIf { s -> s.isNotBlank() }
+        }
+        out.add(
+            PcMcpServerItem(
+                id = obj.optString("id", "mcp_$i"),
+                name = obj.optString("name", "MCP"),
+                transport = obj.optString("transport", "stdio"),
+                command = obj.optString("command", ""),
+                args = argsList,
+                enabled = obj.optBoolean("enabled", true),
+                status = obj.optString("status", "configured"),
+                tools = toolsList,
+                error = obj.optString("error", ""),
+                probedAt = obj.optString("probedAt", ""),
+                errorCode = obj.optString("errorCode", "").takeIf { it.isNotBlank() },
+                serverInfo = serverInfoText
+            )
+        )
+    }
+    return out
+}
+
+/**
+ * При ошибке связи с мостом или err != null залипший статус "connected"
+ * сбрасывается в "configured" (требует проверки) — без свежего рукопожатия
+ * «подключён» не подтверждён.
+ */
+internal fun demoteUnverifiedConnected(
+    items: List<PcMcpServerItem>,
+    err: String?
+): List<PcMcpServerItem> {
+    if (err == null) return items
+    return items.map {
+        if (it.status.equals("connected", ignoreCase = true)) it.copy(status = "configured") else it
+    }
+}
+
+/** Безопасное извлечение текста ошибки из тела ответа моста (лимит 200 символов). */
+internal fun safeBridgeErrorText(bodyText: String): String {
+    val trimmed = bodyText.trim()
+    if (trimmed.isEmpty()) return "пустое тело ответа"
+    return runCatching { JSONObject(trimmed).optString("error", "") }
+        .getOrNull()
+        ?.takeIf { it.isNotBlank() }
+        ?.take(200)
+        ?: trimmed.take(200)
 }
 
