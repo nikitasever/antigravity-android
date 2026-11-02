@@ -211,6 +211,8 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
 
     private val _settings = MutableStateFlow(
         AntigravitySettings(
+            chatTextSize = com.google.antigravity.model.ChatTextSize.restore(prefs.getString("chat_text_size", null)),
+            responseFont = com.google.antigravity.model.ResponseFont.restore(prefs.getString("response_font", null)),
             activeConversationId = prefs.getString("active_conversation_id", "").orEmpty(),
             activeSessionTitle = prefs.getString("active_session_title", "").orEmpty(),
             executionTarget = runCatching { AgentExecutionTarget.valueOf(prefs.getString("active_execution_target", "PC_REMOTE_SESSION").orEmpty()) }.getOrDefault(AgentExecutionTarget.PC_REMOTE_SESSION),
@@ -3233,6 +3235,8 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
         }
         val s = _settings.value
         prefs.edit()
+            .putString("chat_text_size", s.chatTextSize.name)
+            .putString("response_font", s.responseFont.name)
             .putString("pc_bridge_url", s.pcBridgeUrl)
             .putString("selected_model_id", s.selectedModelId)
             .putString("voice_provider", s.voiceProvider.name)

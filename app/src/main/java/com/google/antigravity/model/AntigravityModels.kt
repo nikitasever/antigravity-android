@@ -560,7 +560,9 @@ data class AntigravitySettings(
     val openRouterApiKey: String = "",
     val pcBridgeUrl: String = "https://2d0102ca0a9fe83d-79-137-206-221.serveousercontent.com",
     val antigravityGatewayUrl: String = "https://antigravity.google.com",
-    val forcePublicTunnelOnly: Boolean = false
+    val forcePublicTunnelOnly: Boolean = false,
+    val chatTextSize: ChatTextSize = ChatTextSize.NORMAL,
+    val responseFont: ResponseFont = ResponseFont.SYSTEM
 ) {
     val selectedModelDisplay: String
         get() = AVAILABLE_AGY_MODELS.find { it.id == selectedModelId }?.displayName

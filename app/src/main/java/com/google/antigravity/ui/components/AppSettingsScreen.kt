@@ -95,6 +95,7 @@ fun AppSettingsScreen(
                         })
                     if (search.isNotBlank()) {
                         val entries = listOf(
+                            Triple("Внешний вид", "Размер текста и шрифт ответов", "размер текст шрифт чтение крупный мелкий font appearance"),
                             Triple("Аккаунт", "Google и веб-сессия", "профиль вход почта account google"),
                             Triple("Голос", "Источник, тембр и микрофон", "voice микрофон звук озвучка речь перебивать live tts"),
                             Triple("Модели и ключи", "Gemini API и работа через ПК", "gemini api ключ модель argon flash"),
@@ -120,6 +121,8 @@ fun AppSettingsScreen(
                         SettingsLink("Google", googleEmail.ifBlank { "Вход не выполнен" }) { page = "Аккаунт" }
                     }
                     SettingsGroup("Приложение") {
+                        SettingsLink("Внешний вид", "${settings.chatTextSize.titleRu} · ${settings.responseFont.titleRu}") { page = "Внешний вид" }
+                        SettingsRule()
                         SettingsLink("Голос", voiceTitle(settings.voiceProvider)) { page = "Голос" }
                         SettingsRule()
                         SettingsLink("Модели и ключи", "Gemini API и работа через ПК") { page = "Модели и ключи" }
@@ -136,6 +139,35 @@ fun AppSettingsScreen(
                     Text("Antigravity · ${BuildConfig.VERSION_NAME}", color = SettingsMuted, fontSize = 12.sp,
                         modifier = Modifier.align(Alignment.CenterHorizontally))
                     }
+                }
+                if (page == "Внешний вид") {
+                    SettingsGroup("Размер текста в чате") {
+                        ChatTextSize.entries.forEach { size ->
+                            Row(Modifier.fillMaxWidth().selectable(selected = settings.chatTextSize == size,
+                                role = Role.RadioButton, onClick = { onUpdate { it.copy(chatTextSize = size) } })
+                                .padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                RadioButton(selected = settings.chatTextSize == size, onClick = null)
+                                Text(size.titleRu, color = Color.White, fontSize = 16.sp, modifier = Modifier.padding(start = 10.dp))
+                            }
+                        }
+                    }
+                    SettingsGroup("Шрифт ответов") {
+                        ResponseFont.entries.forEach { font ->
+                            Row(Modifier.fillMaxWidth().selectable(selected = settings.responseFont == font,
+                                role = Role.RadioButton, onClick = { onUpdate { it.copy(responseFont = font) } })
+                                .padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                RadioButton(selected = settings.responseFont == font, onClick = null)
+                                Text(font.titleRu, color = Color.White, fontSize = 16.sp, modifier = Modifier.padding(start = 10.dp))
+                            }
+                        }
+                    }
+                    SettingsGroup("Предпросмотр") {
+                        ChatGptMarkdownText(
+                            markdown = "## Удобно читать\nРазмер текста меняется сразу, а **важное** остаётся заметным.\n\n```kotlin\nval message = \"Привет!\"\n```",
+                            textSize = settings.chatTextSize, responseFont = settings.responseFont,
+                            modifier = Modifier.padding(16.dp))
+                    }
+                    SettingsNote("Размер применяется к сообщениям и ответам. Шрифт с засечками — только к ответам; код остаётся моноширинным. Изменения сохраняются автоматически. Масштаб текста Android учитывается дополнительно.")
                 }
                 if (page == "Голос") {
                     SettingsGroup("Источник голоса") {

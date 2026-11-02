@@ -1229,6 +1229,8 @@ private fun ChatGptMainChatScreen(
                     itemsIndexed(messages, key = { _, msg -> msg.id }) { _, msg ->
                         ChatGptMessageBubble(
                             message = msg,
+                            readingTextSize = chatSettings.chatTextSize,
+                            responseFont = chatSettings.responseFont,
                             isSpeakingAloud = isSpeakingAloud,
                             onToggleThinking = { viewModel.toggleThinkingExpanded(msg.id) },
                             onSpeak = { viewModel.toggleSpeakMessage(msg.content) },
@@ -3052,6 +3054,8 @@ private fun EnvironmentMiniIcon() {
 @Composable
 private fun ChatGptMessageBubble(
     message: ChatMessage,
+    readingTextSize: com.google.antigravity.model.ChatTextSize = com.google.antigravity.model.ChatTextSize.NORMAL,
+    responseFont: com.google.antigravity.model.ResponseFont = com.google.antigravity.model.ResponseFont.SYSTEM,
     isSpeakingAloud: Boolean = false,
     onToggleThinking: () -> Unit,
     onSpeak: () -> Unit,
@@ -3224,6 +3228,7 @@ private fun ChatGptMessageBubble(
                         ChatGptMarkdownText(
                             markdown = message.content,
                             textColor = Color.White,
+                            textSize = readingTextSize,
                             onSaveCodeToPhone = onSaveToPhone
                         )
                     }
@@ -3336,6 +3341,7 @@ private fun ChatGptMessageBubble(
                 ) {
                     message.toolCalls.forEach { tc ->
                         if (tc.leadingText.isNotBlank()) ChatGptMarkdownText(markdown = tc.leadingText,
+                            textSize = readingTextSize, responseFont = responseFont,
                             textColor = Color(0xFFECECEC), onSaveCodeToPhone = onSaveToPhone)
                         var detailsExpanded by remember(tc.id) { mutableStateOf(false) }
                         val hasDetails = tc.details.isNotBlank() || !tc.unifiedDiff.isNullOrBlank()
@@ -3465,6 +3471,8 @@ private fun ChatGptMessageBubble(
                 ChatGptMarkdownText(
                     markdown = message.content,
                     textColor = Color(0xFFECECEC),
+                    textSize = readingTextSize,
+                    responseFont = responseFont,
                     onSaveCodeToPhone = onSaveToPhone
                 )
             }

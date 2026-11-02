@@ -50,6 +50,8 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.antigravity.R
+import com.google.antigravity.model.ChatTextSize
+import com.google.antigravity.model.ResponseFont
 
 private val ChatGptMenloFontFamily = FontFamily(
     Font(R.font.menlo_regular, FontWeight.Normal),
@@ -98,7 +100,9 @@ fun ChatGptMarkdownText(
     modifier: Modifier = Modifier,
     textColor: Color = Color(0xFFECECEC),
     onSaveCodeToPhone: ((suggestedFileName: String, code: String) -> Unit)? = null,
-    onUrlClick: ((String) -> Unit)? = null
+    onUrlClick: ((String) -> Unit)? = null,
+    textSize: ChatTextSize = ChatTextSize.NORMAL,
+    responseFont: ResponseFont = ResponseFont.SYSTEM
 ) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
@@ -173,8 +177,8 @@ fun ChatGptMarkdownText(
                     Text(
                         text = codeAnnotated,
                         color = Color(0xFFE0E0E0),
-                        fontSize = 12.sp,
-                        lineHeight = 18.sp,
+                        fontSize = (12 * textSize.scale).sp,
+                        lineHeight = (18 * textSize.scale).sp,
                         fontFamily = ChatGptMenloFontFamily,
                         softWrap = true,
                         modifier = Modifier
@@ -183,16 +187,17 @@ fun ChatGptMarkdownText(
                     )
                 }
             } else {
-                val annotated = remember(seg.text, textColor) {
-                    parseInlineMarkdown(seg.text, textColor)
+                val annotated = remember(seg.text, textColor, textSize) {
+                    parseInlineMarkdown(seg.text, textColor, textSize.scale)
                 }
                 @Suppress("DEPRECATION")
                 ClickableText(
                     text = annotated,
                     style = TextStyle(
                         color = textColor,
-                        fontSize = 15.sp,
-                        lineHeight = 22.sp
+                        fontSize = (15 * textSize.scale).sp,
+                        lineHeight = (22 * textSize.scale).sp,
+                        fontFamily = if (responseFont == ResponseFont.SERIF) FontFamily.Serif else FontFamily.Default
                     ),
                     onClick = { offset ->
                         annotated.getStringAnnotations(tag = "URL", start = offset, end = offset)
@@ -272,38 +277,38 @@ private fun splitCodeAndProse(raw: String): List<MarkdownSegment> {
     return result
 }
 
-fun parseInlineMarkdown(text: String, baseColor: Color): AnnotatedString {
+fun parseInlineMarkdown(text: String, baseColor: Color, fontScale: Float = 1f): AnnotatedString {
     return buildAnnotatedString {
         val lines = text.lines()
         lines.forEachIndexed { lineIdx, rawLine ->
             val trimmed = rawLine.trimStart()
             val lineToParse = when {
                 trimmed.startsWith("##### ") -> {
-                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = 14.5.sp, color = Color.White)) {
+                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = (14.5 * fontScale).sp, color = Color.White)) {
                         appendInlineFormatted(trimmed.removePrefix("##### "))
                     }
                     null
                 }
                 trimmed.startsWith("#### ") -> {
-                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = 15.5.sp, color = Color.White)) {
+                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = (15.5 * fontScale).sp, color = Color.White)) {
                         appendInlineFormatted(trimmed.removePrefix("#### "))
                     }
                     null
                 }
                 trimmed.startsWith("### ") -> {
-                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)) {
+                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = (16 * fontScale).sp, color = Color.White)) {
                         appendInlineFormatted(trimmed.removePrefix("### "))
                     }
                     null
                 }
                 trimmed.startsWith("## ") -> {
-                    withStyle(SpanStyle(fontWeight = FontWeight.ExtraBold, fontSize = 17.sp, color = Color.White)) {
+                    withStyle(SpanStyle(fontWeight = FontWeight.ExtraBold, fontSize = (17 * fontScale).sp, color = Color.White)) {
                         appendInlineFormatted(trimmed.removePrefix("## "))
                     }
                     null
                 }
                 trimmed.startsWith("# ") -> {
-                    withStyle(SpanStyle(fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = Color.White)) {
+                    withStyle(SpanStyle(fontWeight = FontWeight.ExtraBold, fontSize = (18 * fontScale).sp, color = Color.White)) {
                         appendInlineFormatted(trimmed.removePrefix("# "))
                     }
                     null
@@ -325,7 +330,7 @@ fun parseInlineMarkdown(text: String, baseColor: Color): AnnotatedString {
                             append("────────────────────────────────")
                         }
                     } else {
-                        withStyle(SpanStyle(fontSize = 13.5.sp, color = Color(0xFFE5E5E5))) {
+                        withStyle(SpanStyle(fontSize = (13.5 * fontScale).sp, color = Color(0xFFE5E5E5))) {
                             cells.forEachIndexed { cellIdx, cellText ->
                                 appendInlineFormatted(cellText)
                                 if (cellIdx < cells.lastIndex) {

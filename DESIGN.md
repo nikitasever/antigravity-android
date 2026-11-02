@@ -69,6 +69,14 @@ Root settings search navigates to existing detail pages or the permission sheet;
 it searches labels and parameter keywords, never secret values. The live Claude
 settings evidence is recorded in CLAUDE_SETTINGS_REFERENCE.md.
 
+Reading preferences live in AntigravitySettings and persist on the device.
+AppSettingsScreen owns Appearance controls and a real Markdown preview.
+ChatGptMessageBubble forwards text size to prompts and replies; response font
+affects assistant prose only. MarkdownRenderer scales prose, headings, tables
+and code while preserving monospaced code and link annotations. The default
+remains 15sp prose / 22sp line height and the system font. Android accessibility
+font scaling is respected through sp units.
+
 Canonical owners are `ChatGptMainChatScreen`, `ChatGptExactNavigationDrawer`, and
 the shared sheets in `ui/components/Round5PanelsAndSheets.kt`. Extend those owners
 instead of creating parallel versions of the same interaction.

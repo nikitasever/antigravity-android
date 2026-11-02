@@ -38,14 +38,14 @@ jobs:
         run: |
           chmod +x ./gradlew
           ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --no-daemon
-          cp app/build/outputs/apk/debug/app-debug.apk Antigravity-Android-2.0.3.apk
+          cp app/build/outputs/apk/debug/app-debug.apk Antigravity-Android-2.0.4.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Antigravity-Android-2.0.3-apk
+          name: Antigravity-Android-2.0.4-apk
           path: |
-            Antigravity-Android-2.0.3.apk
+            Antigravity-Android-2.0.4.apk
             app/build/outputs/apk/debug/app-debug.apk
 
       - name: Publish GitHub Release
@@ -53,8 +53,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            Antigravity-Android-2.0.3.apk
+            Antigravity-Android-2.0.4.apk
             app/build/outputs/apk/debug/app-debug.apk
           name: "Google Antigravity Android ${{ github.ref_name }}"
-          body_path: RELEASE_NOTES_2.0.3.md
+          body_path: RELEASE_NOTES_2.0.4.md
           generate_release_notes: true
