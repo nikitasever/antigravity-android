@@ -323,7 +323,7 @@ fun MainScreen(
         }
     }
 
-    // РЎРёСЃС‚РµРјРЅС‹Рµ Р»РѕРЅС‡РµСЂС‹ Android РґР»СЏ Р·Р°РіСЂСѓР·РєРё Р»СЋР±С‹С… С„Р°Р№Р»РѕРІ, С„РѕС‚РѕРіСЂР°С„РёР№ Рё СЃСЉС‘РјРєРё РєР°РјРµСЂРѕР№
+    // Системные лончеры Android для загрузки любых файлов, фотографий и съёмки камерой
     val multipleFilesLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenMultipleDocuments()
     ) { uris ->
@@ -344,7 +344,7 @@ fun MainScreen(
         }
     }
 
-    // Р”РѕРєСѓРјРµРЅС‚ РєРѕРЅС‚РµРєСЃС‚Р° РїСЂРѕРµРєС‚Р°: СЃРёСЃС‚РµРјРЅС‹Р№ РІС‹Р±РѕСЂ С„Р°Р№Р»Р° РїСЂРёРІСЏР·С‹РІР°РµС‚СЃСЏ Рє С†РµР»РµРІРѕРјСѓ РїСЂРѕРµРєС‚Сѓ.
+    // Документ контекста проекта: системный выбор файла привязывается к целевому проекту.
     var projectDocTargetId by remember { mutableStateOf<String?>(null) }
     val projectDocLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -473,7 +473,7 @@ fun MainScreen(
                     onEndCall = { viewModel.stopLiveVoiceCall() }
                 )
 
-                // Р’СЂРµРјРµРЅРЅС‹Р№ С‡Р°С‚ (РєР°Рє РІ ChatGPT): РїРµСЂРµРїРёСЃРєР° РЅРµ СЃРѕС…СЂР°РЅСЏРµС‚СЃСЏ.
+                // Временный чат (как в ChatGPT): переписка не сохраняется.
                 if (temporaryChatActive &&
                     (drawerSection == DrawerSection.CHAT || drawerSection == DrawerSection.PROJECTS)
                 ) {
@@ -483,12 +483,12 @@ fun MainScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                Icons.Default.VisibilityOff, contentDescription = "Р’СЂРµРјРµРЅРЅС‹Р№ С‡Р°С‚",
+                                Icons.Default.VisibilityOff, contentDescription = "Временный чат",
                                 tint = Color(0xFF93C5FD), modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
-                                "Р’СЂРµРјРµРЅРЅС‹Р№ С‡Р°С‚ вЂ” РїРµСЂРµРїРёСЃРєР° РЅРµ СЃРѕС…СЂР°РЅСЏРµС‚СЃСЏ Рё РЅРµ СЃРёРЅС…СЂРѕРЅРёР·РёСЂСѓРµС‚СЃСЏ",
+                                "Временный чат — переписка не сохраняется и не синхронизируется",
                                 color = Color(0xFF93C5FD), fontSize = 12.sp,
                                 modifier = Modifier.weight(1f)
                             )
@@ -496,8 +496,8 @@ fun MainScreen(
                     }
                 }
 
-                // Р Р°Р±РѕС‚Р° Р±РµР· СЃРµС‚Рё: РїРѕСЃР»Рµ СЂРµР°Р»СЊРЅРѕР№ РїСЂРѕРІРµСЂРєРё РјРѕСЃС‚ РЅРµРґРѕСЃС‚СѓРїРµРЅ вЂ” С‡РµСЃС‚РЅС‹Р№
-                // Р±Р°РЅРЅРµСЂ СЃ РїРѕРІС‚РѕСЂРѕРј РїРѕРґРєР»СЋС‡РµРЅРёСЏ; РїРµСЂРµРїРёСЃРєР° РїСЂРѕРґРѕР»Р¶Р°РµС‚ С…СЂР°РЅРёС‚СЊСЃСЏ РЅР° С‚РµР»РµС„РѕРЅРµ.
+                // Работа без сети: после реальной проверки мост недоступен — честный
+                // баннер с повтором подключения; переписка продолжает храниться на телефоне.
                 if (pcBridgeStatus.checked && !pcBridgeStatus.connected &&
                     settings.executionTarget == AgentExecutionTarget.PC_REMOTE_SESSION &&
                     (drawerSection == DrawerSection.CHAT || drawerSection == DrawerSection.PROJECTS)
@@ -508,17 +508,17 @@ fun MainScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                Icons.Default.CloudOff, contentDescription = "РњРѕСЃС‚ РџРљ РЅРµРґРѕСЃС‚СѓРїРµРЅ",
+                                Icons.Default.CloudOff, contentDescription = "Мост ПК недоступен",
                                 tint = Color(0xFFFFB74D), modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
-                                "РњРѕСЃС‚ РџРљ РЅРµРґРѕСЃС‚СѓРїРµРЅ вЂ” РїРµСЂРµРїРёСЃРєР° СЃРѕС…СЂР°РЅСЏРµС‚СЃСЏ РЅР° С‚РµР»РµС„РѕРЅРµ",
+                                "Мост ПК недоступен — переписка сохраняется на телефоне",
                                 color = Color(0xFFFFB74D), fontSize = 12.sp,
                                 modifier = Modifier.weight(1f)
                             )
                             TextButton(onClick = { viewModel.syncRemoteSessionsFromPc() }) {
-                                Text("РџРѕРІС‚РѕСЂРёС‚СЊ", color = Color(0xFFFFB74D))
+                                Text("Повторить", color = Color(0xFFFFB74D))
                             }
                         }
                     }
@@ -619,8 +619,8 @@ fun MainScreen(
                     }
 
                     DrawerSection.PLUGINS -> {
-                        // Р­С‚Р°Рї 6: РµРґРёРЅС‹Р№ РёРЅС‚РµСЂС„РµР№СЃ СЂР°СЃС€РёСЂРµРЅРёР№ вЂ” РџРѕРґРєР»СЋС‡РµРЅРёСЏ /
-                        // РќР°РІС‹РєРё / РџР»Р°РіРёРЅС‹; РІРЅСѓС‚СЂРё РњРѕРё / РљР°С‚Р°Р»РѕРі СЃ РїРѕРёСЃРєРѕРј.
+                        // Этап 6: единый интерфейс расширений — Подключения /
+                        // Навыки / Плагины; внутри Мои / Каталог с поиском.
                         ExtensionsScreen(
                             plugins = installedPlugins,
                             skills = installedSkills,
@@ -759,7 +759,7 @@ fun MainScreen(
             }
         }
 
-        // РњРѕРґР°Р»СЊРЅРѕРµ РјРµРЅСЋ РїСЂРёРєСЂРµРїР»РµРЅРёСЏ С„Р°Р№Р»РѕРІ Рё С„РѕС‚Рѕ (РєРЅРѕРїРєР° `+` РєР°Рє РІ ChatGPT)
+        // Модальное меню прикрепления файлов и фото (кнопка `+` как в ChatGPT)
         if (showAttachmentSheet) {
             ChatGptAttachmentPickerDialog(
                 onTakePhoto = {
@@ -867,7 +867,7 @@ fun MainScreen(
                 onDeleteFile = { fileName -> viewModel.deleteGoogleDriveFile(fileName) },
                 onInsertInChat = { mentionText ->
                     viewModel.sendUserPrompt(
-                        "${mentionText.trim()} РџСЂРѕР°РЅР°Р»РёР·РёСЂСѓР№ СЃРѕРґРµСЂР¶РёРјРѕРµ СЌС‚РѕРіРѕ РѕР±Р»Р°С‡РЅРѕРіРѕ С„Р°Р№Р»Р° РёР· Google Р”РёСЃРєР° (/AntigravityCloud)",
+                        "${mentionText.trim()} Проанализируй содержимое этого облачного файла из Google Диска (/AntigravityCloud)",
                         viaVoice = false
                     )
                     showGoogleDriveSheet = false
@@ -885,7 +885,7 @@ fun MainScreen(
                     viewModel.dispatchSwarmTask(taskPrompt)
                 },
                 onInsertMention = { mentionText ->
-                    viewModel.sendUserPrompt("${mentionText.trim()} Р”РѕР»РѕР¶Рё С‚РµРєСѓС‰РёР№ СЃС‚Р°С‚СѓСЃ", viaVoice = false)
+                    viewModel.sendUserPrompt("${mentionText.trim()} Доложи текущий статус", viaVoice = false)
                 }
             )
         }
@@ -926,10 +926,10 @@ fun MainScreen(
 }
 
 /**
- * Р“Р»Р°РІРЅС‹Р№ СЌРєСЂР°РЅ Р§Р°С‚Р° 1:1 РєР°Рє РІ РѕС„РёС†РёР°Р»СЊРЅРѕРј ChatGPT Android 1.2026.293 Рё Claude Android 1.261029.20:
- * - Р§РёСЃС‚С‹Р№ РІРµСЂС…РЅРёР№ Р±Р°СЂ `Р§Р°С‚ | Р Р°Р±РѕС‚Р°` + РІС‹Р±РѕСЂ РјРѕРґРµР»Рё `Antigravity в–ѕ` СЃ РєРѕРјРїР°РєС‚РЅС‹Рј РёРЅРґРёРєР°С‚РѕСЂРѕРј РєРѕРЅС‚РµРєСЃС‚Р° Рё СЃРєРѕСЂРѕСЃС‚Рё `вљЎ С‚РѕРє/СЃ` (Р±РµР· РїРµСЂРµРіСЂСѓР¶РµРЅРЅС‹С… СЂСЏРґРѕРІ РїР»Р°С€РµРє СЃРІРµСЂС…Сѓ вЂ” Р Р°Р·РґРµР» 11.1)
- * - РљРѕРјРїР°РєС‚РЅР°СЏ РїР»Р°С€РєР° `CodeBackgroundTasksEntryPoint` РІ РїСЂР°РІРѕРј РЅРёР¶РЅРµРј СѓРіР»Сѓ РїСЂСЏРјРѕ РЅР°Рґ СЃС‚СЂРѕРєРѕР№ РІРІРѕРґР° (Р Р°Р·РґРµР»С‹ 11.2, 11.6, 11.7)
- * - РќРёР¶РЅСЏСЏ РєР°РїСЃСѓР»Р° `+ РЎРїСЂРѕСЃРёС‚СЊ Antigravity рџЋ¤ |||`.
+ * Главный экран Чата 1:1 как в официальном ChatGPT Android 1.2026.293 и Claude Android 1.261029.20:
+ * - Чистый верхний бар `Чат | Работа` + выбор модели `Antigravity ▾` с компактным индикатором контекста и скорости `⚡ ток/с` (без перегруженных рядов плашек сверху — Раздел 11.1)
+ * - Компактная плашка `CodeBackgroundTasksEntryPoint` в правом нижнем углу прямо над строкой ввода (Разделы 11.2, 11.6, 11.7)
+ * - Нижняя капсула `+ Спросить Antigravity 🎤 |||`.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1021,20 +1021,20 @@ private fun ChatGptMainChatScreen(
     }
     val adaptiveInputPlaceholder = remember(isOpenRouterModel, isVideoModel, isImageModel, shortModelSubtitle) {
         when {
-            isVideoModel -> "РћРїРёС€РёС‚Рµ РІРёРґРµРѕ РґР»СЏ РіРµРЅРµСЂР°С†РёРё ($shortModelSubtitle)вЂ¦"
-            isImageModel -> "РћРїРёС€РёС‚Рµ РёР·РѕР±СЂР°Р¶РµРЅРёРµ РґР»СЏ РіРµРЅРµСЂР°С†РёРё ($shortModelSubtitle)вЂ¦"
-            isOpenRouterModel -> "РЎРїСЂРѕСЃРёС‚СЊ $shortModelSubtitle (/ СЃРєРёР»Р»С‹, @ Р°РіРµРЅС‚С‹)"
-            else -> "РЎРїСЂРѕСЃРёС‚СЊ Antigravity (/ СЃРєРёР»Р»С‹, @ Р°РіРµРЅС‚С‹)"
+            isVideoModel -> "Опишите видео для генерации ($shortModelSubtitle)…"
+            isImageModel -> "Опишите изображение для генерации ($shortModelSubtitle)…"
+            isOpenRouterModel -> "Спросить $shortModelSubtitle (/ скиллы, @ агенты)"
+            else -> "Спросить Antigravity (/ скиллы, @ агенты)"
         }
     }
     val adaptiveModelModeHint = remember(isOpenRouterModel, isVideoModel, isImageModel, isReasoningModel, isVisionModel, shortModelSubtitle) {
         when {
-            isVideoModel -> "$shortModelSubtitle вЂў Р РµР¶РёРј РіРµРЅРµСЂР°С†РёРё РІРёРґРµРѕ (MP4)"
-            isImageModel -> "$shortModelSubtitle вЂў Р РµР¶РёРј РіРµРЅРµСЂР°С†РёРё РёР·РѕР±СЂР°Р¶РµРЅРёР№ (PNG)"
-            isOpenRouterModel && isReasoningModel && isVisionModel -> "$shortModelSubtitle вЂў Reasoning & Vision"
-            isOpenRouterModel && isReasoningModel -> "$shortModelSubtitle вЂў Р“Р»СѓР±РѕРєРѕРµ СЂР°СЃСЃСѓР¶РґРµРЅРёРµ (Reasoning)"
-            isOpenRouterModel && isVisionModel -> "$shortModelSubtitle вЂў РњСѓР»СЊС‚РёРјРѕРґР°Р»СЊРЅС‹Р№ С‡Р°С‚ (Vision)"
-            isOpenRouterModel -> "$shortModelSubtitle вЂў РўРµРєСЃС‚РѕРІС‹Р№ С‡Р°С‚ Рё РёРЅСЃС‚СЂСѓРјРµРЅС‚С‹"
+            isVideoModel -> "$shortModelSubtitle • Режим генерации видео (MP4)"
+            isImageModel -> "$shortModelSubtitle • Режим генерации изображений (PNG)"
+            isOpenRouterModel && isReasoningModel && isVisionModel -> "$shortModelSubtitle • Reasoning & Vision"
+            isOpenRouterModel && isReasoningModel -> "$shortModelSubtitle • Глубокое рассуждение (Reasoning)"
+            isOpenRouterModel && isVisionModel -> "$shortModelSubtitle • Мультимодальный чат (Vision)"
+            isOpenRouterModel -> "$shortModelSubtitle • Текстовый чат и инструменты"
             else -> ""
         }
     }
@@ -1108,7 +1108,7 @@ private fun ChatGptMainChatScreen(
                                 .clickable { onSelectTopTab(TopModeTab.CHAT) }
                         ) {
                             Text(
-                                text = "Р§Р°С‚",
+                                text = "Чат",
                                 color = if (isChat) Color.White else Color(0xFF9E9E9E),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold
@@ -1125,7 +1125,7 @@ private fun ChatGptMainChatScreen(
                                 .clickable { onSelectTopTab(TopModeTab.WORK_SESSIONS) }
                         ) {
                             Text(
-                                text = "Р Р°Р±РѕС‚Р°",
+                                text = "Работа",
                                 color = if (!isChat) Color.White else Color(0xFF9E9E9E),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold
@@ -1159,15 +1159,15 @@ private fun ChatGptMainChatScreen(
                         Spacer(modifier = Modifier.width(2.dp))
                         Icon(
                             imageVector = Icons.Default.KeyboardArrowDown,
-                            contentDescription = "Р’С‹Р±СЂР°С‚СЊ РјРѕРґРµР»СЊ",
+                            contentDescription = "Выбрать модель",
                             tint = Color(0xFFB0B0B0),
                             modifier = Modifier.size(15.dp)
                         )
                     }
 
-                    // РљРѕРјРїР°РєС‚РЅС‹Р№ РёРЅРґРёРєР°С‚РѕСЂ РєРѕРЅС‚РµРєСЃС‚Р° РІ РїРѕРґР·Р°РіРѕР»РѕРІРєРµ (РѕС‚РєСЂС‹РІР°РµС‚ СЃР¶Р°С‚РѕРµ РљРѕРЅС‚РµРєСЃС‚РЅРѕРµ РѕРєРЅРѕ)
+                    // Компактный индикатор контекста в подзаголовке (открывает сжатое Контекстное окно)
                     Text(
-                        text = "вЂў $compactContextLabel",
+                        text = "• $compactContextLabel",
                         color = Color(0xFF6B7280),
                         fontSize = 11.sp,
                         fontFamily = FontFamily.Monospace,
@@ -1184,13 +1184,13 @@ private fun ChatGptMainChatScreen(
             DashedBubbleCircleButton(onClick = onNewChat)
             Box {
                 IconButton(onClick = { showChatMenu = true }) {
-                    Icon(Icons.Default.MoreHoriz, "РњРµРЅСЋ С‡Р°С‚Р°", tint = Color.White)
+                    Icon(Icons.Default.MoreHoriz, "Меню чата", tint = Color.White)
                 }
                 androidx.compose.material3.DropdownMenu(expanded = showChatMenu, onDismissRequest = { showChatMenu = false }) {
-                    androidx.compose.material3.DropdownMenuItem(text = { Text("РџРѕРёСЃРє РІ С‡Р°С‚Рµ") }, onClick = {
+                    androidx.compose.material3.DropdownMenuItem(text = { Text("Поиск в чате") }, onClick = {
                         showSearch = true; showChatMenu = false
                     })
-                    androidx.compose.material3.DropdownMenuItem(text = { Text("РЎРѕРґРµСЂР¶Р°РЅРёРµ СЂР°Р·РіРѕРІРѕСЂР°") }, onClick = {
+                    androidx.compose.material3.DropdownMenuItem(text = { Text("Содержание разговора") }, onClick = {
                         showOutline = true; showChatMenu = false
                     })
                 }
@@ -1199,7 +1199,7 @@ private fun ChatGptMainChatScreen(
         if (showSearch) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(value = searchQuery, onValueChange = { searchQuery = it; searchPosition = 0 },
-                    placeholder = { Text("РџРѕРёСЃРє РІ С‡Р°С‚Рµ") }, singleLine = true,
+                    placeholder = { Text("Поиск в чате") }, singleLine = true,
                     modifier = Modifier.weight(1f),
                     colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
                         focusedTextColor = Color.White, unfocusedTextColor = Color.White),
@@ -1207,21 +1207,21 @@ private fun ChatGptMainChatScreen(
                         color = Color(0xFF9E9E9E), fontSize = 12.sp) })
                 IconButton(enabled = searchMatches.isNotEmpty(), onClick = {
                     searchPosition = (searchPosition - 1 + searchMatches.size) % searchMatches.size
-                }) { Icon(Icons.Default.ExpandLess, "РџСЂРµРґС‹РґСѓС‰РµРµ СЃРѕРІРїР°РґРµРЅРёРµ", tint = Color(0xFFB4B4B4)) }
+                }) { Icon(Icons.Default.ExpandLess, "Предыдущее совпадение", tint = Color(0xFFB4B4B4)) }
                 IconButton(enabled = searchMatches.isNotEmpty(), onClick = {
                     searchPosition = (searchPosition + 1) % searchMatches.size
-                }) { Icon(Icons.Default.ExpandMore, "РЎР»РµРґСѓСЋС‰РµРµ СЃРѕРІРїР°РґРµРЅРёРµ", tint = Color(0xFFB4B4B4)) }
+                }) { Icon(Icons.Default.ExpandMore, "Следующее совпадение", tint = Color(0xFFB4B4B4)) }
                 IconButton(onClick = { showSearch = false; searchQuery = "" }) {
-                    Icon(Icons.Default.Close, "Р—Р°РєСЂС‹С‚СЊ РїРѕРёСЃРє", tint = Color(0xFFB4B4B4))
+                    Icon(Icons.Default.Close, "Закрыть поиск", tint = Color(0xFFB4B4B4))
                 }
             }
         }
         if (showOutline) {
             ModalBottomSheet(onDismissRequest = { showOutline = false }, containerColor = Color(0xFF1C1C1E), contentColor = Color.White) {
-                Text("РЎРѕРґРµСЂР¶Р°РЅРёРµ СЂР°Р·РіРѕРІРѕСЂР°", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(20.dp))
+                Text("Содержание разговора", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(20.dp))
                 LazyColumn(Modifier.fillMaxWidth().heightIn(max = 480.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
                     val turns = messages.withIndex().filter { it.value.role == MessageRole.USER }
-                    if (turns.isEmpty()) item { Text("Р’ СЌС‚РѕРј С‡Р°С‚Рµ РїРѕРєР° РЅРµС‚ СЃРѕРѕР±С‰РµРЅРёР№", color = Color.Gray, modifier = Modifier.padding(20.dp)) }
+                    if (turns.isEmpty()) item { Text("В этом чате пока нет сообщений", color = Color.Gray, modifier = Modifier.padding(20.dp)) }
                     items(turns, key = { it.value.id }) { turn ->
                         Text(turn.value.content.ifBlank { turn.value.attachments.joinToString { it.name } },
                             maxLines = 2, overflow = TextOverflow.Ellipsis,
@@ -1284,7 +1284,7 @@ private fun ChatGptMainChatScreen(
                     }
                 }
             } else {
-                // РџСѓСЃС‚РѕРµ СЃРѕСЃС‚РѕСЏРЅРёРµ 1:1 РєР°Рє РІ РѕС„РёС†РёР°Р»СЊРЅРѕРј ChatGPT Android 1.2026.293 (СЃ Р°РґР°РїС‚Р°С†РёРµР№ РїРѕРґ РІС‹Р±СЂР°РЅРЅСѓСЋ РјРѕРґРµР»СЊ)
+                // Пустое состояние 1:1 как в официальном ChatGPT Android 1.2026.293 (с адаптацией под выбранную модель)
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -1293,7 +1293,7 @@ private fun ChatGptMainChatScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "Р§РµРј СЏ РјРѕРіСѓ РїРѕРјРѕС‡СЊ?",
+                        text = "Чем я могу помочь?",
                         color = Color.White,
                         fontSize = 24.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -1318,13 +1318,13 @@ private fun ChatGptMainChatScreen(
                         navigationScope.launch { listState.scrollToItem(messages.lastIndex, Int.MAX_VALUE) }
                     }, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp),
                     colors = androidx.compose.material3.IconButtonDefaults.filledIconButtonColors(containerColor = Color(0xFF303030))
-                ) { Icon(Icons.Default.KeyboardArrowDown, "Рљ РїРѕСЃР»РµРґРЅРµРјСѓ СЃРѕРѕР±С‰РµРЅРёСЋ", tint = Color.White) }
+                ) { Icon(Icons.Default.KeyboardArrowDown, "К последнему сообщению", tint = Color.White) }
             }
         }
 
         val isSwarmTaskActive by viewModel.isSwarmTaskActive.collectAsState()
 
-        // РљРѕРјРїР°РєС‚РЅР°СЏ РїР»Р°С€РєР° С„РѕРЅРѕРІС‹С… Р·Р°РґР°С‡ РїРѕСЏРІР»СЏРµС‚СЃСЏ С‚РѕР»СЊРєРѕ РїСЂРё СЂРµР°Р»СЊРЅРѕ Р·Р°РїСѓС‰РµРЅРЅРѕР№ С„РѕРЅРѕРІРѕР№/РјСѓР»СЊС‚РёР°РіРµРЅС‚РЅРѕР№ Р·Р°РґР°С‡Рµ
+        // Компактная плашка фоновых задач появляется только при реально запущенной фоновой/мультиагентной задаче
         if (forceExpandBgTasks || isSwarmTaskActive) {
             CodeBackgroundTasksEntryPoint(
                 agents = swarmAgents,
@@ -1336,7 +1336,7 @@ private fun ChatGptMainChatScreen(
                 onDispatchCodeTask = { viewModel.dispatchSwarmTask(it, prepareChanges = true) },
                 onDispatchSwarmTask = { prompt -> viewModel.dispatchSwarmTask(prompt) },
                 onInsertMention = { mentionText ->
-                    viewModel.sendUserPrompt("${mentionText.trim()} Р”РѕР»РѕР¶Рё С‚РµРєСѓС‰РёР№ СЃС‚Р°С‚СѓСЃ", viaVoice = false)
+                    viewModel.sendUserPrompt("${mentionText.trim()} Доложи текущий статус", viaVoice = false)
                 },
                 forceExpandedInline = forceExpandBgTasks
             )
@@ -1401,7 +1401,7 @@ private fun Round5QuickHubBar(
         )
 
         QuickHubPill(
-            text = "Р—Р°РґР°С‡Рё ($swarmAgentsCount)",
+            text = "Задачи ($swarmAgentsCount)",
             accentColor = Color(0xFFF59E0B),
             onClick = onOpenSwarmSheet
         )
@@ -1413,13 +1413,13 @@ private fun Round5QuickHubBar(
         )
 
         QuickHubPill(
-            text = "рџ§Є РџРµСЃРѕС‡РЅРёС†Р°",
+            text = "🧪 Песочница",
             accentColor = Color(0xFFA78BFA),
             onClick = { onOpenCliSandboxSheet(1) }
         )
 
         QuickHubPill(
-            text = "рџ›ЎпёЏ Р Р°Р·СЂРµС€РµРЅРёСЏ",
+            text = "🛡️ Разрешения",
             accentColor = Color(0xFF34D399),
             onClick = onOpenPermissionsSheet
         )
@@ -1453,16 +1453,16 @@ private fun QuickHubPill(
 private fun formatEnvironmentRu(raw: String): String {
     val lower = raw.lowercase()
     return when {
-        lower.contains("phone") || lower.contains("sdcard") || lower.contains("СЃРјР°СЂС‚С„РѕРЅ") -> "РџР°РјСЏС‚СЊ СЃРјР°СЂС‚С„РѕРЅР°"
-        lower.contains("cloud") || lower.contains("РѕР±Р»Р°РєРѕ") -> "РћР±Р»Р°РєРѕ Google"
-        lower.contains("cr05318") || lower.contains("base environment") || lower.contains("win-11") -> "Р Р°Р±РѕС‡Р°СЏ СЃС‚Р°РЅС†РёСЏ РџРљ"
+        lower.contains("phone") || lower.contains("sdcard") || lower.contains("смартфон") -> "Память смартфона"
+        lower.contains("cloud") || lower.contains("облако") -> "Облако Google"
+        lower.contains("cr05318") || lower.contains("base environment") || lower.contains("win-11") -> "Рабочая станция ПК"
         else -> raw
     }
 }
 
 /**
- * Р­РєСЂР°РЅ СѓР¶Рµ СЃРѕР·РґР°РЅРЅС‹С… СѓРґР°Р»С‘РЅРЅС‹С… СЃРµСЃСЃРёР№ (`Р Р°Р±РѕС‚Р°`).
- * РќР°Р¶Р°С‚РёРµ РЅР° Р»СЋР±СѓСЋ СЃРµСЃСЃРёСЋ СЃСЂР°Р·Сѓ РѕС‚РєСЂС‹РІР°РµС‚ Р§Р°С‚ СЃРѕ РІСЃРµРјРё РїСЂРѕС€Р»С‹РјРё СЃРѕРѕР±С‰РµРЅРёСЏРјРё СЌС‚РѕР№ СЃРµСЃСЃРёРё!
+ * Экран уже созданных удалённых сессий (`Работа`).
+ * Нажатие на любую сессию сразу открывает Чат со всеми прошлыми сообщениями этой сессии!
  */
 @Composable
 private fun ChatGptRemoteSessionsCodexScreen(
@@ -1551,7 +1551,7 @@ private fun ChatGptRemoteSessionsCodexScreen(
                             .clickable { onSelectTopTab(TopModeTab.CHAT) }
                     ) {
                         Text(
-                            text = "Р§Р°С‚",
+                            text = "Чат",
                             color = if (isChat) Color.White else Color(0xFF9E9E9E),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold
@@ -1568,7 +1568,7 @@ private fun ChatGptRemoteSessionsCodexScreen(
                             .clickable { onSelectTopTab(TopModeTab.WORK_SESSIONS) }
                     ) {
                         Text(
-                            text = "Р Р°Р±РѕС‚Р°",
+                            text = "Работа",
                             color = if (!isChat) Color.White else Color(0xFF9E9E9E),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold
@@ -1584,7 +1584,7 @@ private fun ChatGptRemoteSessionsCodexScreen(
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = onSearchQueryChange,
-                placeholder = { Text("РџРѕРёСЃРє СѓРґР°Р»С‘РЅРЅРѕР№ СЃРµСЃСЃРёРё...", color = Color(0xFF8E8E8E)) },
+                placeholder = { Text("Поиск удалённой сессии...", color = Color(0xFF8E8E8E)) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 4.dp),
@@ -1683,7 +1683,7 @@ private fun ChatGptRemoteSessionsCodexScreen(
                         .padding(top = 6.dp, bottom = 4.dp)
                 ) {
                     Text(
-                        text = "РќРµРґР°РІРЅРёРµ",
+                        text = "Недавние",
                         color = Color.White,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold
@@ -1719,7 +1719,7 @@ private fun ChatGptRemoteSessionsCodexScreen(
                         Spacer(modifier = Modifier.width(7.dp))
                         Text(
                             text = if (session.messageCount > 0) {
-                                "$cleanEnv вЂў ${session.messageCount} СЃРѕРѕР±С‰."
+                                "$cleanEnv • ${session.messageCount} сообщ."
                             } else {
                                 cleanEnv
                             },
@@ -1732,7 +1732,7 @@ private fun ChatGptRemoteSessionsCodexScreen(
 
             item {
                 Text(
-                    text = "Р‘РѕР»СЊС€Рµ РґРёР°Р»РѕРіРѕРІ РЅРµС‚",
+                    text = "Больше диалогов нет",
                     color = Color(0xFF8E8E8E),
                     fontSize = 14.sp,
                     textAlign = TextAlign.Center,
@@ -1747,7 +1747,7 @@ private fun ChatGptRemoteSessionsCodexScreen(
 
         ChatGptBottomInputPill(
             viewModel = viewModel,
-            placeholderText = "РЎРїСЂРѕСЃРёС‚СЊ Antigravity (/ СЃРєРёР»Р»С‹, @ Р°РіРµРЅС‚С‹)",
+            placeholderText = "Спросить Antigravity (/ скиллы, @ агенты)",
             pendingAttachments = pendingAttachments,
             isDictatingInline = isDictatingInline,
             isStreaming = isAnyMessageStreaming,
@@ -1772,8 +1772,8 @@ private fun ChatGptRemoteSessionsCodexScreen(
 }
 
 /**
- * Р‘РѕРєРѕРІРѕРµ РјРµРЅСЋ РЅР°РІРёРіР°С†РёРё 1:1 РєР°Рє РІ ChatGPT Android (Р Р°Р·РґРµР»С‹ 11.1, 11.5, 11.6):
- * РѕС‚РґРµР»СЊРЅС‹Рµ РїСѓРЅРєС‚С‹ РІ Р»РµРІРѕРј РјРµРЅСЋ (Р±РµР· РґСѓР±Р»РёСЂРѕРІР°РЅРёСЏ Р¤РѕРЅРѕРІС‹С… Р·Р°РґР°С‡ Рё СЃСѓР±Р°РіРµРЅС‚РѕРІ, РєРѕС‚РѕСЂС‹Рµ РЅР°С…РѕРґСЏС‚СЃСЏ РЅР°Рґ РїРѕР»РµРј РІРІРѕРґР° С‡Р°С‚Р°).
+ * Боковое меню навигации 1:1 как в ChatGPT Android (Разделы 11.1, 11.5, 11.6):
+ * отдельные пункты в левом меню (без дублирования Фоновых задач и субагентов, которые находятся над полем ввода чата).
  */
 @Composable
 private fun ChatGptExactNavigationDrawer(
@@ -1833,8 +1833,8 @@ private fun DrawerMenuRow(
 }
 
 /**
- * РќРёР¶РЅСЏСЏ РєР°РїСЃСѓР»Р° РІРІРѕРґР° 1:1 РєР°Рє РІ ChatGPT Android, СЃ РїРѕРґРґРµСЂР¶РєРѕР№ РїСЂРёРєСЂРµРїР»С‘РЅРЅС‹С… С„Р°Р№Р»РѕРІ РЅР°Рґ СЃС‚СЂРѕРєРѕР№ С‚РµРєСЃС‚Р°
- * Рё СЂРµР°РєС‚РёРІРЅС‹Рј Р°РІС‚РѕРґРѕРїРѕР»РЅРµРЅРёРµРј `/` (СЃРєРёР»Р»С‹ Рё РєРѕРјР°РЅРґС‹) Рё `@` (РєРѕРЅС‚РµРєСЃС‚ Рё СЃСѓР±-Р°РіРµРЅС‚С‹ СЂРѕСЏ).
+ * Нижняя капсула ввода 1:1 как в ChatGPT Android, с поддержкой прикреплённых файлов над строкой текста
+ * и реактивным автодополнением `/` (скиллы и команды) и `@` (контекст и суб-агенты роя).
  */
 @Composable
 private fun ChatGptBottomInputPill(
@@ -1926,11 +1926,11 @@ private fun ChatGptBottomInputPill(
     ) {
         currentQueue.forEach { queued ->
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Р’ РѕС‡РµСЂРµРґРё: ${queued.prompt}", color = Color(0xFF9E9E9E), maxLines = 1,
+                Text("В очереди: ${queued.prompt}", color = Color(0xFF9E9E9E), maxLines = 1,
                     overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                if (!isStreaming) TextButton(onClick = { viewModel.sendQueuedFollowUp(queued.id) }) { Text("РћС‚РїСЂР°РІРёС‚СЊ") }
+                if (!isStreaming) TextButton(onClick = { viewModel.sendQueuedFollowUp(queued.id) }) { Text("Отправить") }
                 IconButton(onClick = { viewModel.removeQueuedFollowUp(queued.id) }) {
-                    Icon(Icons.Default.Close, contentDescription = "РЈРґР°Р»РёС‚СЊ СЃРѕРѕР±С‰РµРЅРёРµ РёР· РѕС‡РµСЂРµРґРё", tint = Color.Gray)
+                    Icon(Icons.Default.Close, contentDescription = "Удалить сообщение из очереди", tint = Color.Gray)
                 }
             }
         }
@@ -1963,7 +1963,7 @@ private fun ChatGptBottomInputPill(
                 }
             }
         }
-        // Р РµР°РєС‚РёРІРЅРѕРµ РІСЃРїР»С‹РІР°СЋС‰РµРµ РјРµРЅСЋ `/` (СЃРєРёР»Р»С‹ Рё РєРѕРјР°РЅРґС‹) Рё `@` (СѓРїРѕРјРёРЅР°РЅРёСЏ, СЃСѓР±-Р°РіРµРЅС‚С‹ СЂРѕСЏ, С„Р°Р№Р»С‹)
+        // Реактивное всплывающее меню `/` (скиллы и команды) и `@` (упоминания, суб-агенты роя, файлы)
         if (slashAndMentionSuggestions.isNotEmpty()) {
             SlashAndMentionPopup(
                 suggestions = slashAndMentionSuggestions,
@@ -2017,7 +2017,7 @@ private fun ChatGptBottomInputPill(
             )
         }
 
-        // РџР»Р°С€РєРё РїСЂРёРєСЂРµРїР»С‘РЅРЅС‹С… С„Р°Р№Р»РѕРІ РЅР°Рґ РїРѕР»РµРј РІРІРѕРґР° (РєР°Рє РІ ChatGPT РїСЂРё Р·Р°РіСЂСѓР·РєРµ С„Р°Р№Р»РѕРІ)
+        // Плашки прикреплённых файлов над полем ввода (как в ChatGPT при загрузке файлов)
         if (pendingAttachments.isNotEmpty()) {
             Row(
                 modifier = Modifier
@@ -2051,7 +2051,7 @@ private fun ChatGptBottomInputPill(
                                     maxLines = 1
                                 )
                                 Text(
-                                    text = "${(att.sizeBytes / 1024).coerceAtLeast(1)} РљР‘",
+                                    text = "${(att.sizeBytes / 1024).coerceAtLeast(1)} КБ",
                                     color = Color(0xFF8E8E8E),
                                     fontSize = 11.sp
                                 )
@@ -2059,7 +2059,7 @@ private fun ChatGptBottomInputPill(
                             Spacer(modifier = Modifier.width(8.dp))
                             Icon(
                                 imageVector = Icons.Default.Close,
-                                contentDescription = "РЈРґР°Р»РёС‚СЊ РІР»РѕР¶РµРЅРёРµ",
+                                contentDescription = "Удалить вложение",
                                 tint = Color(0xFFB0B0B0),
                                 modifier = Modifier
                                     .size(18.dp)
@@ -2092,7 +2092,7 @@ private fun ChatGptBottomInputPill(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Add,
-                        contentDescription = "Р—Р°РіСЂСѓР·РёС‚СЊ С„Р°Р№Р»С‹ РёР»Рё С„РѕС‚Рѕ",
+                        contentDescription = "Загрузить файлы или фото",
                         tint = Color.White,
                         modifier = Modifier.size(22.dp)
                     )
@@ -2106,7 +2106,7 @@ private fun ChatGptBottomInputPill(
                 ) {
                     if (text.isEmpty()) {
                         Text(
-                            text = if (pendingAttachments.isNotEmpty()) "Р”РѕР±Р°РІСЊС‚Рµ СЃРѕРѕР±С‰РµРЅРёРµ Рє С„Р°Р№Р»Сѓ..." else if (isStreaming) "РЎРѕРѕР±С‰РµРЅРёРµ РІ РѕС‡РµСЂРµРґСЊвЂ¦" else placeholderText,
+                            text = if (pendingAttachments.isNotEmpty()) "Добавьте сообщение к файлу..." else if (isStreaming) "Сообщение в очередь…" else placeholderText,
                             color = Color(0xFF8E8E8E),
                             fontSize = 15.sp,
                             maxLines = 1,
@@ -2143,7 +2143,7 @@ private fun ChatGptBottomInputPill(
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Mic,
-                        contentDescription = "Р“РѕР»РѕСЃРѕРІР°СЏ РґРёРєС‚РѕРІРєР° РІ С‚РµРєСЃС‚",
+                        contentDescription = "Голосовая диктовка в текст",
                         tint = Color.White,
                         modifier = Modifier.size(22.dp)
                     )
@@ -2156,7 +2156,7 @@ private fun ChatGptBottomInputPill(
                         val toQueue = text
                         viewModel.setComposerDraft("")
                         onSendPrompt(toQueue)
-                    }) { Icon(Icons.Default.ArrowUpward, "Р”РѕР±Р°РІРёС‚СЊ РІ РѕС‡РµСЂРµРґСЊ", tint = Color.White) }
+                    }) { Icon(Icons.Default.ArrowUpward, "Добавить в очередь", tint = Color.White) }
                     Box(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier
@@ -2167,7 +2167,7 @@ private fun ChatGptBottomInputPill(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Stop,
-                            contentDescription = "РћСЃС‚Р°РЅРѕРІРёС‚СЊ РіРµРЅРµСЂР°С†РёСЋ",
+                            contentDescription = "Остановить генерацию",
                             tint = Color.Black,
                             modifier = Modifier.size(20.dp)
                         )
@@ -2188,7 +2188,7 @@ private fun ChatGptBottomInputPill(
                     ) {
                         Icon(
                             imageVector = Icons.Default.ArrowUpward,
-                            contentDescription = "РћС‚РїСЂР°РІРёС‚СЊ",
+                            contentDescription = "Отправить",
                             tint = Color.Black,
                             modifier = Modifier.size(22.dp)
                         )
@@ -2202,7 +2202,7 @@ private fun ChatGptBottomInputPill(
 }
 
 /**
- * РќРёР¶РЅСЏСЏ С€С‚РѕСЂРєР° РІС‹Р±РѕСЂР° РІР»РѕР¶РµРЅРёР№ РїРѕ РєРЅРѕРїРєРµ `+` 1:1 РєР°Рє РІ ChatGPT Android 1.2026.293 (`ModalBottomSheet`).
+ * Нижняя шторка выбора вложений по кнопке `+` 1:1 как в ChatGPT Android 1.2026.293 (`ModalBottomSheet`).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -2227,26 +2227,26 @@ private fun ChatGptAttachmentPickerDialog(
                 .padding(horizontal = 20.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // 3 Р±РѕР»СЊС€РёРµ РїР»РёС‚РєРё СЃРІРµСЂС…Сѓ (РљР°РјРµСЂР° | Р¤РѕС‚РѕРіСЂР°С„РёРё | Р¤Р°Р№Р»С‹), РєР°Рє РІ ChatGPT Android 1.2026.293
+            // 3 большие плитки сверху (Камера | Фотографии | Файлы), как в ChatGPT Android 1.2026.293
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 AttachmentTileButton(
                     icon = Icons.Default.CameraAlt,
-                    label = "РљР°РјРµСЂР°",
+                    label = "Камера",
                     onClick = onTakePhoto,
                     modifier = Modifier.weight(1f)
                 )
                 AttachmentTileButton(
                     icon = Icons.Default.Image,
-                    label = "Р¤РѕС‚РѕРіСЂР°С„РёРё",
+                    label = "Фотографии",
                     onClick = onPickPhotos,
                     modifier = Modifier.weight(1f)
                 )
                 AttachmentTileButton(
                     icon = Icons.Default.AttachFile,
-                    label = "Р¤Р°Р№Р»С‹",
+                    label = "Файлы",
                     onClick = onPickAnyFiles,
                     modifier = Modifier.weight(1f)
                 )
@@ -2272,13 +2272,13 @@ private fun ChatGptAttachmentPickerDialog(
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
-                            text = "РџРѕРёСЃРє Рё С„Р°Р№Р»С‹ РІ С‚РµР»РµС„РѕРЅРµ",
+                            text = "Поиск и файлы в телефоне",
                             color = Color.White,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
-                            text = "РќР°Р№С‚Рё РґРѕРєСѓРјРµРЅС‚С‹, С„РѕС‚Рѕ, РєРѕРЅС‚Р°РєС‚С‹ РёР»Рё СЃРѕР·РґР°С‚СЊ С„Р°Р№Р» РЅР° СЃРјР°СЂС‚С„РѕРЅРµ",
+                            text = "Найти документы, фото, контакты или создать файл на смартфоне",
                             color = Color(0xFF9E9E9E),
                             fontSize = 12.sp
                         )
@@ -2328,7 +2328,7 @@ private fun AttachmentTileButton(
 }
 
 /**
- * Р Р°Р·РґРµР» Р‘РѕРєРѕРІРѕРіРѕ РњРµРЅСЋ: `Р‘РёР±Р»РёРѕС‚РµРєР°` (РђСЂС‚РµС„Р°РєС‚С‹ СЃРµСЃСЃРёР№ РџРљ + С„Р°Р№Р»С‹ СЃРјР°СЂС‚С„РѕРЅР°).
+ * Раздел Бокового Меню: `Библиотека` (Артефакты сессий ПК + файлы смартфона).
  */
 @Composable
 private fun ChatGptLibraryScreen(
@@ -2356,9 +2356,9 @@ private fun ChatGptImagesScreen(
     onSendImagePrompt: (String) -> Unit
 ) {
     val presets = listOf(
-        "РЎРіРµРЅРµСЂРёСЂСѓР№ РєРѕРЅС†РµРїС‚ РёРєРѕРЅРєРё Android-РїСЂРёР»РѕР¶РµРЅРёСЏ Antigravity РІ С‚С‘РјРЅРѕРј СЃС‚РёР»Рµ",
-        "РќР°СЂРёСЃСѓР№ Р°СЂС…РёС‚РµРєС‚СѓСЂРЅСѓСЋ РґРёР°РіСЂР°РјРјСѓ РіРѕР»РѕСЃРѕРІРѕРіРѕ РґРІРёР¶РєР° Рё РјРѕСЃС‚Р° СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёРё",
-        "РЎРѕР·РґР°Р№ UI-РјР°РєРµС‚ СЌРєСЂР°РЅР° СѓРґР°Р»С‘РЅРЅС‹С… СЃРµСЃСЃРёР№ РІ СЃС‚РёР»Рµ ChatGPT Dark"
+        "Сгенерируй концепт иконки Android-приложения Antigravity в тёмном стиле",
+        "Нарисуй архитектурную диаграмму голосового движка и моста синхронизации",
+        "Создай UI-макет экрана удалённых сессий в стиле ChatGPT Dark"
     )
 
     Column(
@@ -2371,7 +2371,7 @@ private fun ChatGptImagesScreen(
         Row(verticalAlignment = Alignment.CenterVertically) {
             TwoLineMenuCircleButton(onClick = onOpenDrawer)
             Spacer(modifier = Modifier.width(14.dp))
-            Text("РР·РѕР±СЂР°Р¶РµРЅРёСЏ", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text("Изображения", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
@@ -2383,7 +2383,7 @@ private fun ChatGptImagesScreen(
             ) {
                 Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("РР· РіР°Р»РµСЂРµРё")
+                Text("Из галереи")
             }
             Button(
                 onClick = onTakeCameraPhoto,
@@ -2393,11 +2393,11 @@ private fun ChatGptImagesScreen(
             ) {
                 Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("РљР°РјРµСЂР°")
+                Text("Камера")
             }
         }
 
-        Text("Р‘С‹СЃС‚СЂС‹Рµ С€Р°Р±Р»РѕРЅС‹ РіРµРЅРµСЂР°С†РёРё Рё Р°РЅР°Р»РёР·Р° РёР·РѕР±СЂР°Р¶РµРЅРёР№", color = Color(0xFF8E8E8E), fontSize = 13.sp)
+        Text("Быстрые шаблоны генерации и анализа изображений", color = Color(0xFF8E8E8E), fontSize = 13.sp)
 
         presets.forEach { preset ->
             Surface(
@@ -2419,7 +2419,7 @@ private fun ChatGptImagesScreen(
 }
 
 /**
- * Р Р°Р·РґРµР» Р‘РѕРєРѕРІРѕРіРѕ РњРµРЅСЋ: `Р—Р°РїР»Р°РЅРёСЂРѕРІР°РЅРѕ` (С„РѕРЅРѕРІС‹Рµ СЂР°СЃРїРёСЃР°РЅРёСЏ Р·Р°РґР°С‡).
+ * Раздел Бокового Меню: `Запланировано` (фоновые расписания задач).
  */
 @Composable
 private fun ChatGptScheduledScreen(
@@ -2430,7 +2430,7 @@ private fun ChatGptScheduledScreen(
     onRunTaskNow: (ScheduledAutomationItem) -> Unit
 ) {
     var newTitle by remember { mutableStateOf("") }
-    var newCron by remember { mutableStateOf("РљР°Р¶РґС‹Р№ РґРµРЅСЊ РІ 10:00") }
+    var newCron by remember { mutableStateOf("Каждый день в 10:00") }
 
     Column(
         modifier = Modifier
@@ -2442,7 +2442,7 @@ private fun ChatGptScheduledScreen(
         Row(verticalAlignment = Alignment.CenterVertically) {
             TwoLineMenuCircleButton(onClick = onOpenDrawer)
             Spacer(modifier = Modifier.width(14.dp))
-            Text("Р—Р°РїР»Р°РЅРёСЂРѕРІР°РЅРѕ", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text("Запланировано", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         }
 
         Card(
@@ -2450,11 +2450,11 @@ private fun ChatGptScheduledScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("РќРѕРІРѕРµ СЂР°СЃРїРёСЃР°РЅРёРµ Р·Р°РґР°С‡", color = Color.White, fontWeight = FontWeight.Bold)
+                Text("Новое расписание задач", color = Color.White, fontWeight = FontWeight.Bold)
                 OutlinedTextField(
                     value = newTitle,
                     onValueChange = { newTitle = it },
-                    placeholder = { Text("РћРїРёСЃР°РЅРёРµ Р·Р°РґР°С‡Рё...") },
+                    placeholder = { Text("Описание задачи...") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
@@ -2462,7 +2462,7 @@ private fun ChatGptScheduledScreen(
                     OutlinedTextField(
                         value = newCron,
                         onValueChange = { newCron = it },
-                        label = { Text("РџРµСЂРёРѕРґРёС‡РЅРѕСЃС‚СЊ") },
+                        label = { Text("Периодичность") },
                         modifier = Modifier.weight(1f),
                         singleLine = true
                     )
@@ -2473,7 +2473,7 @@ private fun ChatGptScheduledScreen(
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E5BF6))
                     ) {
-                        Text("Р”РѕР±Р°РІРёС‚СЊ")
+                        Text("Добавить")
                     }
                 }
             }
@@ -2497,7 +2497,7 @@ private fun ChatGptScheduledScreen(
                                 .clickable { onRunTaskNow(task) }
                         ) {
                             Text(task.title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                            Text("Р Р°СЃРїРёСЃР°РЅРёРµ: ${task.cronSchedule}", color = Color(0xFF8E8E8E), fontSize = 12.sp)
+                            Text("Расписание: ${task.cronSchedule}", color = Color(0xFF8E8E8E), fontSize = 12.sp)
                         }
                         Switch(checked = task.enabled, onCheckedChange = { onToggleTask(task.id) })
                     }
@@ -2558,7 +2558,7 @@ private fun DashedBubbleCircleButton(onClick: () -> Unit) {
                     cap = StrokeCap.Round
                 )
             )
-            // РҐРІРѕСЃС‚РёРє СЂРµС‡РµРІРѕРіРѕ РїСѓР·С‹СЂСЏ РІ Р»РµРІРѕРј РЅРёР¶РЅРµРј СѓРіР»Сѓ (РєР°Рє РІ ChatGPT 1.2026.293)
+            // Хвостик речевого пузыря в левом нижнем углу (как в ChatGPT 1.2026.293)
             drawLine(
                 color = Color.White,
                 start = Offset(size.width * 0.25f, size.height * 0.75f),
@@ -2582,7 +2582,7 @@ private fun SearchCircleButton(onClick: () -> Unit, sizeDp: Int = 46) {
     ) {
         Icon(
             imageVector = Icons.Default.Search,
-            contentDescription = "РџРѕРёСЃРє",
+            contentDescription = "Поиск",
             tint = Color.White,
             modifier = Modifier.size(22.dp)
         )
@@ -2681,7 +2681,7 @@ private fun ChatGptMessageBubble(
                 putExtra(Intent.EXTRA_TEXT, message.content)
             }
             context.startActivity(
-                Intent.createChooser(sendIntent, "РџРѕРґРµР»РёС‚СЊСЃСЏ СЃРѕРѕР±С‰РµРЅРёРµРј")
+                Intent.createChooser(sendIntent, "Поделиться сообщением")
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
         } catch (_: Throwable) {
@@ -2740,7 +2740,7 @@ private fun ChatGptMessageBubble(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "${att.name} (${(att.sizeBytes / 1024).coerceAtLeast(1)} РљР‘)",
+                                text = "${att.name} (${(att.sizeBytes / 1024).coerceAtLeast(1)} КБ)",
                                 color = Color.White,
                                 fontSize = 12.sp
                             )
@@ -2753,17 +2753,17 @@ private fun ChatGptMessageBubble(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(enabled = !message.isStreaming && versions.selected > 0,
                         onClick = { onSelectVersion(versions.selected - 1) }) {
-                        Icon(Icons.Default.KeyboardArrowLeft, "РџСЂРµРґС‹РґСѓС‰Р°СЏ РІРµСЂСЃРёСЏ", tint = Color.Gray)
+                        Icon(Icons.Default.KeyboardArrowLeft, "Предыдущая версия", tint = Color.Gray)
                     }
                     Text("${versions.selected + 1} / ${versions.branches.size}", color = Color.Gray, fontSize = 12.sp)
                     IconButton(enabled = !message.isStreaming && versions.selected < versions.branches.lastIndex,
                         onClick = { onSelectVersion(versions.selected + 1) }) {
-                        Icon(Icons.Default.KeyboardArrowRight, "РЎР»РµРґСѓСЋС‰Р°СЏ РІРµСЂСЃРёСЏ", tint = Color.Gray)
+                        Icon(Icons.Default.KeyboardArrowRight, "Следующая версия", tint = Color.Gray)
                     }
                 }
             }
             if (isEditingPrompt) {
-                Text("РЎРѕС…СЂР°РЅРµРЅРёРµ СЃРѕР·РґР°СЃС‚ РЅРѕРІСѓСЋ РІРµСЂСЃРёСЋ РІ СЌС‚РѕРј СЂР°Р·РіРѕРІРѕСЂРµ.", color = Color.Gray, fontSize = 12.sp)
+                Text("Сохранение создаст новую версию в этом разговоре.", color = Color.Gray, fontSize = 12.sp)
                 Surface(
                     color = Color(0xFF242424),
                     shape = RoundedCornerShape(18.dp),
@@ -2786,7 +2786,7 @@ private fun ChatGptMessageBubble(
                                 editedText = message.content
                                 isEditingPrompt = false
                             }) {
-                                Text("РћС‚РјРµРЅР°", color = Color.White, fontSize = 12.sp)
+                                Text("Отмена", color = Color.White, fontSize = 12.sp)
                             }
                             Spacer(modifier = Modifier.width(8.dp))
                             Button(
@@ -2797,13 +2797,13 @@ private fun ChatGptMessageBubble(
                                 enabled = editedText.isNotBlank(),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)
                             ) {
-                                Text("РћС‚РїСЂР°РІРёС‚СЊ", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text("Отправить", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
                 }
             } else {
-                // РџСѓР·С‹СЂСЊ СЃРѕРѕР±С‰РµРЅРёСЏ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ 1:1 РєР°Рє РІ ChatGPT Android 1.2026.293 (#2F2F2F, СЃ РїРѕРґРґРµСЂР¶РєРѕР№ РєР»РёРєР°Р±РµР»СЊРЅС‹С… СЃСЃС‹Р»РѕРє)
+                // Пузырь сообщения пользователя 1:1 как в ChatGPT Android 1.2026.293 (#2F2F2F, с поддержкой кликабельных ссылок)
                 Surface(
                     color = Color(0xFF2F2F2F),
                     shape = RoundedCornerShape(22.dp),
@@ -2867,9 +2867,9 @@ private fun ChatGptMessageBubble(
                     }
                     Text(
                         text = if (isReceivingThinking) {
-                            "Р”СѓРјР°СЋвЂ¦ ${message.thinkingDurationSec.coerceAtLeast(1)} СЃ"
+                            "Думаю… ${message.thinkingDurationSec.coerceAtLeast(1)} с"
                         } else {
-                            "Р”СѓРјР°Р» ${message.thinkingDurationSec.coerceAtLeast(1)} СЃ"
+                            "Думал ${message.thinkingDurationSec.coerceAtLeast(1)} с"
                         },
                         color = if (message.isStreaming) Color(0xFFD4D4D4) else Color(0xFF9E9E9E),
                         fontSize = 13.5.sp,
@@ -2879,14 +2879,14 @@ private fun ChatGptMessageBubble(
                         Spacer(modifier = Modifier.width(4.dp))
                         Icon(
                             imageVector = if (message.isThinkingExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                            contentDescription = if (message.isThinkingExpanded) "РЎРІРµСЂРЅСѓС‚СЊ СЂР°Р·РјС‹С€Р»РµРЅРёРµ" else "Р Р°Р·РІРµСЂРЅСѓС‚СЊ СЂР°Р·РјС‹С€Р»РµРЅРёРµ",
+                            contentDescription = if (message.isThinkingExpanded) "Свернуть размышление" else "Развернуть размышление",
                             tint = Color(0xFF9E9E9E),
                             modifier = Modifier.size(16.dp)
                         )
                     }
                 }
 
-                // Р Р°СЃРєСЂС‹РІР°РµРј С‚РѕР»СЊРєРѕ РґР°РЅРЅС‹Рµ СЂР°Р·РјС‹С€Р»РµРЅРёСЏ, РїРѕР»СѓС‡РµРЅРЅС‹Рµ РѕС‚ РїСЂРѕРІР°Р№РґРµСЂР°.
+                // Раскрываем только данные размышления, полученные от провайдера.
                 AnimatedVisibility(visible = message.isThinkingExpanded && thinkingText.isNotEmpty()) {
                     Row(
                         modifier = Modifier
@@ -2918,7 +2918,7 @@ private fun ChatGptMessageBubble(
             }
 
             if (message.isStreaming && thinkingText.isEmpty() && message.content.isBlank() && message.toolCalls.isEmpty()) {
-                Text("РћР¶РёРґР°РЅРёРµ РѕС‚РІРµС‚Р°вЂ¦", color = Color(0xFF9E9E9E), fontSize = 13.sp,
+                Text("Ожидание ответа…", color = Color(0xFF9E9E9E), fontSize = 13.sp,
                     modifier = Modifier.padding(vertical = 4.dp))
             }
 
@@ -2959,13 +2959,13 @@ private fun ChatGptMessageBubble(
                                             else -> Icons.Default.MoreHoriz
                                         },
                                         contentDescription = when (tc.status) {
-                                            ToolCallStatus.COMPLETED -> "Р—Р°РІРµСЂС€РµРЅРѕ"
-                                            ToolCallStatus.FAILED -> "РћС€РёР±РєР°"
-                                            ToolCallStatus.CANCELLED -> "РћСЃС‚Р°РЅРѕРІР»РµРЅРѕ"
-                                            ToolCallStatus.DENIED -> "РћС‚РєР»РѕРЅРµРЅРѕ"
-                                            ToolCallStatus.RUNNING -> "Р’С‹РїРѕР»РЅСЏРµС‚СЃСЏ"
-                                            ToolCallStatus.AWAITING_APPROVAL -> "РћР¶РёРґР°РµС‚ СЂР°Р·СЂРµС€РµРЅРёСЏ"
-                                            ToolCallStatus.APPROVED -> "Р Р°Р·СЂРµС€РµРЅРѕ"
+                                            ToolCallStatus.COMPLETED -> "Завершено"
+                                            ToolCallStatus.FAILED -> "Ошибка"
+                                            ToolCallStatus.CANCELLED -> "Остановлено"
+                                            ToolCallStatus.DENIED -> "Отклонено"
+                                            ToolCallStatus.RUNNING -> "Выполняется"
+                                            ToolCallStatus.AWAITING_APPROVAL -> "Ожидает разрешения"
+                                            ToolCallStatus.APPROVED -> "Разрешено"
                                         },
                                         tint = when (tc.status) {
                                             ToolCallStatus.COMPLETED -> Color(0xFF10A37F)
@@ -2986,7 +2986,7 @@ private fun ChatGptMessageBubble(
                                     if (hasDetails) {
                                         Icon(
                                             imageVector = if (detailsExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                            contentDescription = "Р”РµС‚Р°Р»Рё РёРЅСЃС‚СЂСѓРјРµРЅС‚Р°",
+                                            contentDescription = "Детали инструмента",
                                             tint = Color(0xFF8E8E8E),
                                             modifier = Modifier.size(15.dp)
                                         )
@@ -3001,14 +3001,14 @@ private fun ChatGptMessageBubble(
                                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                                             modifier = Modifier.height(30.dp)
                                         ) {
-                                            Text("Р Р°Р·СЂРµС€РёС‚СЊ", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            Text("Разрешить", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                         }
                                         OutlinedButton(
                                             onClick = { onDecideToolCall(tc.id, ApprovalDecision.DENIED) },
                                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                                             modifier = Modifier.height(30.dp)
                                         ) {
-                                            Text("РћС‚РєР»РѕРЅРёС‚СЊ", color = Color(0xFFF87171), fontSize = 11.sp)
+                                            Text("Отклонить", color = Color(0xFFF87171), fontSize = 11.sp)
                                         }
                                     }
                                 }
@@ -3039,7 +3039,7 @@ private fun ChatGptMessageBubble(
                 }
             }
 
-            // РљР°СЂС‚РѕС‡РєРё СЃРѕР·РґР°РЅРЅС‹С…/РёР·РјРµРЅС‘РЅРЅС‹С… С„Р°Р№Р»РѕРІ СЃ diff (+added Р·РµР»С‘РЅС‹Р№ / -removed РєСЂР°СЃРЅС‹Р№) (Р Р°Р·РґРµР» 5.2 Рё 11.5)
+            // Карточки созданных/изменённых файлов с diff (+added зелёный / -removed красный) (Раздел 5.2 и 11.5)
             if (message.createdDiffs.isNotEmpty()) {
                 Column(
                     modifier = Modifier
@@ -3057,7 +3057,7 @@ private fun ChatGptMessageBubble(
                 }
             }
 
-            if (message.content.isNotBlank() && message.content != "Р”СѓРјР°СЋвЂ¦") {
+            if (message.content.isNotBlank() && message.content != "Думаю…") {
                 ChatGptMarkdownText(
                     markdown = message.content,
                     textColor = Color(0xFFECECEC),
@@ -3067,7 +3067,7 @@ private fun ChatGptMessageBubble(
                 )
             }
 
-            // РЎРіРµРЅРµСЂРёСЂРѕРІР°РЅРЅС‹Рµ РР С„РѕС‚Рѕ Рё РІРёРґРµРѕ СЃ РїСЂРµРґРїСЂРѕСЃРјРѕС‚СЂРѕРј Рё СЃРєР°С‡РёРІР°РЅРёРµРј РІ РїР°РјСЏС‚СЊ С‚РµР»РµС„РѕРЅР° (Р Р°Р·РґРµР»С‹ 2 Рё 8.1)
+            // Сгенерированные ИИ фото и видео с предпросмотром и скачиванием в память телефона (Разделы 2 и 8.1)
             if (message.generatedMedia.isNotEmpty()) {
                 Column(
                     modifier = Modifier
@@ -3084,10 +3084,10 @@ private fun ChatGptMessageBubble(
                 }
             }
 
-            // Р–РёРІР°СЏ СЃРєРѕСЂРѕСЃС‚СЊ РіРµРЅРµСЂР°С†РёРё РІРѕ РІСЂРµРјСЏ СЃС‚СЂРёРјРёРЅРіР° (Р Р°Р·РґРµР» 11.4)
+            // Живая скорость генерации во время стриминга (Раздел 11.4)
             if (message.isStreaming && message.tokensPerSecond > 0f) {
                 Text(
-                    text = "${String.format(Locale.US, "%.1f", message.tokensPerSecond)} С‚РѕРє/СЃ вЂў ${message.outputTokensCount} С‚РѕРє.",
+                    text = "${String.format(Locale.US, "%.1f", message.tokensPerSecond)} ток/с • ${message.outputTokensCount} ток.",
                     color = Color(0xFF34D399),
                     fontSize = 11.2.sp,
                     fontFamily = FontFamily.Monospace,
@@ -3095,7 +3095,7 @@ private fun ChatGptMessageBubble(
                 )
             }
 
-            // РќРёР¶РЅРёР№ СЂСЏРґ РёРєРѕРЅРѕРє РґРµР№СЃС‚РІРёР№ 1:1 РєР°Рє РІ ChatGPT Android 1.2026.293 + СЃРєРѕСЂРѕСЃС‚СЊ РіРµРЅРµСЂР°С†РёРё вљЎ С‚РѕРє/СЃ (Р Р°Р·РґРµР» 11.4)
+            // Нижний ряд иконок действий 1:1 как в ChatGPT Android 1.2026.293 + скорость генерации ⚡ ток/с (Раздел 11.4)
             if (!message.isStreaming && message.content.isNotBlank()) {
                 val effectiveTps = if (message.tokensPerSecond > 0f) message.tokensPerSecond else 0f
                 val effectiveOutTokens = if (message.outputTokensCount > 0) message.outputTokensCount else (message.content.length / 4).coerceAtLeast(12)
@@ -3113,7 +3113,7 @@ private fun ChatGptMessageBubble(
                     ) {
                         Icon(
                             imageVector = if (copiedToast) Icons.Default.Check else Icons.Default.ContentCopy,
-                            contentDescription = "РљРѕРїРёСЂРѕРІР°С‚СЊ",
+                            contentDescription = "Копировать",
                             tint = if (copiedToast) Color(0xFF10A37F) else Color(0xFF9E9E9E),
                             modifier = Modifier
                                 .size(18.dp)
@@ -3125,7 +3125,7 @@ private fun ChatGptMessageBubble(
 
                         Icon(
                             imageVector = if (isSpeakingAloud) Icons.Default.StopCircle else Icons.AutoMirrored.Filled.VolumeUp,
-                            contentDescription = "РџСЂРѕС‡РёС‚Р°С‚СЊ РІСЃР»СѓС…",
+                            contentDescription = "Прочитать вслух",
                             tint = if (isSpeakingAloud) Color.White else Color(0xFF9E9E9E),
                             modifier = Modifier
                                 .size(19.dp)
@@ -3134,7 +3134,7 @@ private fun ChatGptMessageBubble(
 
                         Icon(
                             imageVector = Icons.Default.Share,
-                            contentDescription = "РџРѕРґРµР»РёС‚СЊСЃСЏ",
+                            contentDescription = "Поделиться",
                             tint = Color(0xFF9E9E9E),
                             modifier = Modifier
                                 .size(18.dp)
@@ -3143,7 +3143,7 @@ private fun ChatGptMessageBubble(
 
                         Icon(
                             imageVector = Icons.Default.MoreHoriz,
-                            contentDescription = "Р”СЂСѓРіРёРµ РґРµР№СЃС‚РІРёСЏ",
+                            contentDescription = "Другие действия",
                             tint = Color(0xFF9E9E9E),
                             modifier = Modifier
                                 .size(18.dp)
@@ -3152,7 +3152,7 @@ private fun ChatGptMessageBubble(
                     }
 
                     if (message.tokensPerSecond > 0f) Text(
-                        text = "${String.format(Locale.US, "%.1f", effectiveTps)} С‚РѕРє/СЃ вЂў $effectiveOutTokens С‚РѕРє.",
+                        text = "${String.format(Locale.US, "%.1f", effectiveTps)} ток/с • $effectiveOutTokens ток.",
                         color = Color(0xFF6B7280),
                         fontSize = 11.sp,
                         fontFamily = FontFamily.Monospace,
@@ -3165,7 +3165,7 @@ private fun ChatGptMessageBubble(
         }
     }
 
-    // РљРѕРЅС‚РµРєСЃС‚РЅРѕРµ РјРµРЅСЋ СЃРѕРѕР±С‰РµРЅРёСЏ РїРѕ РґРѕР»РіРѕРјСѓ РЅР°Р¶Р°С‚РёСЋ 1:1 РєР°Рє РІ ChatGPT Android 1.2026.293
+    // Контекстное меню сообщения по долгому нажатию 1:1 как в ChatGPT Android 1.2026.293
     if (showContextMenuSheet) {
         val contextSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ModalBottomSheet(
@@ -3182,7 +3182,7 @@ private fun ChatGptMessageBubble(
             ) {
                 MessageContextMenuRow(
                     icon = Icons.Default.ContentCopy,
-                    label = "РљРѕРїРёСЂРѕРІР°С‚СЊ",
+                    label = "Копировать",
                     onClick = {
                         clipboard.setText(AnnotatedString(message.content))
                         copiedToast = true
@@ -3190,19 +3190,19 @@ private fun ChatGptMessageBubble(
                     }
                 )
                 if (!isUser && !message.isStreaming) MessageContextMenuRow(
-                    icon = Icons.Default.SaveAlt, label = "РЎРѕС…СЂР°РЅРёС‚СЊ РІ Р±РёР±Р»РёРѕС‚РµРєСѓ", onClick = {
+                    icon = Icons.Default.SaveAlt, label = "Сохранить в библиотеку", onClick = {
                         onSaveToLibrary(); showContextMenuSheet = false
                     }
                 )
                 if (!message.isStreaming) MessageContextMenuRow(
-                    icon = Icons.Default.Edit, label = "Р’РµС‚РєР° РІ РЅРѕРІРѕРј С‡Р°С‚Рµ", onClick = {
+                    icon = Icons.Default.Edit, label = "Ветка в новом чате", onClick = {
                         showContextMenuSheet = false
                         onBranch()
                     }
                 )
                 MessageContextMenuRow(
                     icon = Icons.Default.SelectAll,
-                    label = "Р’С‹РґРµР»РёС‚СЊ С‚РµРєСЃС‚",
+                    label = "Выделить текст",
                     onClick = {
                         showContextMenuSheet = false
                         showSelectTextDialog = true
@@ -3210,7 +3210,7 @@ private fun ChatGptMessageBubble(
                 )
                 MessageContextMenuRow(
                     icon = Icons.AutoMirrored.Filled.VolumeUp,
-                    label = if (isSpeakingAloud) "РћСЃС‚Р°РЅРѕРІРёС‚СЊ РѕР·РІСѓС‡РєСѓ" else "РџСЂРѕС‡РёС‚Р°С‚СЊ РІСЃР»СѓС…",
+                    label = if (isSpeakingAloud) "Остановить озвучку" else "Прочитать вслух",
                     onClick = {
                         showContextMenuSheet = false
                         onSpeak()
@@ -3219,7 +3219,7 @@ private fun ChatGptMessageBubble(
                 if (isUser) {
                     MessageContextMenuRow(
                         icon = Icons.Default.Edit,
-                        label = "Р РµРґР°РєС‚РёСЂРѕРІР°С‚СЊ СЃРѕРѕР±С‰РµРЅРёРµ",
+                        label = "Редактировать сообщение",
                         onClick = {
                             showContextMenuSheet = false
                             isEditingPrompt = true
@@ -3228,7 +3228,7 @@ private fun ChatGptMessageBubble(
                 } else {
                     MessageContextMenuRow(
                         icon = Icons.Default.Refresh,
-                        label = "РџРѕРІС‚РѕСЂРёС‚СЊ",
+                        label = "Повторить",
                         onClick = {
                             showContextMenuSheet = false
                             onRegenerate()
@@ -3237,7 +3237,7 @@ private fun ChatGptMessageBubble(
                 }
                 MessageContextMenuRow(
                     icon = Icons.Default.SaveAlt,
-                    label = "РЎРѕС…СЂР°РЅРёС‚СЊ РІ С„Р°Р№Р» РЅР° С‚РµР»РµС„РѕРЅ",
+                    label = "Сохранить в файл на телефон",
                     onClick = {
                         showContextMenuSheet = false
                         onSaveToPhone(
@@ -3248,7 +3248,7 @@ private fun ChatGptMessageBubble(
                 )
                 MessageContextMenuRow(
                     icon = Icons.Default.Share,
-                    label = "РџРѕРґРµР»РёС‚СЊСЃСЏ",
+                    label = "Поделиться",
                     onClick = {
                         showContextMenuSheet = false
                         shareMessageText()
@@ -3259,7 +3259,7 @@ private fun ChatGptMessageBubble(
         }
     }
 
-    // РћРєРЅРѕ РїСЂРѕРёР·РІРѕР»СЊРЅРѕРіРѕ РІС‹РґРµР»РµРЅРёСЏ С‚РµРєСЃС‚Р° (ChatGPT 1.2026.293 `0x7f130a7c Р’С‹РґРµР»РёС‚СЊ С‚РµРєСЃС‚`)
+    // Окно произвольного выделения текста (ChatGPT 1.2026.293 `0x7f130a7c Выделить текст`)
     if (showSelectTextDialog) {
         Dialog(
             onDismissRequest = { showSelectTextDialog = false },
@@ -3280,13 +3280,13 @@ private fun ChatGptMessageBubble(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Р’С‹РґРµР»РёС‚СЊ С‚РµРєСЃС‚",
+                            text = "Выделить текст",
                             color = Color.White,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold
                         )
                         IconButton(onClick = { showSelectTextDialog = false }) {
-                            Icon(Icons.Default.Close, contentDescription = "Р—Р°РєСЂС‹С‚СЊ", tint = Color.White)
+                            Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = Color.White)
                         }
                     }
                     Spacer(modifier = Modifier.height(8.dp))
@@ -3391,22 +3391,22 @@ private fun ModelAndModeSelectorDialog(
                 .padding(horizontal = 20.dp, vertical = 6.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            // Р—Р°РіРѕР»РѕРІРѕРє Рё РїРѕРґР·Р°РіРѕР»РѕРІРѕРє РёР· СЃС‚СЂРѕРєРѕРІС‹С… СЂРµСЃСѓСЂСЃРѕРІ ChatGPT 1.2026.293 (0x7f130fab, 0x7f130fa9)
+            // Заголовок и подзаголовок из строковых ресурсов ChatGPT 1.2026.293 (0x7f130fab, 0x7f130fa9)
             Text(
-                text = "Р’С‹Р±СЂР°С‚СЊ РјРѕРґРµР»СЊ",
+                text = "Выбрать модель",
                 color = Color.White,
                 fontWeight = FontWeight.Bold,
                 fontSize = 19.sp
             )
             Text(
-                text = "РџРµСЂРµРєР»СЋС‡Р°Р№С‚РµСЃСЊ РјРµР¶РґСѓ СЂРµРєРѕРјРµРЅРґСѓРµРјС‹РјРё РЅР°РјРё РјРѕРґРµР»СЏРјРё",
+                text = "Переключайтесь между рекомендуемыми нами моделями",
                 color = Color(0xFF9E9E9E),
                 fontSize = 13.5.sp
             )
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // РџРµСЂРµРєР»СЋС‡Р°С‚РµР»СЊ СЃСЂРµРґС‹ РІС‹РїРѕР»РЅРµРЅРёСЏ РІ РµРґРёРЅРѕР№ РєРѕРјРїР°РєС‚РЅРѕР№ РєР°РїСЃСѓР»Рµ ChatGPT
+            // Переключатель среды выполнения в единой компактной капсуле ChatGPT
             Surface(
                 color = Color(0xFF2A2A2A),
                 shape = RoundedCornerShape(20.dp),
@@ -3421,9 +3421,9 @@ private fun ModelAndModeSelectorDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     val targets = listOf(
-                        AgentExecutionTarget.PC_REMOTE_SESSION to "РЎРµСЃСЃРёСЏ РџРљ",
-                        AgentExecutionTarget.PHONE_LOCAL_RESOURCES to "РЎРјР°СЂС‚С„РѕРЅ",
-                        AgentExecutionTarget.GOOGLE_WEB_CONSOLE to "Р’РµР±-РєРѕРЅСЃРѕР»СЊ"
+                        AgentExecutionTarget.PC_REMOTE_SESSION to "Сессия ПК",
+                        AgentExecutionTarget.PHONE_LOCAL_RESOURCES to "Смартфон",
+                        AgentExecutionTarget.GOOGLE_WEB_CONSOLE to "Веб-консоль"
                     )
                     targets.forEach { (target, shortLabel) ->
                         val isTargetSelected = settings.executionTarget == target
@@ -3451,7 +3451,7 @@ private fun ModelAndModeSelectorDialog(
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // РљРЅРѕРїРєР° РїРµСЂРµС…РѕРґР° РІ РїРѕР»РЅС‹Р№ Р¶РёРІРѕР№ РєР°С‚Р°Р»РѕРі OpenRouter (450+ РјРѕРґРµР»РµР№ 2026: Р¤РѕС‚Рѕ, Р’РёРґРµРѕ, Reasoning, Vision)
+            // Кнопка перехода в полный живой каталог OpenRouter (450+ моделей 2026: Фото, Видео, Reasoning, Vision)
             Surface(
                 color = Color(0xFF132238),
                 shape = RoundedCornerShape(14.dp),
@@ -3473,7 +3473,7 @@ private fun ModelAndModeSelectorDialog(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "РЎРёРЅС…СЂРѕРЅРёР·Р°С†РёСЏ openrouter.ai/api/v1/models вЂў Р¤РѕС‚Рѕ, Р’РёРґРµРѕ, Reasoning, Free",
+                            text = "Синхронизация openrouter.ai/api/v1/models • Фото, Видео, Reasoning, Free",
                             color = Color(0xFFA0B3C8),
                             fontSize = 11.8.sp
                         )
@@ -3483,7 +3483,7 @@ private fun ModelAndModeSelectorDialog(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Р§РёСЃС‚С‹Р№ СЃРїРёСЃРѕРє РјРѕРґРµР»РµР№ Р±РµР· СЂР°РјРѕРє 1:1 РєР°Рє РІ ChatGPT Android 1.2026.293
+            // Чистый список моделей без рамок 1:1 как в ChatGPT Android 1.2026.293
             modelsList.forEach { model ->
                 val selected = settings.selectedModelId == model.id
                 Surface(
@@ -3516,7 +3516,7 @@ private fun ModelAndModeSelectorDialog(
                             Spacer(modifier = Modifier.width(12.dp))
                             Icon(
                                 imageVector = Icons.Default.Check,
-                                contentDescription = "Р’С‹Р±СЂР°РЅРѕ",
+                                contentDescription = "Выбрано",
                                 tint = Color.White,
                                 modifier = Modifier.size(20.dp)
                             )
