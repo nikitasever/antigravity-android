@@ -1,0 +1,12 @@
+{
+  "guard": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          { "type": "command", "command": "node hook-guard.js", "timeoutSec": 10 }
+        ]
+      }
+    ]
+  }
+}

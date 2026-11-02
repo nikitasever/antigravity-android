@@ -1,0 +1,8 @@
+{
+  "name": "control-composite-plugin",
+  "version": "1.0.0",
+  "description": "Контрольный составной плагин Этапа 7 с зависимостями",
+  "license": "MIT",
+  "skills": ["skills/composite-demo"],
+  "hooks": ["hooks/hooks.json"]
+}

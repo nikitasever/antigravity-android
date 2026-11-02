@@ -1,0 +1,3725 @@
+{
+  "schemaVersion": 1,
+  "title": "Этап 7 — перенос всех позиций по матрице: полный проход инвентаря",
+  "generatedAt": "2026-11-02T16:17:48.870Z",
+  "generatedBy": "pc-bridge/scripts/build-migration-coverage.js",
+  "sources": {
+    "inventory": "extensions-inventory.json",
+    "adapterMatrix": "extensions-adapter-matrix.json",
+    "plan": "EXTENSIONS_INTEGRATION_PLAN.md (Этап 7)"
+  },
+  "batches": [
+    {
+      "id": "documents-pdf",
+      "title": "Документы и PDF",
+      "order": 1,
+      "positionCount": 2,
+      "positionIds": [
+        "claude-web-card-desktop-commander",
+        "claude-web-card-doc-coauthoring"
+      ]
+    },
+    {
+      "id": "sheets-slides",
+      "title": "Таблицы/презентации",
+      "order": 2,
+      "positionCount": 0,
+      "positionIds": []
+    },
+    {
+      "id": "code-git",
+      "title": "Код и Git",
+      "order": 3,
+      "positionCount": 17,
+      "positionIds": [
+        "claude-web-code-upgrade",
+        "claude-android-github-app",
+        "chatgpt-cat-developer-tools",
+        "codex-remote-composer-extensions",
+        "local-skill-autonomous-software-engineer",
+        "local-skill-reverse-engineer-anything",
+        "local-skill-rigorous-programming-reasoner",
+        "local-skill-rigorous-programming-reasoner-disabled",
+        "local-skill-workstation-diagnostics",
+        "local-skill-builtin-permissioned-github",
+        "local-import-uploads-skill-md",
+        "local-plugin-antigravity-workspace-guard",
+        "local-plugin-kotlin-compose-inspector",
+        "local-plugin-staging-antigravity-workspace-guard",
+        "local-plugin-staging-kotlin-compose-inspector",
+        "local-mcp-ag-workstation-info",
+        "local-mcp-rea"
+      ]
+    },
+    {
+      "id": "search-browser",
+      "title": "Поиск/браузер",
+      "order": 4,
+      "positionCount": 4,
+      "positionIds": [
+        "claude-web-card-searchfit-seo",
+        "claude-web-card-bright-data",
+        "claude-web-card-product-tracking",
+        "claude-web-toggle-web-search"
+      ]
+    },
+    {
+      "id": "design-media",
+      "title": "Дизайн/медиа",
+      "order": 5,
+      "positionCount": 7,
+      "positionIds": [
+        "claude-web-card-figma",
+        "claude-web-card-web-artifacts-builder",
+        "claude-web-entry-design-system",
+        "claude-android-connector-figma",
+        "chatgpt-cat-creativity-design",
+        "codex-visualize-plugin-assets",
+        "local-skill-builtin-generative-ui"
+      ]
+    },
+    {
+      "id": "mail-calendar-drive",
+      "title": "Почта/календарь/диск",
+      "order": 6,
+      "positionCount": 8,
+      "positionIds": [
+        "claude-web-card-zoom",
+        "claude-android-connector-calendar",
+        "claude-android-connector-google-drive",
+        "claude-android-settings-integrations",
+        "chatgpt-connector-gmail",
+        "chatgpt-connector-google-calendar",
+        "chatgpt-connector-outlook",
+        "chatgpt-file-sources"
+      ]
+    },
+    {
+      "id": "tasks-knowledge",
+      "title": "Задачи/знания",
+      "order": 7,
+      "positionCount": 11,
+      "positionIds": [
+        "claude-web-card-learn",
+        "claude-web-card-productivity",
+        "claude-web-toggle-memory",
+        "chatgpt-cat-productivity",
+        "chatgpt-cat-research-knowledge",
+        "local-skill-builtin-agy-customizations",
+        "local-skill-builtin-antigravity-guide",
+        "local-skill-builtin-automation",
+        "local-skill-builtin-migrate-workflows",
+        "local-skill-builtin-plugin",
+        "local-skill-builtin-run-workflow"
+      ]
+    },
+    {
+      "id": "other-catalogs",
+      "title": "Остальные категории зафиксированных каталогов",
+      "order": 8,
+      "positionCount": 30,
+      "positionIds": [
+        "claude-web-catalog-connectors",
+        "claude-web-catalog-skills",
+        "claude-web-catalog-plugins",
+        "claude-web-card-marketing",
+        "claude-web-card-finance",
+        "claude-web-entry-skills",
+        "claude-web-entry-add-connector",
+        "claude-web-entry-add-plugins",
+        "claude-web-entry-get-apps-extensions",
+        "claude-web-surface-cowork",
+        "claude-android-connector-custom",
+        "claude-android-connector-catalog",
+        "claude-android-skills",
+        "claude-android-mcp-servers",
+        "claude-android-plugin-label",
+        "chatgpt-plugin-directory",
+        "chatgpt-cat-business-analytics",
+        "chatgpt-cat-messaging-social",
+        "chatgpt-plugin-directory-views",
+        "chatgpt-plugin-detail",
+        "chatgpt-plugin-permissions",
+        "chatgpt-plugin-management",
+        "chatgpt-component-app",
+        "chatgpt-component-skill",
+        "chatgpt-connectors",
+        "chatgpt-connector-1password",
+        "chatgpt-gpts",
+        "chatgpt-finance-connections",
+        "chatgpt-availability-gates",
+        "local-skill-builtin-ui-plugin-navigation"
+      ]
+    }
+  ],
+  "controlPackages": [
+    {
+      "id": "control-instruction-skill",
+      "kind": "skill-instruction",
+      "fixture": "pc-bridge/test/fixtures/stage7/control-instruction-skill",
+      "scenario": "Установка пакета навыка в реестр → каталог навыков → выбор по /имя → загрузка инструкций ТОЛЬКО выбранного навыка → блок SKILL_INSTRUCTION в запросе.",
+      "fixturePresent": true,
+      "verification": "сквозной сценарий проверяется тестом pc-bridge/test/extensions-stage7.test.js (установка → включение → проверка → вызов)"
+    },
+    {
+      "id": "control-script-skill",
+      "kind": "skill-with-script",
+      "fixture": "pc-bridge/test/fixtures/stage7/control-script-skill",
+      "scenario": "Навык со скриптом: проверка зависимостей до запуска (интерпретатор + require) → запуск в изолированном рабочем каталоге → результат наружу; отсутствие зависимостей — видимый блокер, не молчаливый прогон.",
+      "fixturePresent": true,
+      "verification": "сквозной сценарий проверяется тестом pc-bridge/test/extensions-stage7.test.js (установка → включение → проверка → вызов)"
+    },
+    {
+      "id": "control-http-mcp",
+      "kind": "mcp-http",
+      "fixture": "pc-bridge/test/fixtures/stage7/control-http-mcp",
+      "scenario": "HTTP MCP: реестр подключения → настоящее рукопожатие initialize → tools/list → tools/call к живому HTTP-серверу; «подключён» только после рукопожатия.",
+      "fixturePresent": true,
+      "verification": "сквозной сценарий проверяется тестом pc-bridge/test/extensions-stage7.test.js (установка → включение → проверка → вызов)"
+    },
+    {
+      "id": "control-stdio-mcp",
+      "kind": "mcp-stdio",
+      "fixture": "pc-bridge/test/fixtures/stage7/control-stdio-mcp",
+      "scenario": "stdio MCP: запуск локального процесса сервера → рукопожатие → tools/list → tools/call; падение процесса — видимая ошибка.",
+      "fixturePresent": true,
+      "verification": "сквозной сценарий проверяется тестом pc-bridge/test/extensions-stage7.test.js (установка → включение → проверка → вызов)"
+    },
+    {
+      "id": "control-composite-plugin",
+      "kind": "plugin-composite",
+      "fixture": "pc-bridge/test/fixtures/stage7/control-composite-plugin",
+      "scenario": "Составной плагин с зависимостями: разбор состава (manifest + skills + hooks + scripts) → адаптеры компонентов → проверка зависимостей скриптов ДО запуска → hook по официальному контракту (stdin JSON → stdout JSON) с видимыми отказами.",
+      "fixturePresent": true,
+      "verification": "сквозной сценарий проверяется тестом pc-bridge/test/extensions-stage7.test.js (установка → включение → проверка → вызов)"
+    }
+  ],
+  "positions": [
+    {
+      "id": "claude-web-catalog-connectors",
+      "name": "Каталог Claude: вкладка Connectors",
+      "sourceProduct": "claude.ai (web)",
+      "batch": "other-catalogs",
+      "availability": "visible",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "catalog-tab",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Открыть Customize → Connectors, сверить число и состав карточек с инвентарём, записать каждую карточку с вкладкой и издателем",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "claude-web-catalog-skills",
+      "name": "Каталог Claude: вкладка Skills",
+      "sourceProduct": "claude.ai (web)",
+      "batch": "other-catalogs",
+      "availability": "visible",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "catalog-tab",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Снять Discover со Skills, записать издателя/состав каждой карточки и сверить пересечение с вкладкой Plugins",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "claude-web-catalog-plugins",
+      "name": "Каталог Claude: вкладка Plugins",
+      "sourceProduct": "claude.ai (web)",
+      "batch": "other-catalogs",
+      "availability": "visible",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "catalog-tab",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Открыть карточку Plugins, записать manifest/состав/версию и проверить, тот ли это пакет, что на вкладке Skills",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "claude-web-card-figma",
+      "name": "Figma",
+      "sourceProduct": "claude.ai (web)",
+      "batch": "design-media",
+      "availability": "visible",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "catalog-card",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Открыть карточку, записать вкладку/издателя/состав, затем проверить импорт в Antigravity без выдачи новых прав",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "claude-web-card-desktop-commander",
+      "name": "Desktop Commander",
+      "sourceProduct": "claude.ai (web)",
+      "batch": "documents-pdf",
+      "availability": "visible",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "catalog-card",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Проверить состав (scripts/references) и определить исполнителя: телефон или ПК, до установки",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "claude-web-card-searchfit-seo",
+      "name": "SearchFit SEO",
+      "sourceProduct": "claude.ai (web)",
+      "batch": "search-browser",
+      "availability": "visible",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "catalog-card",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Определить, есть ли публичный endpoint/API, до обещания переноса",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "claude-web-card-bright-data",
+      "name": "Bright Data",
+      "sourceProduct": "claude.ai (web)",
+      "batch": "search-browser",
+      "availability": "visible",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "catalog-card",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Проверить публичный endpoint и свой вход Antigravity, не перенося ключи поставщика",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "claude-web-card-zoom",
+      "name": "Zoom",
+      "sourceProduct": "claude.ai (web)",
+      "batch": "mail-calendar-drive",
+      "availability": "visible",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "catalog-card",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Открыть карточку, зафиксировать тип (connector/plugin/skill) и требуемую авторизацию",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "claude-web-card-product-tracking",
+      "name": "Product Tracking",
+      "sourceProduct": "claude.ai (web)",
+      "batch": "search-browser",
+      "availability": "visible",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "catalog-card",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Открыть карточку и записать состав до любого импорта",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "claude-web-card-learn",
+      "name": "learn",
+      "sourceProduct": "claude.ai (web)",
+      "batch": "tasks-knowledge",
+      "availability": "visible",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "catalog-card",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Уточнить на карточке: пакет, категория или навык; записать результат в инвентарь",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "claude-web-card-doc-coauthoring",
+      "name": "doc-coauthoring",
+      "sourceProduct": "claude.ai (web)",
+      "batch": "documents-pdf",
+      "availability": "visible",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "catalog-card",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Проверить формат (SKILL.md vs manifest) и полный пакет файлов",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "claude-web-card-web-artifacts-builder",
+      "name": "web-artifacts-builder",
+      "sourceProduct": "claude.ai (web)",
+      "batch": "design-media",
+      "availability": "visible",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "catalog-card",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Открыть карточку, записать зависимости от продуктовых UI-функций Claude",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "claude-web-card-productivity",
+      "name": "Productivity",
+      "sourceProduct": "claude.ai (web)",
+      "batch": "tasks-knowledge",
+      "availability": "visible",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "catalog-card",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "При повторном проходе уточнить: карточка пакета или категория вкладки",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "claude-web-card-marketing",
+      "name": "Marketing",
+      "sourceProduct": "claude.ai (web)",
+      "batch": "other-catalogs",
+      "availability": "visible",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "catalog-card",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "При повторном проходе уточнить тип и состав",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "claude-web-card-finance",
+      "name": "Finance",
+      "sourceProduct": "claude.ai (web)",
+      "batch": "other-catalogs",
+      "availability": "visible",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "catalog-card",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "При повторном проходе уточнить тип и требования к доступу",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "claude-web-entry-skills",
+      "name": "Меню плюса: Skills",
+      "sourceProduct": "claude.ai (web)",
+      "batch": "other-catalogs",
+      "availability": "visible",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "not-applicable",
+        "records": [
+          {
+            "componentType": "entry-point",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Открыть Skills из композера и сверить список с вкладкой Skills настроек",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "claude-web-entry-add-connector",
+      "name": "Меню плюса: Add connector",
+      "sourceProduct": "claude.ai (web)",
+      "batch": "other-catalogs",
+      "availability": "visible",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "not-applicable",
+        "records": [
+          {
+            "componentType": "entry-point",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Открыть форму и записать поля (URL, OAuth, заголовки) для сравнения с Android-строками 0x7f14003f/0x7f14005f",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "claude-web-entry-add-plugins",
+      "name": "Меню плюса: Add plugins",
+      "sourceProduct": "claude.ai (web)",
+      "batch": "other-catalogs",
+      "availability": "visible",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "not-applicable",
+        "records": [
+          {
+            "componentType": "entry-point",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Открыть список и выгрузить его полностью (Discover + Yours), затем сравнить с вкладкой Plugins настроек",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "claude-web-entry-design-system",
+      "name": "Меню плюса: Design system",
+      "sourceProduct": "claude.ai (web)",
+      "batch": "design-media",
+      "availability": "visible",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "not-applicable",
+        "records": [
+          {
+            "componentType": "entry-point",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Определить, является ли Design system носителем Figma-коннектора, до включения в матрицу переноса",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "claude-web-entry-get-apps-extensions",
+      "name": "Боковая навигация: Get apps and extensions",
+      "sourceProduct": "claude.ai (web)",
+      "batch": "other-catalogs",
+      "availability": "visible",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "not-applicable",
+        "records": [
+          {
+            "componentType": "entry-point",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Перейти по ссылке и зафиксировать список приложений/расширений и их типы",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "claude-web-toggle-web-search",
+      "name": "Web search (переключатель)",
+      "sourceProduct": "claude.ai (web)",
+      "batch": "search-browser",
+      "availability": "builtin",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "not-applicable",
+        "records": [
+          {
+            "componentType": "builtin-toggle",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Проверить в Antigravity отдельно, не выдавать за импортированное расширение",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "claude-web-toggle-memory",
+      "name": "Memory (переключатель)",
+      "sourceProduct": "claude.ai (web)",
+      "batch": "tasks-knowledge",
+      "availability": "builtin",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "not-applicable",
+        "records": [
+          {
+            "componentType": "builtin-toggle",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Зафиксировать как встроенную функцию в матрице, не как установленное расширение",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "claude-web-surface-cowork",
+      "name": "Поверхность Cowork (переключатель Chat/Cowork)",
+      "sourceProduct": "claude.ai (web)",
+      "batch": "other-catalogs",
+      "availability": "unknown",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "surface",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Открыть Cowork и снять отдельный срез его расширений, не смешивая с claude.ai",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "claude-web-code-upgrade",
+      "name": "Code (Code Upgrade)",
+      "sourceProduct": "claude.ai (web)",
+      "batch": "code-git",
+      "availability": "subscription-gated",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "entry-point",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "На платном доступе открыть Code и снять отдельный срез; до этого позиция остаётся gated",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "claude-android-connector-custom",
+      "name": "Add custom connector (MCP URL)",
+      "sourceProduct": "Claude for Android 1.261029.20",
+      "batch": "other-catalogs",
+      "availability": "unknown",
+      "adaptation": {
+        "supportStatus": "blocked",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "connector",
+            "strategy": "convert",
+            "status": "blocked",
+            "executor": "cloud",
+            "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+          }
+        ]
+      },
+      "verificationScenario": "С аккаунтом, где функция доступна, добавить свой stdio/HTTP MCP и проверить tools/list; отдельно проверить отказ на ограниченном аккаунте",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "claude-android-connector-catalog",
+      "name": "Каталог коннекторов Android (Browse/Search/Discovery)",
+      "sourceProduct": "Claude for Android 1.261029.20",
+      "batch": "other-catalogs",
+      "availability": "unknown",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "catalog-page",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Открыть Browse connectors на устройстве и выгрузить список карточек с издателями и версиями",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "claude-android-skills",
+      "name": "Навыки Claude (Android)",
+      "sourceProduct": "Claude for Android 1.261029.20",
+      "batch": "other-catalogs",
+      "availability": "unknown",
+      "adaptation": {
+        "supportStatus": "partial",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "skill",
+            "strategy": "preserve",
+            "status": "verified",
+            "executor": "pc-bridge",
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Создать навык на claude.ai, увидеть его в Android, вызвать по /name и проверить ссылки на ресурсы",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "claude-android-mcp-servers",
+      "name": "MCP-серверы и MCP tools (Android)",
+      "sourceProduct": "Claude for Android 1.261029.20",
+      "batch": "other-catalogs",
+      "availability": "unknown",
+      "adaptation": {
+        "supportStatus": "partial",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "mcp-server",
+            "strategy": "own-executor",
+            "status": "verified",
+            "executor": "pc-bridge",
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Подключить тестовый MCP, выполнить initialize/tools/list/tools/call, проверить выключатель «MCP servers not allowed»",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "claude-android-plugin-label",
+      "name": "Plugin (единственная метка в Android-клиенте)",
+      "sourceProduct": "Claude for Android 1.261029.20",
+      "batch": "other-catalogs",
+      "availability": "unknown",
+      "adaptation": {
+        "supportStatus": "blocked",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "plugin",
+            "strategy": "own-executor",
+            "status": "requires-check",
+            "executor": "pc-bridge",
+            "blocker": "в строках Android только одиночная метка «Plugin» — экран каталога плагинов не найден; нельзя утверждать наличие плагинов в Android-клиенте"
+          }
+        ]
+      },
+      "verificationScenario": "На устройстве найти, где показывается метка, и снять состав вкладки Plugins",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "claude-android-connector-figma",
+      "name": "Figma-коннектор (упоминание в Android)",
+      "sourceProduct": "Claude for Android 1.261029.20",
+      "batch": "design-media",
+      "availability": "unknown",
+      "adaptation": {
+        "supportStatus": "blocked",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "connector",
+            "strategy": "convert",
+            "status": "blocked",
+            "executor": "cloud",
+            "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+          }
+        ]
+      },
+      "verificationScenario": "Проверить одобрение Figma на вебе и в Android и свести в одну позицию после подтверждения идентичности",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "claude-android-github-app",
+      "name": "Claude GitHub App (интеграция)",
+      "sourceProduct": "Claude for Android 1.261029.20",
+      "batch": "code-git",
+      "availability": "unknown",
+      "adaptation": {
+        "supportStatus": "blocked",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "connector",
+            "strategy": "convert",
+            "status": "blocked",
+            "executor": "cloud",
+            "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+          }
+        ]
+      },
+      "verificationScenario": "Установить GitHub App на тестовый репозиторий и проверить запуск сессии; отдельно зафиксировать, где это живёт в UI",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "claude-android-connector-calendar",
+      "name": "Calendar (доступ к календарю)",
+      "sourceProduct": "Claude for Android 1.261029.20",
+      "batch": "mail-calendar-drive",
+      "availability": "unknown",
+      "adaptation": {
+        "supportStatus": "blocked",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "connector",
+            "strategy": "convert",
+            "status": "blocked",
+            "executor": "cloud",
+            "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+          }
+        ]
+      },
+      "verificationScenario": "Открыть выбор календарей, разрешить один, попросить Claude найти событие и проверить границы доступа",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "claude-android-connector-google-drive",
+      "name": "Google Drive (упоминание в Android)",
+      "sourceProduct": "Claude for Android 1.261029.20",
+      "batch": "mail-calendar-drive",
+      "availability": "unknown",
+      "adaptation": {
+        "supportStatus": "blocked",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "connector",
+            "strategy": "convert",
+            "status": "blocked",
+            "executor": "cloud",
+            "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+          }
+        ]
+      },
+      "verificationScenario": "Подключить Drive и открыть файл — проверить конвертацию и границы доступа",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "claude-android-settings-integrations",
+      "name": "Раздел настроек: integrations / mcp / tools / google drive / gmail / calendar",
+      "sourceProduct": "Claude for Android 1.261029.20",
+      "batch": "mail-calendar-drive",
+      "availability": "unknown",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "settings-facet",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Открыть настройки, выполнить поиск по каждому слову и записать, какие разделы реально открываются",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "chatgpt-plugin-directory",
+      "name": "Каталог плагинов ChatGPT (Directory)",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "batch": "other-catalogs",
+      "availability": "unknown",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "catalog-page",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Открыть Browse plugins на устройстве, выгрузить страницы/категории/карточки с версиями и издателями",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "chatgpt-cat-business-analytics",
+      "name": "Категория: Business and Analytics",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "batch": "other-catalogs",
+      "availability": "unknown",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "catalog-category",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Открыть категорию, зафиксировать число карточек и пустоту/непустоту",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "chatgpt-cat-creativity-design",
+      "name": "Категория: Creativity and Design",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "batch": "design-media",
+      "availability": "unknown",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "catalog-category",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Открыть категорию и выгрузить карточки",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "chatgpt-cat-developer-tools",
+      "name": "Категория: Developer Tools",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "batch": "code-git",
+      "availability": "unknown",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "catalog-category",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Открыть категорию и выгрузить карточки",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "chatgpt-cat-messaging-social",
+      "name": "Категория: Messaging and Social",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "batch": "other-catalogs",
+      "availability": "unknown",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "catalog-category",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Открыть категорию и выгрузить карточки",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "chatgpt-cat-productivity",
+      "name": "Категория: Productivity",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "batch": "tasks-knowledge",
+      "availability": "unknown",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "catalog-category",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Сравнить состав этой категории с карточкой Claude «Productivity» только после выгрузки обоих",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "chatgpt-cat-research-knowledge",
+      "name": "Категория: Research and Knowledge",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "batch": "tasks-knowledge",
+      "availability": "unknown",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "catalog-category",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Открыть категорию и выгрузить карточки",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "chatgpt-plugin-directory-views",
+      "name": "Разделы каталога: Installed / Created by me / Shared / Workspace / Popular",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "batch": "other-catalogs",
+      "availability": "unknown",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "catalog-view",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Пройти каждый раздел, зафиксировать счётчики и пустоту; отдельно — раздел workspace под нужным аккаунтом",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "chatgpt-plugin-detail",
+      "name": "Карточка плагина: Version / Developer / Capabilities / Privacy Policy",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "batch": "other-catalogs",
+      "availability": "unknown",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "catalog-detail",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Открыть карточку, перенести в инвентарь версию/издателя/лицензионные ссылки/состав",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "chatgpt-plugin-permissions",
+      "name": "Разрешения плагинов (Always ask → Allow all, Read/Write actions)",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "batch": "other-catalogs",
+      "availability": "unknown",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "not-applicable",
+        "records": [
+          {
+            "componentType": "permission-model",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Сменить уровень на каждом из четырёх значений и проверить, что Antigravity применяет свою политику, а не копирует чужую",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "chatgpt-plugin-management",
+      "name": "Управление плагинами: установка/удаление/счётчики",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "batch": "other-catalogs",
+      "availability": "unknown",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "not-applicable",
+        "records": [
+          {
+            "componentType": "management",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Установить тестовый плагин, проверить счётчик, удалить и убедиться, что его навыки исчезают (в источнике) и что наш импорт это учитывает",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "chatgpt-component-app",
+      "name": "Компонент App (приложения внутри плагина)",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "batch": "other-catalogs",
+      "availability": "unknown",
+      "adaptation": {
+        "supportStatus": "blocked",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "app",
+            "strategy": "convert",
+            "status": "blocked",
+            "executor": "cloud",
+            "blocker": "путь — подключение сервиса через MCP-реестр (Этап 3); формат .app.json/apps и переносимый сервер для Antigravity не подтверждены"
+          }
+        ]
+      },
+      "verificationScenario": "Открыть App внутри плагина, записать его контракт (действия/авторизация) и решить, каким адаптером он станет в Antigravity",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "chatgpt-component-skill",
+      "name": "Компонент Skill (навыки ChatGPT)",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "batch": "other-catalogs",
+      "availability": "unknown",
+      "adaptation": {
+        "supportStatus": "partial",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "skill",
+            "strategy": "preserve",
+            "status": "verified",
+            "executor": "pc-bridge",
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Открыть Skill details, записать структуру Included files и сверить с форматом Agent Skills",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "chatgpt-connectors",
+      "name": "Connectors (подключённые аккаунты)",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "batch": "other-catalogs",
+      "availability": "unknown",
+      "adaptation": {
+        "supportStatus": "blocked",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "connector",
+            "strategy": "convert",
+            "status": "blocked",
+            "executor": "cloud",
+            "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+          }
+        ]
+      },
+      "verificationScenario": "Открыть Connectors, выгрузить список, подключить один тестовый и проверить отключение/истечение срока",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "chatgpt-connector-gmail",
+      "name": "Gmail (коннектор)",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "batch": "mail-calendar-drive",
+      "availability": "unknown",
+      "adaptation": {
+        "supportStatus": "blocked",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "connector",
+            "strategy": "convert",
+            "status": "blocked",
+            "executor": "cloud",
+            "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+          }
+        ]
+      },
+      "verificationScenario": "Подключить тестовый Gmail, прочитать письмо, отключить и проверить отзыв доступа",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "chatgpt-connector-google-calendar",
+      "name": "Google Calendar (коннектор)",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "batch": "mail-calendar-drive",
+      "availability": "unknown",
+      "adaptation": {
+        "supportStatus": "blocked",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "connector",
+            "strategy": "convert",
+            "status": "blocked",
+            "executor": "cloud",
+            "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+          }
+        ]
+      },
+      "verificationScenario": "Подключить календарь, создать событие через ассистента, отключить и проверить отзыв",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "chatgpt-connector-outlook",
+      "name": "Outlook (коннектор)",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "batch": "mail-calendar-drive",
+      "availability": "unknown",
+      "adaptation": {
+        "supportStatus": "blocked",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "connector",
+            "strategy": "convert",
+            "status": "blocked",
+            "executor": "cloud",
+            "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+          }
+        ]
+      },
+      "verificationScenario": "Подключить Outlook, прочитать почту, отключить и проверить отзыв доступа",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "chatgpt-connector-1password",
+      "name": "1Password (подключение для входа на сайты)",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "batch": "other-catalogs",
+      "availability": "unknown",
+      "adaptation": {
+        "supportStatus": "blocked",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "connector",
+            "strategy": "convert",
+            "status": "blocked",
+            "executor": "cloud",
+            "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+          }
+        ]
+      },
+      "verificationScenario": "Подключить 1Password, выполнить вход на сайт через браузер продукта, отключить и проверить отзыв",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "chatgpt-file-sources",
+      "name": "Источники файлов: Box / Dropbox / Google Drive / SharePoint",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "batch": "mail-calendar-drive",
+      "availability": "unknown",
+      "adaptation": {
+        "supportStatus": "blocked",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "connector",
+            "strategy": "convert",
+            "status": "blocked",
+            "executor": "cloud",
+            "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+          }
+        ]
+      },
+      "verificationScenario": "Подключить одно хранилище, найти файл через поиск, открыть его и проверить отключение",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "chatgpt-gpts",
+      "name": "GPTs (My GPTs / Public GPTs)",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "batch": "other-catalogs",
+      "availability": "unknown",
+      "adaptation": {
+        "supportStatus": "blocked",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "gpt",
+            "strategy": "preserve",
+            "status": "blocked",
+            "executor": null,
+            "blocker": "GPT ≠ плагин и ≠ MCP; переносимого сервера нет без доступного API"
+          }
+        ]
+      },
+      "verificationScenario": "Открыть Public GPTs, выбрать один, зафиксировать состав и ограничения; отдельно — My GPTs",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "chatgpt-finance-connections",
+      "name": "Финансовые подключения (connect accounts)",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "batch": "other-catalogs",
+      "availability": "unknown",
+      "adaptation": {
+        "supportStatus": "blocked",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "connector",
+            "strategy": "convert",
+            "status": "blocked",
+            "executor": "cloud",
+            "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+          }
+        ]
+      },
+      "verificationScenario": "Определить поставщика на устройстве, зафиксировать тип доступа и срок действия",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "chatgpt-availability-gates",
+      "name": "Гейты доступа каталога: план, админ, офлайн",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "batch": "other-catalogs",
+      "availability": "unknown",
+      "adaptation": {
+        "supportStatus": "observation",
+        "fullSupportAllowed": false,
+        "licenseRight": "not-applicable",
+        "records": [
+          {
+            "componentType": "availability-facet",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Проверить карточку на Free и Pro, с отключённой сетью и под админом workspace — три разных статуса",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "codex-remote-composer-extensions",
+      "name": "Remote-композер: skills / MCP servers / plugins ($ и @)",
+      "sourceProduct": "Codex (Remote), в составе APK ChatGPT",
+      "batch": "code-git",
+      "availability": "unknown",
+      "adaptation": {
+        "supportStatus": "blocked",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "plugin",
+            "strategy": "own-executor",
+            "status": "requires-check",
+            "executor": "pc-bridge",
+            "blocker": "блок строк относится к Remote-композеру: по плану §2 плагин Codex нельзя считать плагином Android ChatGPT; атрибуция внутри APK дампом не разделена"
+          }
+        ]
+      },
+      "verificationScenario": "В отдельном прогоне Codex Remote ввести $ и @, записать списки и решить, к какому продукту они относятся",
+      "path": {
+        "confirmed": false,
+        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
+        "checked": []
+      },
+      "mandatory": false
+    },
+    {
+      "id": "codex-visualize-plugin-assets",
+      "name": "Ассеты bundled-plugin Codex «visualize» в проекте",
+      "sourceProduct": "Codex (bundled plugin), ассеты в проекте",
+      "batch": "design-media",
+      "availability": "imported",
+      "adaptation": {
+        "supportStatus": "blocked",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "skill-assets",
+            "strategy": "preserve",
+            "status": "blocked",
+            "executor": null,
+            "blocker": "сетевая зависимость от unpkg.com и отсутствие лицензии; сквозной запуск визуализации не выполнялся"
+          }
+        ]
+      },
+      "verificationScenario": "Открыть визуализацию в Antigravity без сети (проверить отказ CDN) и с сетью (проверить рендер в iframe)",
+      "path": {
+        "confirmed": true,
+        "basis": "локальный путь подтверждён проверкой на диске (fs.existsSync)",
+        "checked": [
+          {
+            "recorded": "app/src/main/assets/spaces/README.md",
+            "resolved": "C:\\Users\\st811210\\.gemini\\antigravity\\scratch\\antigravity-android\\app\\src\\main\\assets\\spaces\\README.md",
+            "exists": true
+          },
+          {
+            "recorded": "app/src/main/assets/spaces/visualize.html",
+            "resolved": "C:\\Users\\st811210\\.gemini\\antigravity\\scratch\\antigravity-android\\app\\src\\main\\assets\\spaces\\visualize.html",
+            "exists": true
+          },
+          {
+            "recorded": "app/src/main/assets/spaces/visualize.css",
+            "resolved": "C:\\Users\\st811210\\.gemini\\antigravity\\scratch\\antigravity-android\\app\\src\\main\\assets\\spaces\\visualize.css",
+            "exists": true
+          }
+        ]
+      },
+      "mandatory": false
+    },
+    {
+      "id": "local-skill-autonomous-software-engineer",
+      "name": "autonomous-software-engineer (навык)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "batch": "code-git",
+      "availability": "installed",
+      "adaptation": {
+        "supportStatus": "partial",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "skill",
+            "strategy": "preserve",
+            "status": "verified",
+            "executor": "pc-bridge",
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Оставить только SKILL.md.disabled, вызвать listSkills и убедиться в enabled=false; затем проверить, что активная и отключённая копии не дают двух записей",
+      "path": {
+        "confirmed": true,
+        "basis": "локальный путь подтверждён проверкой на диске (fs.existsSync)",
+        "checked": [
+          {
+            "recorded": "C:\\Users\\st811210\\.gemini\\config\\skills\\autonomous-software-engineer",
+            "resolved": "C:\\Users\\st811210\\.gemini\\config\\skills\\autonomous-software-engineer",
+            "exists": true
+          }
+        ]
+      },
+      "mandatory": true
+    },
+    {
+      "id": "local-skill-reverse-engineer-anything",
+      "name": "reverse-engineer-anything (навык)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "batch": "code-git",
+      "availability": "installed",
+      "adaptation": {
+        "supportStatus": "partial",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "skill",
+            "strategy": "preserve",
+            "status": "verified",
+            "executor": "pc-bridge",
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Включить rea, выбрать навык, выполнить один инструмент REA и проверить, что ссылки references/* разрешаются",
+      "path": {
+        "confirmed": true,
+        "basis": "локальный путь подтверждён проверкой на диске (fs.existsSync)",
+        "checked": [
+          {
+            "recorded": "C:\\Users\\st811210\\.gemini\\config\\skills\\reverse-engineer-anything",
+            "resolved": "C:\\Users\\st811210\\.gemini\\config\\skills\\reverse-engineer-anything",
+            "exists": true
+          }
+        ]
+      },
+      "mandatory": true
+    },
+    {
+      "id": "local-skill-rigorous-programming-reasoner",
+      "name": "rigorous-programming-reasoner (навык, активный)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "batch": "code-git",
+      "availability": "installed",
+      "adaptation": {
+        "supportStatus": "partial",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "skill",
+            "strategy": "preserve",
+            "status": "verified",
+            "executor": "pc-bridge",
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Проверить, что в списке ровно одна запись и что удаление/отключение активного файла не удаляет отключённую копию",
+      "path": {
+        "confirmed": true,
+        "basis": "локальный путь подтверждён проверкой на диске (fs.existsSync)",
+        "checked": [
+          {
+            "recorded": "C:\\Users\\st811210\\.gemini\\config\\skills\\rigorous-programming-reasoner",
+            "resolved": "C:\\Users\\st811210\\.gemini\\config\\skills\\rigorous-programming-reasoner",
+            "exists": true
+          }
+        ]
+      },
+      "mandatory": true
+    },
+    {
+      "id": "local-skill-rigorous-programming-reasoner-disabled",
+      "name": "rigorous-programming-reasoner (отключённая копия)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "batch": "code-git",
+      "availability": "installed",
+      "adaptation": {
+        "supportStatus": "partial",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "skill",
+            "strategy": "preserve",
+            "status": "verified",
+            "executor": "pc-bridge",
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Убедиться, что при отсутствии активного файла навык отображается отключённым и переживает вызовы списка (Этап 0)",
+      "path": {
+        "confirmed": true,
+        "basis": "локальный путь подтверждён проверкой на диске (fs.existsSync)",
+        "checked": [
+          {
+            "recorded": "C:\\Users\\st811210\\.gemini\\config\\skills\\rigorous-programming-reasoner\\SKILL.md.disabled",
+            "resolved": "C:\\Users\\st811210\\.gemini\\config\\skills\\rigorous-programming-reasoner\\SKILL.md.disabled",
+            "exists": true
+          }
+        ]
+      },
+      "mandatory": true
+    },
+    {
+      "id": "local-skill-workstation-diagnostics",
+      "name": "workstation-diagnostics (навык)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "batch": "code-git",
+      "availability": "installed",
+      "adaptation": {
+        "supportStatus": "partial",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "skill",
+            "strategy": "preserve",
+            "status": "verified",
+            "executor": "pc-bridge",
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Повторить вызов get_workstation_pulse после любого изменения MCP-конфигурации",
+      "path": {
+        "confirmed": true,
+        "basis": "локальный путь подтверждён проверкой на диске (fs.existsSync)",
+        "checked": [
+          {
+            "recorded": "C:\\Users\\st811210\\.gemini\\config\\skills\\workstation-diagnostics",
+            "resolved": "C:\\Users\\st811210\\.gemini\\config\\skills\\workstation-diagnostics",
+            "exists": true
+          }
+        ]
+      },
+      "mandatory": true
+    },
+    {
+      "id": "local-skill-builtin-agy-customizations",
+      "name": "agy-customizations (встроенный)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "batch": "tasks-knowledge",
+      "availability": "installed",
+      "adaptation": {
+        "supportStatus": "partial",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "skill",
+            "strategy": "preserve",
+            "status": "verified",
+            "executor": "pc-bridge",
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Проверить, что карточка показывает источник builtin и что отключение не влияет на пользовательские навыки",
+      "path": {
+        "confirmed": true,
+        "basis": "локальный путь подтверждён проверкой на диске (fs.existsSync)",
+        "checked": [
+          {
+            "recorded": "C:\\Users\\st811210\\.gemini\\antigravity\\builtin\\skills\\agy-customizations",
+            "resolved": "C:\\Users\\st811210\\.gemini\\antigravity\\builtin\\skills\\agy-customizations",
+            "exists": true
+          }
+        ]
+      },
+      "mandatory": true
+    },
+    {
+      "id": "local-skill-builtin-antigravity-guide",
+      "name": "antigravity-guide (встроенный)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "batch": "tasks-knowledge",
+      "availability": "installed",
+      "adaptation": {
+        "supportStatus": "partial",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "skill",
+            "strategy": "preserve",
+            "status": "verified",
+            "executor": "pc-bridge",
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Убедиться, что карточка не попадает в категорию «перенесённые из Claude/ChatGPT»",
+      "path": {
+        "confirmed": true,
+        "basis": "локальный путь подтверждён проверкой на диске (fs.existsSync)",
+        "checked": [
+          {
+            "recorded": "C:\\Users\\st811210\\.gemini\\antigravity\\builtin\\skills\\antigravity_guide",
+            "resolved": "C:\\Users\\st811210\\.gemini\\antigravity\\builtin\\skills\\antigravity_guide",
+            "exists": true
+          }
+        ]
+      },
+      "mandatory": true
+    },
+    {
+      "id": "local-skill-builtin-automation",
+      "name": "automation (встроенный)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "batch": "tasks-knowledge",
+      "availability": "installed",
+      "adaptation": {
+        "supportStatus": "partial",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "skill",
+            "strategy": "preserve",
+            "status": "verified",
+            "executor": "pc-bridge",
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Создать расписание и проверить запуск на ПК; отдельно — доступность на телефоне",
+      "path": {
+        "confirmed": true,
+        "basis": "локальный путь подтверждён проверкой на диске (fs.existsSync)",
+        "checked": [
+          {
+            "recorded": "C:\\Users\\st811210\\.gemini\\antigravity\\builtin\\skills\\automation",
+            "resolved": "C:\\Users\\st811210\\.gemini\\antigravity\\builtin\\skills\\automation",
+            "exists": true
+          }
+        ]
+      },
+      "mandatory": true
+    },
+    {
+      "id": "local-skill-builtin-generative-ui",
+      "name": "generative_ui (встроенный)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "batch": "design-media",
+      "availability": "installed",
+      "adaptation": {
+        "supportStatus": "partial",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "skill",
+            "strategy": "preserve",
+            "status": "verified",
+            "executor": "pc-bridge",
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Сгенерировать виджет и проверить отображение на ПК и на телефоне",
+      "path": {
+        "confirmed": true,
+        "basis": "локальный путь подтверждён проверкой на диске (fs.existsSync)",
+        "checked": [
+          {
+            "recorded": "C:\\Users\\st811210\\.gemini\\antigravity\\builtin\\skills\\generative_ui",
+            "resolved": "C:\\Users\\st811210\\.gemini\\antigravity\\builtin\\skills\\generative_ui",
+            "exists": true
+          }
+        ]
+      },
+      "mandatory": true
+    },
+    {
+      "id": "local-skill-builtin-migrate-workflows",
+      "name": "migrate-workflows (встроенный)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "batch": "tasks-knowledge",
+      "availability": "installed",
+      "adaptation": {
+        "supportStatus": "partial",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "skill",
+            "strategy": "preserve",
+            "status": "verified",
+            "executor": "pc-bridge",
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Запустить только по явному действию пользователя и проверить, что отключённые навыки не активируются",
+      "path": {
+        "confirmed": true,
+        "basis": "локальный путь подтверждён проверкой на диске (fs.existsSync)",
+        "checked": [
+          {
+            "recorded": "C:\\Users\\st811210\\.gemini\\antigravity\\builtin\\skills\\migrate-workflows",
+            "resolved": "C:\\Users\\st811210\\.gemini\\antigravity\\builtin\\skills\\migrate-workflows",
+            "exists": true
+          }
+        ]
+      },
+      "mandatory": true
+    },
+    {
+      "id": "local-skill-builtin-permissioned-github",
+      "name": "permissioned-github (встроенный)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "batch": "code-git",
+      "availability": "installed",
+      "adaptation": {
+        "supportStatus": "partial",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "skill",
+            "strategy": "preserve",
+            "status": "verified",
+            "executor": "pc-bridge",
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Проверить, что карточка помечена источником Antigravity, а не Claude",
+      "path": {
+        "confirmed": true,
+        "basis": "локальный путь подтверждён проверкой на диске (fs.existsSync)",
+        "checked": [
+          {
+            "recorded": "C:\\Users\\st811210\\.gemini\\antigravity\\builtin\\skills\\permissioned-github",
+            "resolved": "C:\\Users\\st811210\\.gemini\\antigravity\\builtin\\skills\\permissioned-github",
+            "exists": true
+          }
+        ]
+      },
+      "mandatory": true
+    },
+    {
+      "id": "local-skill-builtin-plugin",
+      "name": "plugin (встроенный справочник по плагинам)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "batch": "tasks-knowledge",
+      "availability": "installed",
+      "adaptation": {
+        "supportStatus": "partial",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "skill",
+            "strategy": "preserve",
+            "status": "verified",
+            "executor": "pc-bridge",
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Сверить структуру «плагин Antigravity» с requirements Этапа 2 и зафиксировать различия",
+      "path": {
+        "confirmed": true,
+        "basis": "локальный путь подтверждён проверкой на диске (fs.existsSync)",
+        "checked": [
+          {
+            "recorded": "C:\\Users\\st811210\\.gemini\\antigravity\\builtin\\skills\\plugin",
+            "resolved": "C:\\Users\\st811210\\.gemini\\antigravity\\builtin\\skills\\plugin",
+            "exists": true
+          }
+        ]
+      },
+      "mandatory": true
+    },
+    {
+      "id": "local-skill-builtin-run-workflow",
+      "name": "run-workflow (встроенный)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "batch": "tasks-knowledge",
+      "availability": "installed",
+      "adaptation": {
+        "supportStatus": "partial",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "skill",
+            "strategy": "preserve",
+            "status": "verified",
+            "executor": "pc-bridge",
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Запустить малый workflow и проверить, что дочерние задачи получают только нужный поднабор прав",
+      "path": {
+        "confirmed": true,
+        "basis": "локальный путь подтверждён проверкой на диске (fs.existsSync)",
+        "checked": [
+          {
+            "recorded": "C:\\Users\\st811210\\.gemini\\antigravity\\builtin\\skills\\run-workflow",
+            "resolved": "C:\\Users\\st811210\\.gemini\\antigravity\\builtin\\skills\\run-workflow",
+            "exists": true
+          }
+        ]
+      },
+      "mandatory": true
+    },
+    {
+      "id": "local-skill-builtin-ui-plugin-navigation",
+      "name": "ui-plugin-navigation (встроенный)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "batch": "other-catalogs",
+      "availability": "installed",
+      "adaptation": {
+        "supportStatus": "partial",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "skill",
+            "strategy": "preserve",
+            "status": "verified",
+            "executor": "pc-bridge",
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Проверить отсутствие этой кнопки на телефоне и не рисовать фиктивный UI",
+      "path": {
+        "confirmed": true,
+        "basis": "локальный путь подтверждён проверкой на диске (fs.existsSync)",
+        "checked": [
+          {
+            "recorded": "C:\\Users\\st811210\\.gemini\\antigravity\\builtin\\skills\\ui-plugin-navigation",
+            "resolved": "C:\\Users\\st811210\\.gemini\\antigravity\\builtin\\skills\\ui-plugin-navigation",
+            "exists": true
+          }
+        ]
+      },
+      "mandatory": true
+    },
+    {
+      "id": "local-import-uploads-skill-md",
+      "name": "uploads/SKILL.md (пользовательский импорт)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "batch": "code-git",
+      "availability": "imported",
+      "adaptation": {
+        "supportStatus": "partial",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "skill",
+            "strategy": "preserve",
+            "status": "verified",
+            "executor": "pc-bridge",
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Перенести файл в один из корней и убедиться, что он появляется ровно одной записью без раздвоения",
+      "path": {
+        "confirmed": true,
+        "basis": "локальный путь подтверждён проверкой на диске (fs.existsSync)",
+        "checked": [
+          {
+            "recorded": "…\\scratch\\antigravity-android\\uploads\\SKILL.md",
+            "resolved": "C:\\Users\\st811210\\.gemini\\antigravity\\scratch\\antigravity-android\\uploads\\SKILL.md",
+            "exists": true
+          }
+        ]
+      },
+      "mandatory": true
+    },
+    {
+      "id": "local-plugin-antigravity-workspace-guard",
+      "name": "antigravity-workspace-guard (плагин)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "batch": "code-git",
+      "availability": "installed",
+      "adaptation": {
+        "supportStatus": "blocked",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "plugin",
+            "strategy": "own-executor",
+            "status": "blocked",
+            "executor": "pc-bridge",
+            "blocker": "состав пуст: только manifest (plugin.json); заявленные возможности не обеспечены компонентами (skills/agents/rules/hooks/mcp) — пути исполнения нет"
+          },
+          {
+            "componentType": "plugin",
+            "strategy": "own-executor",
+            "status": "blocked",
+            "executor": "pc-bridge",
+            "blocker": "состав пуст: только manifest (plugin.json); заявленные возможности не обеспечены компонентами (skills/agents/rules/hooks/mcp) — пути исполнения нет"
+          }
+        ]
+      },
+      "verificationScenario": "Проверить, делает ли плагин что-либо при включении (лог/действие), иначе карточка обязана показывать «требует проверки»",
+      "path": {
+        "confirmed": true,
+        "basis": "локальный путь подтверждён проверкой на диске (fs.existsSync)",
+        "checked": [
+          {
+            "recorded": "C:\\Users\\st811210\\.gemini\\config\\plugins\\antigravity-workspace-guard",
+            "resolved": "C:\\Users\\st811210\\.gemini\\config\\plugins\\antigravity-workspace-guard",
+            "exists": true
+          }
+        ]
+      },
+      "mandatory": true
+    },
+    {
+      "id": "local-plugin-kotlin-compose-inspector",
+      "name": "kotlin-compose-inspector (плагин)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "batch": "code-git",
+      "availability": "installed",
+      "adaptation": {
+        "supportStatus": "blocked",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "plugin",
+            "strategy": "own-executor",
+            "status": "blocked",
+            "executor": "pc-bridge",
+            "blocker": "состав пуст: только manifest (plugin.json); заявленные возможности не обеспечены компонентами (skills/agents/rules/hooks/mcp) — пути исполнения нет"
+          },
+          {
+            "componentType": "plugin",
+            "strategy": "own-executor",
+            "status": "blocked",
+            "executor": "pc-bridge",
+            "blocker": "состав пуст: только manifest (plugin.json); заявленные возможности не обеспечены компонентами (skills/agents/rules/hooks/mcp) — пути исполнения нет"
+          }
+        ]
+      },
+      "verificationScenario": "Отключить через agy и убедиться, что оба источника состояния сходятся, а карточка не показывает ложное «включено»",
+      "path": {
+        "confirmed": true,
+        "basis": "локальный путь подтверждён проверкой на диске (fs.existsSync)",
+        "checked": [
+          {
+            "recorded": "C:\\Users\\st811210\\.gemini\\config\\plugins\\kotlin-compose-inspector",
+            "resolved": "C:\\Users\\st811210\\.gemini\\config\\plugins\\kotlin-compose-inspector",
+            "exists": true
+          }
+        ]
+      },
+      "mandatory": true
+    },
+    {
+      "id": "local-plugin-staging-antigravity-workspace-guard",
+      "name": "staging-копия antigravity-workspace-guard",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "batch": "code-git",
+      "availability": "imported",
+      "adaptation": {
+        "supportStatus": "blocked",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "plugin",
+            "strategy": "own-executor",
+            "status": "requires-check",
+            "executor": "pc-bridge",
+            "blocker": "байт-в-байт совпадает с установленным manifest — считать одним пакетом с двумя путями, а не двумя"
+          }
+        ]
+      },
+      "verificationScenario": "При установке из staging проверить, что реестр не создаёт вторую карточку с тем же именем",
+      "path": {
+        "confirmed": true,
+        "basis": "локальный путь подтверждён проверкой на диске (fs.existsSync)",
+        "checked": [
+          {
+            "recorded": "…\\uploads\\plugin-staging\\antigravity-workspace-guard",
+            "resolved": "C:\\Users\\st811210\\.gemini\\antigravity\\scratch\\antigravity-android\\uploads\\plugin-staging\\antigravity-workspace-guard",
+            "exists": true
+          }
+        ]
+      },
+      "mandatory": true
+    },
+    {
+      "id": "local-plugin-staging-kotlin-compose-inspector",
+      "name": "staging-копия kotlin-compose-inspector",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "batch": "code-git",
+      "availability": "imported",
+      "adaptation": {
+        "supportStatus": "blocked",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "plugin",
+            "strategy": "own-executor",
+            "status": "requires-check",
+            "executor": "pc-bridge",
+            "blocker": "байт-в-байт совпадает с установленным manifest — один пакет, два пути"
+          }
+        ]
+      },
+      "verificationScenario": "Проверить коллизию имён при установке из staging (Этап 2)",
+      "path": {
+        "confirmed": true,
+        "basis": "локальный путь подтверждён проверкой на диске (fs.existsSync)",
+        "checked": [
+          {
+            "recorded": "…\\uploads\\plugin-staging\\kotlin-compose-inspector",
+            "resolved": "C:\\Users\\st811210\\.gemini\\antigravity\\scratch\\antigravity-android\\uploads\\plugin-staging\\kotlin-compose-inspector",
+            "exists": true
+          }
+        ]
+      },
+      "mandatory": true
+    },
+    {
+      "id": "local-mcp-ag-workstation-info",
+      "name": "ag-workstation-info (MCP, stdio)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "batch": "code-git",
+      "availability": "installed",
+      "adaptation": {
+        "supportStatus": "fully-supported",
+        "fullSupportAllowed": true,
+        "licenseRight": "granted",
+        "records": [
+          {
+            "componentType": "mcp-server",
+            "strategy": "own-executor",
+            "status": "verified",
+            "executor": "pc-bridge",
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "initialize → tools/list → tools/call get_workstation_pulse → проверить mcpVerificationBadge ANTIGRAVITY-MCP-VERIFIED-2026",
+      "path": {
+        "confirmed": false,
+        "basis": "записанный локальный путь не найден на диске",
+        "checked": [
+          {
+            "recorded": "C:\\Users\\st811210\\.gemini\\config\\mcp_config.json",
+            "resolved": "C:\\Users\\st811210\\.gemini\\config\\mcp_config.json",
+            "exists": true
+          },
+          {
+            "recorded": "C:\\...\\pc-bridge\\mcp_sysinfo_server.js",
+            "resolved": "C:\\...\\pc-bridge\\mcp_sysinfo_server.js",
+            "exists": false
+          }
+        ]
+      },
+      "mandatory": true
+    },
+    {
+      "id": "local-mcp-rea",
+      "name": "rea (MCP, stdio)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "batch": "code-git",
+      "availability": "installed",
+      "adaptation": {
+        "supportStatus": "partial",
+        "fullSupportAllowed": false,
+        "licenseRight": "unknown",
+        "records": [
+          {
+            "componentType": "mcp-server",
+            "strategy": "own-executor",
+            "status": "verified",
+            "executor": "pc-bridge",
+            "blocker": null
+          }
+        ]
+      },
+      "verificationScenario": "Включить rea, свести три конфигурации в один источник и выполнить один вызов инструмента REA",
+      "path": {
+        "confirmed": true,
+        "basis": "локальный путь подтверждён проверкой на диске (fs.existsSync)",
+        "checked": [
+          {
+            "recorded": "C:\\Users\\st811210\\.gemini\\config\\mcp_config.json",
+            "resolved": "C:\\Users\\st811210\\.gemini\\config\\mcp_config.json",
+            "exists": true
+          }
+        ]
+      },
+      "mandatory": true
+    }
+  ],
+  "backlog": [
+    {
+      "id": "bl:claude-web-catalog-connectors",
+      "positionId": "claude-web-catalog-connectors",
+      "issues": [
+        "полный список карточек не выгружен; присутствуют Yours/Discover, поиск, фильтры, добавление"
+      ],
+      "dependencies": [
+        "аккаунт claude.ai (Organization disabled)"
+      ],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (claude.ai (web))",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:claude-web-catalog-skills",
+      "positionId": "claude-web-catalog-skills",
+      "issues": [
+        "видимые карточки Skills и Plugins частично совпадают — состав пакета не проверен, дубли не разведены"
+      ],
+      "dependencies": [
+        "аккаунт claude.ai"
+      ],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (claude.ai (web))",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:claude-web-catalog-plugins",
+      "positionId": "claude-web-catalog-plugins",
+      "issues": [
+        "совпадение карточек со Skills не доказывает одинаковый формат пакета — нужно открыть каждую карточку"
+      ],
+      "dependencies": [
+        "аккаунт claude.ai"
+      ],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (claude.ai (web))",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:claude-web-card-figma",
+      "positionId": "claude-web-card-figma",
+      "issues": [
+        "вкладка, категория и состав не зафиксированы; установка и вход не выполнялись"
+      ],
+      "dependencies": [],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (claude.ai (web))",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:claude-web-card-desktop-commander",
+      "positionId": "claude-web-card-desktop-commander",
+      "issues": [
+        "вкладка/состав не зафиксированы; наверняка скриптовый пакет — Android-исполнитель не проверен"
+      ],
+      "dependencies": [],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (claude.ai (web))",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:claude-web-card-searchfit-seo",
+      "positionId": "claude-web-card-searchfit-seo",
+      "issues": [
+        "вкладка/состав не зафиксированы; внешний сервис — наличие переносимого сервера не подтверждено"
+      ],
+      "dependencies": [],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (claude.ai (web))",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:claude-web-card-bright-data",
+      "positionId": "claude-web-card-bright-data",
+      "issues": [
+        "внешний сервис с собственной авторизацией — подключение не проверялось"
+      ],
+      "dependencies": [],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (claude.ai (web))",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:claude-web-card-zoom",
+      "positionId": "claude-web-card-zoom",
+      "issues": [
+        "карточка видима; подключение/входы не менялись"
+      ],
+      "dependencies": [],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (claude.ai (web))",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:claude-web-card-product-tracking",
+      "positionId": "claude-web-card-product-tracking",
+      "issues": [
+        "вкладка/состав/издатель не зафиксированы"
+      ],
+      "dependencies": [],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (claude.ai (web))",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:claude-web-card-learn",
+      "positionId": "claude-web-card-learn",
+      "issues": [
+        "короткое имя совпадает с типичным названием категории/навыка — тип позиции не подтверждён"
+      ],
+      "dependencies": [],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (claude.ai (web))",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:claude-web-card-doc-coauthoring",
+      "positionId": "claude-web-card-doc-coauthoring",
+      "issues": [
+        "вкладка/состав не зафиксированы; вероятно инструкционный навык — это надо подтвердить"
+      ],
+      "dependencies": [],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (claude.ai (web))",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:claude-web-card-web-artifacts-builder",
+      "positionId": "claude-web-card-web-artifacts-builder",
+      "issues": [
+        "вкладка/состав не зафиксированы; возможна привязка к артефактам Claude"
+      ],
+      "dependencies": [],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (claude.ai (web))",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:claude-web-card-productivity",
+      "positionId": "claude-web-card-productivity",
+      "issues": [
+        "в плане отнесена к карточкам; вкладка и тип (карточка или категория) не зафиксированы"
+      ],
+      "dependencies": [],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (claude.ai (web))",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:claude-web-card-marketing",
+      "positionId": "claude-web-card-marketing",
+      "issues": [
+        "в плане отнесена к карточкам; вкладка и тип не зафиксированы"
+      ],
+      "dependencies": [],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (claude.ai (web))",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:claude-web-card-finance",
+      "positionId": "claude-web-card-finance",
+      "issues": [
+        "в плане отнесена к карточкам; вкладка и тип не зафиксированы"
+      ],
+      "dependencies": [],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (claude.ai (web))",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:claude-web-entry-skills",
+      "positionId": "claude-web-entry-skills",
+      "issues": [
+        "вход только наблюдался, содержимое раздела не открывалось"
+      ],
+      "dependencies": [
+        "меню «Add files, connectors, and more»"
+      ],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (claude.ai (web))",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:claude-web-entry-add-connector",
+      "positionId": "claude-web-entry-add-connector",
+      "issues": [
+        "форма добавления не открывалась: параметры URL/входа не сняты"
+      ],
+      "dependencies": [
+        "меню композера"
+      ],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (claude.ai (web))",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:claude-web-entry-add-plugins",
+      "positionId": "claude-web-entry-add-plugins",
+      "issues": [
+        "список за этим входом не снимался — отсюда неполнота карточек Plugins"
+      ],
+      "dependencies": [
+        "меню композера"
+      ],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (claude.ai (web))",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:claude-web-entry-design-system",
+      "positionId": "claude-web-entry-design-system",
+      "issues": [
+        "похоже на продуктовую функцию, а не на расширение; связь с Figma-коннектором не проверена"
+      ],
+      "dependencies": [
+        "внутренняя функция артефактов Claude"
+      ],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (claude.ai (web))",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:claude-web-entry-get-apps-extensions",
+      "positionId": "claude-web-entry-get-apps-extensions",
+      "issues": [
+        "целевая страница не открывалась — состав «apps and extensions» неизвестен"
+      ],
+      "dependencies": [
+        "боковая навигация Claude"
+      ],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (claude.ai (web))",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:claude-web-toggle-web-search",
+      "positionId": "claude-web-toggle-web-search",
+      "issues": [
+        "не переносится как расширение; учитывается только как встроенная возможность"
+      ],
+      "dependencies": [
+        "внутренний поиск Anthropic"
+      ],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (claude.ai (web))",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:claude-web-toggle-memory",
+      "positionId": "claude-web-toggle-memory",
+      "issues": [
+        "серверная память без переносимого исходника — по плану §2 отдельная реализация через API либо честная зависимость"
+      ],
+      "dependencies": [
+        "хранилище памяти Anthropic"
+      ],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (claude.ai (web))",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:claude-web-surface-cowork",
+      "positionId": "claude-web-surface-cowork",
+      "issues": [
+        "переключатель видим, содержимое Cowork не исследовалось; считать отдельным источником"
+      ],
+      "dependencies": [
+        "отдельный продукт по плану §2"
+      ],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (claude.ai (web))",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:claude-web-code-upgrade",
+      "positionId": "claude-web-code-upgrade",
+      "issues": [
+        "Code Upgrade открыл страницу тарифов; состав/возможности Code недоступны на наблюдаемом аккаунте"
+      ],
+      "dependencies": [
+        "платный тариф"
+      ],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (claude.ai (web))",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:claude-android-connector-custom",
+      "positionId": "claude-android-connector-custom",
+      "issues": [
+        "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+        "строка 0x7f14003b: «Adding custom connectors isn't available for your account» — ограничение аккаунта; без входа форма не проверена"
+      ],
+      "dependencies": [
+        "MCP-совместимый сервер на URL",
+        "request headers (API key) либо вход на сервер"
+      ],
+      "supportStatus": "blocked",
+      "owner": "внешний поставщик (Claude for Android 1.261029.20)",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:claude-android-connector-catalog",
+      "positionId": "claude-android-connector-catalog",
+      "issues": [
+        "сами карточки каталога в дампе отсутствуют — только элементы интерфейса"
+      ],
+      "dependencies": [
+        "список каталога Anthropic"
+      ],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (Claude for Android 1.261029.20)",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:claude-android-skills",
+      "positionId": "claude-android-skills",
+      "issues": [
+        "навыки создаются на claude.ai (0x7f140992) — импорт пакетов SKILL.md в клиенте не подтверждён; организации могут запретить создание (0x7f14074c)"
+      ],
+      "dependencies": [
+        "claude.ai как место создания навыков"
+      ],
+      "supportStatus": "partial",
+      "owner": "внешний поставщик (Claude for Android 1.261029.20)",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:claude-android-mcp-servers",
+      "positionId": "claude-android-mcp-servers",
+      "issues": [
+        "handshake и tools/list не выполнялись; есть политические выключатели «Allow/Turn off MCP servers» (0x7f1403fc-3fe), но списка серверов в дампе нет"
+      ],
+      "dependencies": [
+        "MCP-совместимый сервер",
+        "домены/разрешения окружения (0x7f1403e3)"
+      ],
+      "supportStatus": "partial",
+      "owner": "внешний поставщик (Claude for Android 1.261029.20)",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:claude-android-plugin-label",
+      "positionId": "claude-android-plugin-label",
+      "issues": [
+        "в строках Android только одиночная метка «Plugin» — экран каталога плагинов не найден; нельзя утверждать наличие плагинов в Android-клиенте",
+        "в строках Android только одиночная метка «Plugin» — экран каталога плагинов не найден; нельзя утверждать наличие плагинов в Android-клиенте"
+      ],
+      "dependencies": [],
+      "supportStatus": "blocked",
+      "owner": "внешний поставщик (Claude for Android 1.261029.20)",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:claude-android-connector-figma",
+      "positionId": "claude-android-connector-figma",
+      "issues": [
+        "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+        "строка говорит об отказе Figma, а не о готовности; связь с веб-карточкой Figma — только по имени"
+      ],
+      "dependencies": [
+        "аккаунт Figma для Design/Slides/design system"
+      ],
+      "supportStatus": "blocked",
+      "owner": "внешний поставщик (Claude for Android 1.261029.20)",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:claude-android-github-app",
+      "positionId": "claude-android-github-app",
+      "issues": [
+        "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+        "интеграция привязана к облачным сессиям и репозиториям; в каталоге Connectors не наблюдалась — не считать карточкой каталога"
+      ],
+      "dependencies": [
+        "установка Claude GitHub App в репозитории",
+        "доступ к репозиториям/веткам"
+      ],
+      "supportStatus": "blocked",
+      "owner": "внешний поставщик (Claude for Android 1.261029.20)",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:claude-android-connector-calendar",
+      "positionId": "claude-android-connector-calendar",
+      "issues": [
+        "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+        "поставщик календаря в строках не назван; работа на телефоне именно этой позиции не проверялась"
+      ],
+      "dependencies": [
+        "разрешение READ/WRITE_CALENDAR (claude_badging.txt)",
+        "выбор конкретных календарей"
+      ],
+      "supportStatus": "blocked",
+      "owner": "внешний поставщик (Claude for Android 1.261029.20)",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:claude-android-connector-google-drive",
+      "positionId": "claude-android-connector-google-drive",
+      "issues": [
+        "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+        "подтверждение косвенное (строка ошибки конвертации файла); подключение не проверялось"
+      ],
+      "dependencies": [
+        "аккаунт Google Drive"
+      ],
+      "supportStatus": "blocked",
+      "owner": "внешний поставщик (Claude for Android 1.261029.20)",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:claude-android-settings-integrations",
+      "positionId": "claude-android-settings-integrations",
+      "issues": [
+        "это ключевые слова поиска по настройкам, а не список установленного — Gmail как коннектор отдельной строкой не подтверждён"
+      ],
+      "dependencies": [
+        "экран настроек Claude Android"
+      ],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (Claude for Android 1.261029.20)",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:chatgpt-plugin-directory",
+      "positionId": "chatgpt-plugin-directory",
+      "issues": [
+        "живой проход каталога не выполнялся (план §1) — ни одной карточки с именем/версией не зафиксировано"
+      ],
+      "dependencies": [
+        "список каталога OpenAI"
+      ],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (ChatGPT for Android 1.2026.293)",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:chatgpt-cat-business-analytics",
+      "positionId": "chatgpt-cat-business-analytics",
+      "issues": [
+        "содержимое категории не выгружено; строка «No plugins in this category» (#7659) допускает пустую категорию"
+      ],
+      "dependencies": [
+        "фильтр категории каталога"
+      ],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (ChatGPT for Android 1.2026.293)",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:chatgpt-cat-creativity-design",
+      "positionId": "chatgpt-cat-creativity-design",
+      "issues": [
+        "содержимое категории не выгружено"
+      ],
+      "dependencies": [
+        "фильтр категории каталога"
+      ],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (ChatGPT for Android 1.2026.293)",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:chatgpt-cat-developer-tools",
+      "positionId": "chatgpt-cat-developer-tools",
+      "issues": [
+        "содержимое категории не выгружено"
+      ],
+      "dependencies": [
+        "фильтр категории каталога"
+      ],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (ChatGPT for Android 1.2026.293)",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:chatgpt-cat-messaging-social",
+      "positionId": "chatgpt-cat-messaging-social",
+      "issues": [
+        "содержимое категории не выгружено"
+      ],
+      "dependencies": [
+        "фильтр категории каталога"
+      ],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (ChatGPT for Android 1.2026.293)",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:chatgpt-cat-productivity",
+      "positionId": "chatgpt-cat-productivity",
+      "issues": [
+        "имя совпадает с меткой карточки Claude «Productivity» — совпадение названий не доказывает одинаковый пакет (план §2)"
+      ],
+      "dependencies": [
+        "фильтр категории каталога"
+      ],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (ChatGPT for Android 1.2026.293)",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:chatgpt-cat-research-knowledge",
+      "positionId": "chatgpt-cat-research-knowledge",
+      "issues": [
+        "содержимое категории не выгружено"
+      ],
+      "dependencies": [
+        "фильтр категории каталога"
+      ],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (ChatGPT for Android 1.2026.293)",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:chatgpt-plugin-directory-views",
+      "positionId": "chatgpt-plugin-directory-views",
+      "issues": [
+        "значения списков в дампе нет; «Switch to a workspace to see its plugins» (#7689) означает контекстную зависимость раздела"
+      ],
+      "dependencies": [
+        "рабочее пространство (workspace) для раздела workspace plugins"
+      ],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (ChatGPT for Android 1.2026.293)",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:chatgpt-plugin-detail",
+      "positionId": "chatgpt-plugin-detail",
+      "issues": [
+        "поле Version существует в UI, но ни одного значения из каталога в дампе нет"
+      ],
+      "dependencies": [
+        "описание, скриншоты, список навыков и действий"
+      ],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (ChatGPT for Android 1.2026.293)",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:chatgpt-plugin-permissions",
+      "positionId": "chatgpt-plugin-permissions",
+      "issues": [
+        "модель разрешений источника нельзя копировать вслепую: по плану разрешение установки не расширяет доступ инструментов Antigravity"
+      ],
+      "dependencies": [
+        "общий профиль разрешений + переопределение на плагин"
+      ],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (ChatGPT for Android 1.2026.293)",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:chatgpt-plugin-management",
+      "positionId": "chatgpt-plugin-management",
+      "issues": [
+        "зависимость «плагин → навыки» важна для Этапа 2: разбор пакета должен сохранять этот состав, а не только manifest"
+      ],
+      "dependencies": [
+        "связь «плагин содержит навыки»: удаление плагина удаляет его навыки (#5634)"
+      ],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (ChatGPT for Android 1.2026.293)",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:chatgpt-component-app",
+      "positionId": "chatgpt-component-app",
+      "issues": [
+        "путь — подключение сервиса через MCP-реестр (Этап 3); формат .app.json/apps и переносимый сервер для Antigravity не подтверждены",
+        "формат App не описан в дампе; сопоставление с MCP/коннектором не выполнено"
+      ],
+      "dependencies": [
+        "плагин как контейнер (по #7845 плагин содержит apps или skills)"
+      ],
+      "supportStatus": "blocked",
+      "owner": "внешний поставщик (ChatGPT for Android 1.2026.293)",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:chatgpt-component-skill",
+      "positionId": "chatgpt-component-skill",
+      "issues": [
+        "дамп не говорит, что навыки ChatGPT — это Agent Skills SKILL.md; парсер Этапа 2 нельзя подключать без проверки формата"
+      ],
+      "dependencies": [
+        "плагин-владелец (навык удаляется вместе с плагином #5634)",
+        "включённые файлы (#5619 Included files)"
+      ],
+      "supportStatus": "partial",
+      "owner": "внешний поставщик (ChatGPT for Android 1.2026.293)",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:chatgpt-connectors",
+      "positionId": "chatgpt-connectors",
+      "issues": [
+        "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+        "список доступных коннекторов в дампе не выведен; есть только отдельные строки «Connect … account»"
+      ],
+      "dependencies": [
+        "connected accounts",
+        "MFA для подключения (#5584-5585)",
+        "админ-политика (#5611 Installed by admin)"
+      ],
+      "supportStatus": "blocked",
+      "owner": "внешний поставщик (ChatGPT for Android 1.2026.293)",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:chatgpt-connector-gmail",
+      "positionId": "chatgpt-connector-gmail",
+      "issues": [
+        "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+        "публичного MCP/API-конца в дампе нет; перенос возможен только через официальный доступ, свой вход Antigravity"
+      ],
+      "dependencies": [
+        "аккаунт Google",
+        "разрешение на почту (чтение/создание/отправка — #5560)"
+      ],
+      "supportStatus": "blocked",
+      "owner": "внешний поставщик (ChatGPT for Android 1.2026.293)",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:chatgpt-connector-google-calendar",
+      "positionId": "chatgpt-connector-google-calendar",
+      "issues": [
+        "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+        "переиспользование чужого OAuth-флоу невозможно — нужен собственный вход Antigravity (план §2)"
+      ],
+      "dependencies": [
+        "аккаунт Google",
+        "разрешение на календарь"
+      ],
+      "supportStatus": "blocked",
+      "owner": "внешний поставщик (ChatGPT for Android 1.2026.293)",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:chatgpt-connector-outlook",
+      "positionId": "chatgpt-connector-outlook",
+      "issues": [
+        "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+        "публичный endpoint не зафиксирован; карточка с версией/издателем недоступна без живого прохода"
+      ],
+      "dependencies": [
+        "аккаунт Microsoft"
+      ],
+      "supportStatus": "blocked",
+      "owner": "внешний поставщик (ChatGPT for Android 1.2026.293)",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:chatgpt-connector-1password",
+      "positionId": "chatgpt-connector-1password",
+      "issues": [
+        "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+        "привязано к облачному браузеру продукта — переносим только вместе с этой функцией, иначе честная зависимость"
+      ],
+      "dependencies": [
+        "приложение 1Password из Google Play (#7551)",
+        "выбранные пользователем логины (#7552)"
+      ],
+      "supportStatus": "blocked",
+      "owner": "внешний поставщик (ChatGPT for Android 1.2026.293)",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:chatgpt-file-sources",
+      "positionId": "chatgpt-file-sources",
+      "issues": [
+        "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+        "строки подтверждают только действия «Open in …» и скрытие результатов — не карточки каталога"
+      ],
+      "dependencies": [
+        "подключённые файловые аккаунты",
+        "фильтры результатов поиска (#6565-6568)"
+      ],
+      "supportStatus": "blocked",
+      "owner": "внешний поставщик (ChatGPT for Android 1.2026.293)",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:chatgpt-gpts",
+      "positionId": "chatgpt-gpts",
+      "issues": [
+        "GPT ≠ плагин и ≠ MCP; переносимого сервера нет без доступного API",
+        "GPT ≠ плагин и ≠ MCP: по плану §2 это отдельный тип; переносимого сервера у GPT нет без доступного API"
+      ],
+      "dependencies": [
+        "одобренное рабочее пространство (#6544)",
+        "connected accounts внутри GPT (#6545-6546)"
+      ],
+      "supportStatus": "blocked",
+      "owner": "внешний поставщик (ChatGPT for Android 1.2026.293)",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:chatgpt-finance-connections",
+      "positionId": "chatgpt-finance-connections",
+      "issues": [
+        "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+        "поставщик и метод подключения в дампе не названы; чувствительные данные — секреты в инвентарь не входят (требование плана)"
+      ],
+      "dependencies": [
+        "финансовый поставщик (в строках не назван)"
+      ],
+      "supportStatus": "blocked",
+      "owner": "внешний поставщик (ChatGPT for Android 1.2026.293)",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:chatgpt-availability-gates",
+      "positionId": "chatgpt-availability-gates",
+      "issues": [
+        "эти состояния обязаны различаться в нашей матрице: видим ≠ доступен ≠ установлен; без живого прохода статусы карточек неизвестны"
+      ],
+      "dependencies": [
+        "тариф (Pro), политика администратора workspace, состояние сети"
+      ],
+      "supportStatus": "observation",
+      "owner": "внешний поставщик (ChatGPT for Android 1.2026.293)",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:codex-remote-composer-extensions",
+      "positionId": "codex-remote-composer-extensions",
+      "issues": [
+        "блок строк относится к Remote-композеру: по плану §2 плагин Codex нельзя считать плагином Android ChatGPT; атрибуция внутри APK дампом не разделена",
+        "блок строк относится к Remote-композеру: по плану §2 плагин Codex нельзя считать плагином Android ChatGPT; атрибуция внутри APK дампом не разделена"
+      ],
+      "dependencies": [
+        "Remote/Codex-сессия",
+        "список команд /help /status /goal /plan /fast (#4973)"
+      ],
+      "supportStatus": "blocked",
+      "owner": "внешний поставщик (Codex (Remote), в составе APK ChatGPT)",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:codex-visualize-plugin-assets",
+      "positionId": "codex-visualize-plugin-assets",
+      "issues": [
+        "сетевая зависимость от unpkg.com и отсутствие лицензии; сквозной запуск визуализации не выполнялся",
+        "сетевая зависимость от unpkg.com и отсутствие лицензии; сквозной запуск визуализации не выполнялся"
+      ],
+      "dependencies": [
+        "внешний CDN lucide@1.50.0 (visualize.html:233)",
+        "глобальный объект openai (visualizationTheme/StyleVariables)"
+      ],
+      "supportStatus": "blocked",
+      "owner": "внешний поставщик (Codex (bundled plugin), ассеты в проекте)",
+      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
+      "rule": "external-unconfirmed-path"
+    },
+    {
+      "id": "bl:local-skill-autonomous-software-engineer",
+      "positionId": "local-skill-autonomous-software-engineer",
+      "issues": [
+        "SKILL.md и SKILL.md.disabled идентичны (sha256 83620adedd52a93fecd0dff341b432f5654c4c724c8535213d07007be228e028); активный файл приоритетен, поэтому при чтении списка навык выглядит включённым, а копия отключения игнорируется"
+      ],
+      "dependencies": [
+        "без внешних скриптов в папке (только SKILL.md)"
+      ],
+      "supportStatus": "partial",
+      "owner": "antigravity-android (репозиторий)",
+      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
+      "rule": "license-unconfirmed"
+    },
+    {
+      "id": "bl:local-skill-reverse-engineer-anything",
+      "positionId": "local-skill-reverse-engineer-anything",
+      "issues": [
+        "навык зависит от MCP rea, который в mcp_config.json помечен disabled:true — без включения навык неработоспособен"
+      ],
+      "dependencies": [
+        "references/*.md — 7 файлов",
+        "MCP-сервер rea (инструменты REA)"
+      ],
+      "supportStatus": "partial",
+      "owner": "antigravity-android (репозиторий)",
+      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
+      "rule": "license-unconfirmed"
+    },
+    {
+      "id": "bl:local-skill-rigorous-programming-reasoner",
+      "positionId": "local-skill-rigorous-programming-reasoner",
+      "issues": [
+        "активный SKILL.md (3215 байт, sha256 e558f3ef…) и SKILL.md.disabled (22531 байт, sha256 5910a64f…) различаются; активный приоритетен, отключённая версия остаётся тенью"
+      ],
+      "dependencies": [
+        "без внешних файлов в папке"
+      ],
+      "supportStatus": "partial",
+      "owner": "antigravity-android (репозиторий)",
+      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
+      "rule": "license-unconfirmed"
+    },
+    {
+      "id": "bl:local-skill-rigorous-programming-reasoner-disabled",
+      "positionId": "local-skill-rigorous-programming-reasoner-disabled",
+      "issues": [
+        "при существовании активного SKILL.md отключённая копия не влияет на статус; байт-в-байт совпадает с uploads/SKILL.md"
+      ],
+      "dependencies": [
+        "активная копия того же навыка"
+      ],
+      "supportStatus": "partial",
+      "owner": "antigravity-android (репозиторий)",
+      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
+      "rule": "license-unconfirmed"
+    },
+    {
+      "id": "bl:local-skill-workstation-diagnostics",
+      "positionId": "local-skill-workstation-diagnostics",
+      "issues": [
+        "навык проверен только на ПК; результат телеметрии не должен выдаваться за телефонный"
+      ],
+      "dependencies": [
+        "MCP-сервер ag-workstation-info (get_workstation_pulse)"
+      ],
+      "supportStatus": "partial",
+      "owner": "antigravity-android (репозиторий)",
+      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
+      "rule": "license-unconfirmed"
+    },
+    {
+      "id": "bl:local-skill-builtin-agy-customizations",
+      "positionId": "local-skill-builtin-agy-customizations",
+      "issues": [
+        "builtin-корень смешивается с пользовательскими навыками в одном списке — разделение источников должно сохраниться в реестре"
+      ],
+      "dependencies": [
+        "docs/{hooks,json_configs,mcp_servers,plugins,rules,skills}.md — 6 файлов"
+      ],
+      "supportStatus": "partial",
+      "owner": "antigravity-android (репозиторий)",
+      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
+      "rule": "license-unconfirmed"
+    },
+    {
+      "id": "bl:local-skill-builtin-antigravity-guide",
+      "positionId": "local-skill-builtin-antigravity-guide",
+      "issues": [
+        "описывает Antigravity, а не экосистемы Claude/ChatGPT — учитывается как контекст, не как переносимое расширение"
+      ],
+      "dependencies": [
+        "references/{app,cli,ide,sdk}.md"
+      ],
+      "supportStatus": "partial",
+      "owner": "antigravity-android (репозиторий)",
+      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
+      "rule": "license-unconfirmed"
+    },
+    {
+      "id": "bl:local-skill-builtin-automation",
+      "positionId": "local-skill-builtin-automation",
+      "issues": [
+        "зависит от продуктового планировщика — на телефоне не подтверждено"
+      ],
+      "dependencies": [
+        "slash-команда /automation",
+        "планировщик заданий продукта"
+      ],
+      "supportStatus": "partial",
+      "owner": "antigravity-android (репозиторий)",
+      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
+      "rule": "license-unconfirmed"
+    },
+    {
+      "id": "bl:local-skill-builtin-generative-ui",
+      "positionId": "local-skill-builtin-generative-ui",
+      "issues": [
+        "телефонный рендер не подтверждён"
+      ],
+      "dependencies": [
+        "рендер HTML-виджетов хостом"
+      ],
+      "supportStatus": "partial",
+      "owner": "antigravity-android (репозиторий)",
+      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
+      "rule": "license-unconfirmed"
+    },
+    {
+      "id": "bl:local-skill-builtin-migrate-workflows",
+      "positionId": "local-skill-builtin-migrate-workflows",
+      "issues": [
+        "пишет в конфигурацию — требует явного разрешения, нельзя запускать как часть просмотра списка"
+      ],
+      "dependencies": [
+        "глобальные и workspace-корни конфигурации"
+      ],
+      "supportStatus": "partial",
+      "owner": "antigravity-android (репозиторий)",
+      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
+      "rule": "license-unconfirmed"
+    },
+    {
+      "id": "bl:local-skill-builtin-permissioned-github",
+      "positionId": "local-skill-builtin-permissioned-github",
+      "issues": [
+        "пересекается по теме с Claude GitHub App — не объединять: это разные продукты"
+      ],
+      "dependencies": [
+        "дост к GitHub в среде выполнения"
+      ],
+      "supportStatus": "partial",
+      "owner": "antigravity-android (репозиторий)",
+      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
+      "rule": "license-unconfirmed"
+    },
+    {
+      "id": "bl:local-skill-builtin-plugin",
+      "positionId": "local-skill-builtin-plugin",
+      "issues": [
+        "описывает формат плагинов Antigravity (skills/agents/rules/MCP/hooks), а не форматы Claude/OpenAI — Этапу 2 всё равно нужны отдельные парсеры"
+      ],
+      "dependencies": [
+        "слэш-команда /plugin",
+        "CLI agy plugin"
+      ],
+      "supportStatus": "partial",
+      "owner": "antigravity-android (репозиторий)",
+      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
+      "rule": "license-unconfirmed"
+    },
+    {
+      "id": "bl:local-skill-builtin-run-workflow",
+      "positionId": "local-skill-builtin-run-workflow",
+      "issues": [
+        "телефонный цикл не подтверждён"
+      ],
+      "dependencies": [
+        "инструмент run_workflow",
+        "агенты/параллельные вызовы продукта"
+      ],
+      "supportStatus": "partial",
+      "owner": "antigravity-android (репозиторий)",
+      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
+      "rule": "license-unconfirmed"
+    },
+    {
+      "id": "bl:local-skill-builtin-ui-plugin-navigation",
+      "positionId": "local-skill-builtin-ui-plugin-navigation",
+      "issues": [
+        "привязано к десктопным UI-панелям — на телефоне не применимо без проверки"
+      ],
+      "dependencies": [
+        "UI-панели плагинов продукта",
+        "disable-slash-command: true"
+      ],
+      "supportStatus": "partial",
+      "owner": "antigravity-android (репозиторий)",
+      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
+      "rule": "license-unconfirmed"
+    },
+    {
+      "id": "bl:local-import-uploads-skill-md",
+      "positionId": "local-import-uploads-skill-md",
+      "issues": [
+        "корни listSkills — .agents/skills, ~/.gemini/config/skills, builtin (server.js:2364-2368); uploads/ среди них нет, поэтому навык не виден; байт-в-байт совпадает с отключённой копией rigorous-programming-reasoner"
+      ],
+      "dependencies": [
+        "вне корней listSkills"
+      ],
+      "supportStatus": "partial",
+      "owner": "antigravity-android (репозиторий)",
+      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
+      "rule": "license-unconfirmed"
+    },
+    {
+      "id": "bl:local-plugin-antigravity-workspace-guard",
+      "positionId": "local-plugin-antigravity-workspace-guard",
+      "issues": [
+        "состав пуст: только manifest (plugin.json); заявленные возможности не обеспечены компонентами (skills/agents/rules/hooks/mcp) — пути исполнения нет",
+        "состав пуст: только manifest (plugin.json); заявленные возможности не обеспечены компонентами (skills/agents/rules/hooks/mcp) — пути исполнения нет",
+        "manifest без verifiedTools: наличие файла не подтверждает обещанные проверки сборки/защиты Git (дефект №1 и Этап 0 плана); включён и по agy CLI, и по config.json"
+      ],
+      "dependencies": [
+        "проявленные в manifest компоненты отсутствуют (только name/version/description)"
+      ],
+      "supportStatus": "blocked",
+      "owner": "antigravity-android (репозиторий)",
+      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
+      "rule": "license-unconfirmed"
+    },
+    {
+      "id": "bl:local-plugin-kotlin-compose-inspector",
+      "positionId": "local-plugin-kotlin-compose-inspector",
+      "issues": [
+        "состав пуст: только manifest (plugin.json); заявленные возможности не обеспечены компонентами (skills/agents/rules/hooks/mcp) — пути исполнения нет",
+        "состав пуст: только manifest (plugin.json); заявленные возможности не обеспечены компонентами (skills/agents/rules/hooks/mcp) — пути исполнения нет",
+        "enabled=true по agy CLI, но в config.json запись отсутствует — два источника состояния расходятся (нужен единый реестр, Этап 2)"
+      ],
+      "dependencies": [
+        "компоненты в manifest не перечислены"
+      ],
+      "supportStatus": "blocked",
+      "owner": "antigravity-android (репозиторий)",
+      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
+      "rule": "license-unconfirmed"
+    },
+    {
+      "id": "bl:local-plugin-staging-antigravity-workspace-guard",
+      "positionId": "local-plugin-staging-antigravity-workspace-guard",
+      "issues": [
+        "байт-в-байт совпадает с установленным manifest — считать одним пакетом с двумя путями, а не двумя",
+        "байт-в-байт совпадает с установленным manifest — считать одним пакетом с двумя путями, а не двумя"
+      ],
+      "dependencies": [
+        "дубль установленного пакета"
+      ],
+      "supportStatus": "blocked",
+      "owner": "antigravity-android (репозиторий)",
+      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
+      "rule": "license-unconfirmed"
+    },
+    {
+      "id": "bl:local-plugin-staging-kotlin-compose-inspector",
+      "positionId": "local-plugin-staging-kotlin-compose-inspector",
+      "issues": [
+        "байт-в-байт совпадает с установленным manifest — один пакет, два пути",
+        "байт-в-байт совпадает с установленным manifest — один пакет, два пути"
+      ],
+      "dependencies": [
+        "дубль установленного пакета"
+      ],
+      "supportStatus": "blocked",
+      "owner": "antigravity-android (репозиторий)",
+      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
+      "rule": "license-unconfirmed"
+    },
+    {
+      "id": "bl:local-mcp-ag-workstation-info",
+      "positionId": "local-mcp-ag-workstation-info",
+      "issues": [
+        "tools известны только из декларации самого сервера (get_workstation_pulse), а не из прочитанного tools/list; serverInfo заявляет protocolVersion fallback 2024-11-05 — согласование версии не проверялось (Этап 3)"
+      ],
+      "dependencies": [
+        "node.exe",
+        "pc-bridge/mcp_sysinfo_server.js"
+      ],
+      "supportStatus": "fully-supported",
+      "owner": "antigravity-android (репозиторий)",
+      "nextStep": "Выполнить проверку по сценарию позиции (testScenario) и снять неопределённость: tools известны только из декларации самого сервера (get_workstation_pulse), а не из прочитанного tools/list; serverInfo заявляет protocolVersion fallback 2024-11-05 — согласование версии не проверялось (Этап 3)",
+      "rule": "unresolved-dependency"
+    },
+    {
+      "id": "bl:local-mcp-rea",
+      "positionId": "local-mcp-rea",
+      "issues": [
+        "расхождение источников состояния: mcp_config.json → disabled:true, ~/.gemini/settings.json → без ключа disabled, agy mcp list → disabled; источник истины надо определить до Этапа 3"
+      ],
+      "dependencies": [
+        "node.exe",
+        "node_modules/rea-agents/scripts/rea.mjs"
+      ],
+      "supportStatus": "partial",
+      "owner": "antigravity-android (репозиторий)",
+      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
+      "rule": "license-unconfirmed"
+    }
+  ],
+  "summary": {
+    "positionsTotal": 79,
+    "positionsWithAdaptation": 79,
+    "positionsWithScenario": 79,
+    "byBatch": {
+      "documents-pdf": 2,
+      "sheets-slides": 0,
+      "code-git": 17,
+      "search-browser": 4,
+      "design-media": 7,
+      "mail-calendar-drive": 8,
+      "tasks-knowledge": 11,
+      "other-catalogs": 30
+    },
+    "pathConfirmed": 21,
+    "pathUnconfirmed": 58,
+    "mandatoryTotal": 21,
+    "mandatoryBlocked": [
+      "local-plugin-antigravity-workspace-guard",
+      "local-plugin-kotlin-compose-inspector",
+      "local-plugin-staging-antigravity-workspace-guard",
+      "local-plugin-staging-kotlin-compose-inspector"
+    ],
+    "backlogCount": 79,
+    "overallMigrationStatus": "не завершено",
+    "overallMigrationReason": "Общий перенос нельзя объявить завершённым: обязательные позиции заблокированы (local-plugin-antigravity-workspace-guard, local-plugin-kotlin-compose-inspector, local-plugin-staging-antigravity-workspace-guard, local-plugin-staging-kotlin-compose-inspector)"
+  }
+}

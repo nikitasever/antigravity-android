@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "stage7-stdio-echo": {
+      "command": "node",
+      "args": ["server.js"]
+    }
+  }
+}
