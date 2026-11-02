@@ -1579,9 +1579,13 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
         if (nameOrSource.isBlank()) return
         viewModelScope.launch {
             _isExtensionsLoading.value = true
+            // Этап 0 плана расширений: «установить» на мосту принимает только реальный
+            // путь или URL, поэтому форма с именем и описанием явно создаёт новый
+            // локальный пакет (action=create), а не выдаёт установку за готовую функцию.
+            val action = if (nameOrSource.startsWith("http://") || nameOrSource.startsWith("https://")) "install" else "create"
             val (updated, err) = backendClient.managePlugin(
                 pcBridgeUrl = _settings.value.pcBridgeUrl,
-                action = "install",
+                action = action,
                 idOrName = nameOrSource.trim(),
                 description = description.trim(),
                 enabled = true

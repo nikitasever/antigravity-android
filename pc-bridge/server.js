@@ -2235,32 +2235,10 @@ async function listPlugins() {
     return list;
 }
 
-async function seedDefaultPluginsIfEmpty() {
-    try {
-        const current = await listPlugins();
-        if (current.length > 0) return;
-        const defaults = [
-            {
-                name: 'antigravity-workspace-guard',
-                version: '1.2.0',
-                description: 'Контроль целостности файлов проекта, автоматическая проверка сборки и защита веток Git.'
-            },
-            {
-                name: 'kotlin-compose-inspector',
-                version: '2.0.0',
-                description: 'Анализ UI-дерева Jetpack Compose, проверка карточек инструментов и профилирование запуска.'
-            }
-        ];
-        for (const item of defaults) {
-            const stageDir = path.join(UPLOADS_DIR, 'plugin-staging', item.name);
-            fs.mkdirSync(stageDir, { recursive: true });
-            fs.writeFileSync(path.join(stageDir, 'plugin.json'), JSON.stringify(item, null, 2), 'utf8');
-            await runAgySubcommand(['plugin', 'install', stageDir]);
-        }
-    } catch (_) {}
-}
-setTimeout(seedDefaultPluginsIfEmpty, 1200);
-
+// Этап 0 (EXTENSIONS_INTEGRATION_PLAN.md): автозасев фиктивных плагинов
+// удалён — пустой каталог остаётся пустым. Наличие manifest не подтверждает
+// обещанную функциональность, поэтому «установка готового» и «создание нового
+// пакета» разделены: install принимает только реальный путь или URL.
 async function managePlugin(payload) {
     let action = String(payload.action || '').toLowerCase();
     if (action === 'toggle') {
@@ -2272,27 +2250,49 @@ async function managePlugin(payload) {
     }
 
     if (action === 'install' || action === 'add') {
-        let installTarget = rawName;
         const isUrlOrPath = rawName.startsWith('http://') || rawName.startsWith('https://') || fs.existsSync(rawName);
         if (!isUrlOrPath) {
-            const slug = rawName.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || `plugin-${Date.now()}`;
-            const stageDir = path.join(UPLOADS_DIR, 'plugin-staging', slug);
-            fs.mkdirSync(stageDir, { recursive: true });
-            const manifest = {
-                name: slug,
-                version: String(payload.version || '1.0.0'),
-                description: String(payload.description || `Плагин ${rawName} для Google Antigravity CLI`)
+            return {
+                ok: false,
+                error: `Установка возможна только из реального пути или URL. «${rawName}» не найден: укажите путь к пакету плагина или используйте действие create для создания нового пакета.`,
+                plugins: await listPlugins()
             };
-            fs.writeFileSync(path.join(stageDir, 'plugin.json'), JSON.stringify(manifest, null, 2), 'utf8');
-            installTarget = stageDir;
         }
-        const r = await runAgySubcommand(['plugin', 'install', installTarget]);
+        const r = await runAgySubcommand(['plugin', 'install', rawName]);
         invalidateAllIdleWorkers();
         const plugins = await listPlugins();
         return {
             ok: r.ok,
             message: r.stdout || r.stderr,
             error: r.ok ? '' : (r.stderr || r.stdout || 'Ошибка установки плагина'),
+            plugins
+        };
+    }
+
+    if (action === 'create') {
+        // Явный редактор нового локального пакета: пользователь задаёт имя и
+        // описание сам. Manifest фиксирует только метаданные и не заявляет
+        // рабочих инструментов — карточка показывает это как локальный пакет.
+        const slug = rawName.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || `plugin-${Date.now()}`;
+        const stageDir = path.join(UPLOADS_DIR, 'plugin-staging', slug);
+        fs.mkdirSync(stageDir, { recursive: true });
+        const manifest = {
+            name: slug,
+            version: String(payload.version || '1.0.0'),
+            description: String(payload.description || `Локальный пакет ${slug}`),
+            created: new Date().toISOString(),
+            verifiedTools: []
+        };
+        fs.writeFileSync(path.join(stageDir, 'plugin.json'), JSON.stringify(manifest, null, 2), 'utf8');
+        const r = await runAgySubcommand(['plugin', 'install', stageDir]);
+        invalidateAllIdleWorkers();
+        const plugins = await listPlugins();
+        return {
+            ok: r.ok,
+            message: r.ok
+                ? `Локальный пакет "${slug}" создан. Инструменты пакета не проверены — карточка показывает «требует проверки».`
+                : (r.stderr || r.stdout || 'Ошибка создания пакета'),
+            error: r.ok ? '' : (r.stderr || r.stdout || 'Ошибка создания пакета'),
             plugins
         };
     }
@@ -2358,16 +2358,9 @@ function listSkills() {
     const skills = [];
     const seenIds = new Set();
 
-    // Автоматически активируем ключевой скилл autonomous-software-engineer, если он был отключён
-    try {
-        const aseDir = path.join(SKILLS_DIR, 'autonomous-software-engineer');
-        const aseActive = path.join(aseDir, 'SKILL.md');
-        const aseDisabled = path.join(aseDir, 'SKILL.md.disabled');
-        if (fs.existsSync(aseDisabled) && !fs.existsSync(aseActive)) {
-            fs.copyFileSync(aseDisabled, aseActive);
-        }
-    } catch (_) {}
-
+    // Этап 0: просмотр списка ничего не включает. Раньше здесь незаметно
+    // восстанавливался отключённый autonomous-software-engineer — отключение
+    // пользователя переживало только пока список не открывали заново.
     const skillRoots = [
         { dir: path.join(DEFAULT_WORKSPACE, '.agents', 'skills'), source: 'workspace' },
         { dir: SKILLS_DIR, source: 'global' },
@@ -2524,12 +2517,12 @@ async function listMcpServers() {
                 const enabled = match[3].toLowerCase() === 'enabled';
                 const commandOrUrl = match[4].trim();
                 const parsedCmd = splitCommandAndArgs(commandOrUrl);
-                const tools = [];
-                if (commandOrUrl.includes('mcp_sysinfo_server.js') || name.includes('workstation')) {
-                    tools.push('get_workstation_pulse');
-                } else if (name === 'rea') {
-                    tools.push('rea_inspect', 'rea_decompile');
-                }
+                // Этап 0: инструменты не придумываются по имени сервера. Единственное
+                // честное исключение — собственный sysinfo-сервер: его tools/list
+                // объявляет get_workstation_pulse в mcp_sysinfo_server.js.
+                const tools = commandOrUrl.includes('mcp_sysinfo_server.js')
+                    ? ['get_workstation_pulse']
+                    : [];
                 seen.add(name);
                 servers.push({
                     id: name,
@@ -2540,7 +2533,10 @@ async function listMcpServers() {
                     args: parsedCmd.args,
                     commandOrUrl,
                     tools,
-                    status: enabled ? 'connected' : 'disabled'
+                    // «Включён в конфиге» ≠ «подключён». Реальный handshake и tools/list
+                    // добавляются в Этапе 3; здесь статус готовности честно ограничен
+                    // наблюдаемым фактом (конфигурация).
+                    status: enabled ? 'configured' : 'disabled'
                 });
             }
         }
@@ -2555,10 +2551,9 @@ async function listMcpServers() {
                 const cmd = cfg.url || [cfg.command, ...(Array.isArray(cfg.args) ? cfg.args : [])].filter(Boolean).join(' ');
                 const enabled = !Boolean(cfg.disabled);
                 const parsedCmd = splitCommandAndArgs(cmd);
-                const tools = [];
-                if (cmd.includes('mcp_sysinfo_server.js') || name.includes('workstation')) {
-                    tools.push('get_workstation_pulse');
-                }
+                const tools = cmd.includes('mcp_sysinfo_server.js')
+                    ? ['get_workstation_pulse']
+                    : [];
                 servers.push({
                     id: name,
                     name,
@@ -2568,7 +2563,7 @@ async function listMcpServers() {
                     args: Array.isArray(cfg.args) ? cfg.args : parsedCmd.args,
                     commandOrUrl: cmd,
                     tools,
-                    status: enabled ? 'connected' : 'disabled'
+                    status: enabled ? 'configured' : 'disabled'
                 });
             }
         }
