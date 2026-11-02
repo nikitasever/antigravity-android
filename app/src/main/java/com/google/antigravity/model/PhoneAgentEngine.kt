@@ -9,7 +9,7 @@ import java.util.UUID
 data class PhoneToolOutput(val success: Boolean, val summary: String, val output: String)
 data class PhoneAgentReply(val text: String, val tools: List<ToolCallEvent>)
 
-/** Orchestration runs on Android. Model inference may use the configured remote API.
+/** Orchestration runs on Android. Inference uses a direct API or the PC CLI bridge.
  * Children have explicit task context, read-only tools, no recursive delegation.
  */
 class PhoneAgentEngine(

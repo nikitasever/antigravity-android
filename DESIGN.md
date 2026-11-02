@@ -120,7 +120,9 @@ The current authenticated web reference separately confirms edit-version behavio
 
 The main conversation owns task launch: an Android model may request a bounded
 child task with explicit context. PhoneAgentEngine runs on the phone using the
-configured direct model API; it never requires PC-Bridge. The existing PC executor
+configured direct model API, or the existing phone-mode bridge route for a CLI
+model. CLI inference requires the PC; phone orchestration and tools stay on Android.
+The existing PC executor
 continues to handle PC turns. ToolCallEvent is the shared presentation/persistence
 record, including destination, parent task and leading visible text.
 

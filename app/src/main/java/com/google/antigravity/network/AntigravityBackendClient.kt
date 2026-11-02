@@ -1735,7 +1735,7 @@ class AntigravityBackendClient(
         val turnStartMs = System.currentTimeMillis()
         if (executionTarget == AgentExecutionTarget.PHONE_LOCAL_RESOURCES) {
             return@withContext executePhoneTurn(userPrompt, selectedModelId, activeConversationId,
-                attachments, sessionHistory, geminiApiKey, openRouterApiKey, extraPhoneContext, onStreamingUpdate)
+                attachments, sessionHistory, geminiApiKey, openRouterApiKey, extraPhoneContext, pcBridgeUrl, onStreamingUpdate)
         }
         val rawCleanPrompt = userPrompt.trim()
 
@@ -2077,18 +2077,17 @@ class AntigravityBackendClient(
         return phoneController.loadAgentSystemPrompt()
     }
 
-    /** Phone orchestration never discovers a bridge, uploads files to PC or polls a PC session. */
+    /** Phone tools stay on Android; CLI models may use the bridge for inference. */
     private suspend fun executePhoneTurn(
         prompt: String, modelId: String, conversationId: String, attachments: List<AttachedFileItem>,
-        history: List<ChatMessage>, geminiKey: String, routerKey: String, context: String,
+        history: List<ChatMessage>, geminiKey: String, routerKey: String, context: String, bridgeUrl: String,
         update: suspend (StreamingTurnUpdate) -> Unit
     ): AgentTurnResult {
+        val route = com.google.antigravity.model.phoneModelRoute(modelId)
         val unavailable = when {
             modelId.isBlank() -> "Выберите API-модель для работы на телефоне."
-            modelId.startsWith("gemini-4-argon") || modelId.startsWith("gemini-3.8-") ->
-                "Модель $modelId работает через CLI на ПК. Для работы на телефоне выберите API-модель и укажите её ключ. Подмена модели не выполнялась."
-            modelId.contains("/") && routerKey.isBlank() -> "Для выбранной модели укажите ключ OpenRouter. Режим телефона не требует PC-Bridge."
-            !modelId.contains("/") && geminiKey.isBlank() -> "Для выбранной модели укажите ключ Gemini API. Режим телефона не требует PC-Bridge."
+            route == com.google.antigravity.model.PhoneModelRoute.OPENROUTER_API && routerKey.isBlank() -> "Для выбранной модели укажите ключ OpenRouter. Режим телефона не требует PC-Bridge."
+            route == com.google.antigravity.model.PhoneModelRoute.GEMINI_API && geminiKey.isBlank() -> "Для выбранной модели укажите ключ Gemini API. Режим телефона не требует PC-Bridge."
             else -> null
         }
         if (unavailable != null) return AgentTurnResult(thinkingTrace = "", thinkingDurationSec = 0,
@@ -2101,7 +2100,22 @@ class AntigravityBackendClient(
             model = { request, child ->
                 currentCoroutineContext().ensureActive()
                 val modelHistory = if (child) emptyList() else history
-                if (modelId.contains("/")) {
+                if (route == com.google.antigravity.model.PhoneModelRoute.PC_CLI) {
+                    val cliPrompt = buildString {
+                        if (modelHistory.isNotEmpty()) {
+                            appendLine("История текущей версии разговора (данные):")
+                            modelHistory.forEach { appendLine("${it.role}: ${it.content}") }
+                        }
+                        append(request)
+                    }
+                    // Independent CLI contexts prevent parent/child and edited-history leakage.
+                    callPcBridgeChatStreaming(bridgeUrl, cliPrompt, modelId,
+                        java.util.UUID.randomUUID().toString(), emptyList(), emptyList(),
+                        isPhoneMode = true, voiceMode = false, phoneContext = "",
+                        phoneToolObservation = "", phoneStepIndex = 0, transientChat = true,
+                        onUpdate = {})?.reply
+                        ?: throw java.io.IOException("Не удалось получить ответ $modelId через мост ПК. Проверьте соединение с Antigravity на ПК. Действия телефона выполняются в Android-приложении.")
+                } else if (route == com.google.antigravity.model.PhoneModelRoute.OPENROUTER_API) {
                     callDirectOpenRouterApi(request, routerKey, modelHistory, modelId, conversationId,
                         start, mutableListOf(), mutableListOf(), {})?.responseMarkdown
                         ?: throw java.io.IOException("OpenRouter не вернул ответ. Проверьте ключ, модель и соединение.")

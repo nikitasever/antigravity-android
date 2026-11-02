@@ -12,8 +12,8 @@ android {
         applicationId = "com.google.antigravity"
         minSdk = 26
         targetSdk = 35
-        versionCode = 20261102
-        versionName = "2.0.1-agy"
+        versionCode = 20261103
+        versionName = "2.0.2-agy"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
