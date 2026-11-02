@@ -345,12 +345,51 @@ function toolResultToText(result) {
     return `ОШИБКА ИНСТРУМЕНТА (${result.code || 'tool_error'}): ${result.error || 'без описания'}`;
 }
 
-async function runToolCallLoop({ messages, tools, nameToRef, chat, execute, maxRounds = 6, signal, onToolEvent } = {}) {
+// Этап 5: injectSteps hook'ов (hooks.md) → сообщения контекста хода.
+// systemMessage сохраняется в траектории; ephemeralMessage действует только
+// в текущем ходе (контекст хода собирается заново на каждый ход).
+function injectStepsToMessages(steps) {
+    const out = [];
+    for (const s of steps || []) {
+        if (!s || typeof s !== 'object') continue;
+        if (s.kind === 'systemMessage') out.push({ role: 'system', content: String(s.text || '') });
+        else if (s.kind === 'userMessage') out.push({ role: 'user', content: String(s.text || '') });
+        else if (s.kind === 'ephemeralMessage') out.push({ role: 'system', content: `[ephemeral] ${String(s.text || '')}` });
+    }
+    return out;
+}
+
+async function runToolCallLoop({ messages, tools, nameToRef, chat, execute, maxRounds = 6, signal, onToolEvent, hookRunner = null } = {}) {
     const working = (messages || []).map(m => ({ ...m }));
     const toolCalls = [];
+    const emit = (evt) => {
+        if (typeof onToolEvent === 'function') {
+            try { onToolEvent(evt); } catch (_) {}
+        }
+    };
+    const emitHookRefusals = (refusals) => {
+        if (Array.isArray(refusals) && refusals.length > 0) {
+            emit({ type: 'hook-refusal', refusals });
+        }
+    };
+    // Этап 5: injectSteps hook'ов (hooks.md) — в текущий контекст хода.
+    const applyInjectSteps = (steps) => {
+        working.push(...injectStepsToMessages(steps));
+    };
     for (let round = 1; round <= (maxRounds || 6); round++) {
         if (signal && signal.aborted) {
+            // Отмена пользователем: Stop-hook'и не выполняются — решение
+            // пользователя приоритетно (политика Этапа 5).
             return { finalMessage: null, rounds: round - 1, toolCalls, cancelled: true };
+        }
+        // Этап 5: PreInvocation — до вызова модели (hooks.md).
+        if (hookRunner && typeof hookRunner.onInvocation === 'function') {
+            const pre = await hookRunner.onInvocation({ event: 'PreInvocation', invocationNum: round, initialNumSteps: working.length });
+            if (pre && Array.isArray(pre.injectSteps)) applyInjectSteps(pre.injectSteps);
+            if (pre) emitHookRefusals(pre.refusals);
+            if (pre && pre.terminationBehavior === 'terminate') {
+                return { finalMessage: null, rounds: round, toolCalls, hookTerminated: true };
+            }
         }
         const resp = await chat(working, tools || [], { signal });
         const msg = (resp && resp.message) ? resp.message : resp;
@@ -359,7 +398,27 @@ async function runToolCallLoop({ messages, tools, nameToRef, chat, execute, maxR
             return { finalMessage: null, rounds: round, toolCalls, exhausted: true };
         }
         if (calls.length === 0) {
-            return { finalMessage: msg, rounds: round, toolCalls, cancelled: false };
+            // Этап 5: PostInvocation (может продлить цикл) и Stop (может
+            // заблокировать остановку). maxRounds — жёсткий предел моста.
+            let shouldStop = true;
+            if (hookRunner && typeof hookRunner.onInvocation === 'function') {
+                const post = await hookRunner.onInvocation({ event: 'PostInvocation', invocationNum: round, initialNumSteps: working.length, wouldStop: true });
+                if (post && Array.isArray(post.injectSteps)) applyInjectSteps(post.injectSteps);
+                if (post) emitHookRefusals(post.refusals);
+                if (post && post.terminationBehavior === 'force_continue') shouldStop = false;
+            }
+            if (shouldStop && hookRunner && typeof hookRunner.onStop === 'function') {
+                const stop = await hookRunner.onStop({ terminationReason: 'NO_TOOL_CALL' });
+                if (stop) emitHookRefusals(stop.refusals);
+                if (stop && stop.shouldContinue) {
+                    shouldStop = false;
+                    if (stop.reason) working.push({ role: 'system', content: stop.reason });
+                }
+            }
+            if (shouldStop) {
+                return { finalMessage: msg, rounds: round, toolCalls, cancelled: false };
+            }
+            continue;
         }
         working.push({ role: 'assistant', content: typeof msg.content === 'string' ? msg.content : '', tool_calls: calls });
         for (const c of calls) {
@@ -377,17 +436,68 @@ async function runToolCallLoop({ messages, tools, nameToRef, chat, execute, maxR
             if (typeof onToolEvent === 'function') {
                 try { onToolEvent({ type: 'start', callId: c.id, ref, args }); } catch (_) {}
             }
-            const result = await execute(ref, args, { signal });
+            // Этап 5: PreToolUse (hooks.md): решение deny/ask — видимый отказ,
+            // overwrite — перезапись аргументов с уведомлением в результате.
+            let callArgs = args;
+            let hookNotice = null;
+            if (hookRunner && typeof hookRunner.beforeToolCall === 'function') {
+                const pre = await hookRunner.beforeToolCall({ ref, args, callId: c.id, stepIdx: toolCalls.length });
+                if (pre) emitHookRefusals(pre.refusals);
+                if (pre && pre.allow === false) {
+                    const refusalText = `Вызов заблокирован hook'ом PreToolUse: ${pre.reason || 'решение deny'}`;
+                    toolCalls.push({ callId: c.id, ref, ok: false, code: 'hook_denied', serverId: null, toolName: null });
+                    emit({ type: 'hook', callId: c.id, ref, status: 'BLOCKED', reason: pre.reason || 'deny' });
+                    working.push({ role: 'tool', tool_call_id: c.id, content: refusalText });
+                    continue;
+                }
+                if (pre && pre.args && typeof pre.args === 'object') callArgs = pre.args;
+                if (pre && pre.notice) hookNotice = pre.notice;
+            }
+            const result = await execute(ref, callArgs, { signal });
+            if (hookRunner && typeof hookRunner.afterToolCall === 'function') {
+                const post = await hookRunner.afterToolCall({
+                    ref, args: callArgs, callId: c.id, result, stepIdx: toolCalls.length,
+                    error: result && result.ok ? null : (result && result.code) || 'tool_error'
+                });
+                if (post) emitHookRefusals(post.refusals);
+            }
             toolCalls.push({ callId: c.id, ref, ok: result.ok, code: result.code || null, serverId: result.serverId || null, toolName: result.toolName || null });
             if (typeof onToolEvent === 'function') {
                 try { onToolEvent({ type: 'end', callId: c.id, ref, result }); } catch (_) {}
             }
+            // По контракту hooks.md переписанные hook'ом аргументы помечаются
+            // уведомлением перед результатом.
+            const resultText = hookNotice ? `${hookNotice}\n${toolResultToText(result)}` : toolResultToText(result);
             working.push({
                 role: 'tool',
                 tool_call_id: c.id,
-                content: toolResultToText(result)
+                content: resultText
             });
         }
+        // Этап 5: PostInvocation — после завершения вызовов инструментов.
+        if (hookRunner && typeof hookRunner.onInvocation === 'function') {
+            const post = await hookRunner.onInvocation({ event: 'PostInvocation', invocationNum: round, initialNumSteps: working.length, wouldStop: false });
+            if (post && Array.isArray(post.injectSteps)) applyInjectSteps(post.injectSteps);
+            if (post) emitHookRefusals(post.refusals);
+            if (post && post.terminationBehavior === 'terminate') {
+                return { finalMessage: null, rounds: round, toolCalls, hookTerminated: true };
+            }
+        }
+    }
+    // Лимит ходов исчерпан: maxRounds — жёсткий предел, Stop-hook не продлевает.
+    if (hookRunner && typeof hookRunner.onStop === 'function') {
+        const stop = await hookRunner.onStop({ terminationReason: 'MAX_INVOCATIONS' });
+        const extraRefusals = (stop && Array.isArray(stop.refusals)) ? stop.refusals.slice() : [];
+        if (stop && stop.shouldContinue) {
+            // Решение hook'а видимо отражается, но цикл не продлевается.
+            extraRefusals.push({
+                hookName: null,
+                event: 'Stop',
+                code: 'hard_round_limit',
+                reason: `Stop-hook запросил продолжение, но лимит ходов (${maxRounds}) — жёсткий предел моста`
+            });
+        }
+        emitHookRefusals(extraRefusals);
     }
     return { finalMessage: null, rounds: maxRounds, toolCalls, exhausted: true };
 }
@@ -420,6 +530,7 @@ function buildChildTaskPermissionBlock({ allowedRefs, allowedServers } = {}) {
 module.exports = {
     buildSkillCatalog,
     detectSkillInvocation,
+    injectStepsToMessages,
     loadSelectedSkill,
     composeSkillInstructionBlock,
     PHONE_ACTION_TOOLS,

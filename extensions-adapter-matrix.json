@@ -1,0 +1,3053 @@
+{
+  "schemaVersion": 1,
+  "title": "Матрица адаптеров компонентов (Этап 5)",
+  "generatedAt": "2026-11-02T13:30:03.258Z",
+  "strategies": {
+    "PRESERVE": "preserve",
+    "CONVERT": "convert",
+    "OWN_EXECUTOR": "own-executor"
+  },
+  "statuses": {
+    "VERIFIED": "verified",
+    "BLOCKED": "blocked",
+    "REQUIRES_CHECK": "requires-check",
+    "NOT_APPLICABLE": "not-applicable"
+  },
+  "kindTable": [
+    {
+      "kind": "skill",
+      "componentType": "skill",
+      "normalizedKind": "skill",
+      "strategy": "preserve",
+      "executor": "pc-bridge",
+      "status": "verified",
+      "verification": "инструкции навыка: выбор /имя и загрузка только выбранного (Этап 4); скрипты навыка: script-runner с зависимостями и изоляцией рабочего каталога (Этап 5, запуск подтверждён тестами)",
+      "blocker": null,
+      "note": "SKILL.md + scripts/references/assets переносятся как есть (Agent Skills)"
+    },
+    {
+      "kind": "agent",
+      "componentType": "agent",
+      "normalizedKind": "agent",
+      "strategy": "convert",
+      "executor": "pc-bridge",
+      "status": "verified",
+      "verification": "markdown агента преобразуется в инструкции навыка/дочерней задачи (convertAgentToSkill; поднабор прав — buildChildTaskPermissionBlock Этапа 4); проверено тестами преобразования",
+      "blocker": null,
+      "note": "процедуры агента переносятся как навык/дочерняя задача (submit-claude-plugin)"
+    },
+    {
+      "kind": "rule",
+      "componentType": "rule",
+      "normalizedKind": "rule",
+      "strategy": "preserve",
+      "executor": "pc-bridge",
+      "status": "verified",
+      "verification": "правила вставляются постоянным контекстом (composeRulesBlock); проверено тестом композиции",
+      "blocker": null,
+      "note": "rules/AGENTS.md — markdown без frontmatter, всегда активен при включённом плагине (docs/rules.md)"
+    },
+    {
+      "kind": "hook",
+      "componentType": "hook",
+      "normalizedKind": "hook",
+      "strategy": "own-executor",
+      "executor": "pc-bridge",
+      "status": "verified",
+      "verification": "hook-engine (Этап 5) по официальному контракту docs/hooks.md: реальный запуск type:\"command\", stdin JSON → stdout JSON; подтверждено тестами с настоящими процессами",
+      "blocker": null,
+      "note": "неподдерживаемые типы/события/выключенные hooks — ВИДИМЫЙ отказ, никогда не запускаются молча; право запуска: pcPluginsMcpSkillsAccess + pcPowerShellExecution"
+    },
+    {
+      "kind": "mcp-server",
+      "componentType": "mcp-server",
+      "normalizedKind": "mcp-server",
+      "strategy": "own-executor",
+      "executor": "pc-bridge",
+      "status": "verified",
+      "verification": "живой MCP-handshake и tools/call (Этап 3: initialize → tools/list → вызов, все транспорты)",
+      "blocker": null,
+      "note": "stdio — только ПК (pc-bridge); удалённый Streamable HTTP — через реестр подключений"
+    },
+    {
+      "kind": "config-var",
+      "componentType": "config-var",
+      "normalizedKind": "config-var",
+      "strategy": "convert",
+      "executor": null,
+      "status": "verified",
+      "verification": "сохраняется только схема ключа (тип/sensitive/required); значения не записываются и не исполняются; sensitive редактируется — проверено тестами Этапов 1/5",
+      "blocker": null,
+      "note": "значения конфигурации — входы времени выполнения (заменяются входами/OAuth, submit-claude-plugin)"
+    },
+    {
+      "kind": "asset",
+      "componentType": "asset",
+      "normalizedKind": "asset",
+      "strategy": "preserve",
+      "executor": null,
+      "status": "not-applicable",
+      "verification": "файлы сохраняются с пакетом (sha256 в составе, Этап 1)",
+      "blocker": null,
+      "note": "статические ресурсы/документация; исполнение не применяется"
+    },
+    {
+      "kind": "executable",
+      "componentType": "executable",
+      "normalizedKind": "executable",
+      "strategy": "own-executor",
+      "executor": "pc-bridge",
+      "status": "verified",
+      "verification": "script-runner (Этап 5): проверка интерпретатора и зависимостей ДО запуска, изолированный рабочий каталог, реальный запуск подтверждён тестами",
+      "blocker": null,
+      "note": "локальные программы и скрипты; при нехватке зависимостей/интерпретатора — конкретный блокер вместо молчаливого прогона"
+    },
+    {
+      "kind": "command",
+      "componentType": "command",
+      "normalizedKind": "command",
+      "strategy": "convert",
+      "executor": "pc-bridge",
+      "status": "verified",
+      "verification": "markdown-команда → навык (convertCommandToSkill); проверено тестами преобразования и сборки инструкции",
+      "blocker": null,
+      "note": "OpenAI требует превратить markdown-команду в навык (submit-claude-plugin)"
+    },
+    {
+      "kind": "lsp-server",
+      "componentType": "lsp-server",
+      "normalizedKind": "lsp-server",
+      "strategy": "preserve",
+      "executor": null,
+      "status": "blocked",
+      "verification": null,
+      "blocker": "lspServers не переносится (submit-claude-plugin); LSP-серверы в Antigravity не запускаются — исходник только сохраняется",
+      "note": "LSP-серверы источника"
+    },
+    {
+      "kind": "output-style",
+      "componentType": "output-style",
+      "normalizedKind": "output-style",
+      "strategy": "convert",
+      "executor": "pc-bridge",
+      "status": "verified",
+      "verification": "содержимое преобразуется в навык (convertOutputStyleToSkill); проверено тестом",
+      "blocker": null,
+      "note": "как outputStyle не переносится; суть переносится в навык (submit-claude-plugin)"
+    },
+    {
+      "kind": "workflow",
+      "componentType": "workflow",
+      "normalizedKind": "workflow",
+      "strategy": "preserve",
+      "executor": null,
+      "status": "blocked",
+      "verification": null,
+      "blocker": "workflows — расширение Claude Code; собственного исполнителя в Antigravity нет — исходник только сохраняется",
+      "note": "workflows источника"
+    },
+    {
+      "kind": "theme",
+      "componentType": "theme",
+      "normalizedKind": "theme",
+      "strategy": "preserve",
+      "executor": null,
+      "status": "not-applicable",
+      "verification": "наблюдение сохранено; исполнения нет и не предусмотрено",
+      "blocker": null,
+      "note": "themes — продуктовый UI-компонент Claude; в Antigravity не исполняется"
+    },
+    {
+      "kind": "monitor",
+      "componentType": "monitor",
+      "normalizedKind": "monitor",
+      "strategy": "preserve",
+      "executor": null,
+      "status": "blocked",
+      "verification": null,
+      "blocker": "monitors — расширение Claude Code; собственного исполнителя в Antigravity нет",
+      "note": "monitors источника"
+    },
+    {
+      "kind": "settings",
+      "componentType": "settings",
+      "normalizedKind": "settings",
+      "strategy": "preserve",
+      "executor": null,
+      "status": "blocked",
+      "verification": null,
+      "blocker": "settings.json/CLAUDE.md — настройки Claude Code, не переносятся; схемы конфигурации обрабатываются как config-var",
+      "note": "настройки источника"
+    },
+    {
+      "kind": "app",
+      "componentType": "app",
+      "normalizedKind": "app",
+      "strategy": "convert",
+      "executor": "cloud",
+      "status": "blocked",
+      "verification": null,
+      "blocker": "путь — подключение сервиса через MCP-реестр (Этап 3); формат .app.json/apps и переносимый сервер для Antigravity не подтверждены",
+      "note": "зарегистрированные MCP-маппинги источника"
+    },
+    {
+      "kind": "plugin",
+      "componentType": "plugin",
+      "normalizedKind": "plugin",
+      "strategy": "own-executor",
+      "executor": "pc-bridge",
+      "status": "requires-check",
+      "verification": "составной: разложение по компонентам (analyzePluginAdapters); «поддержан полностью» — только после проверки всего состава",
+      "blocker": null,
+      "note": "плагин-пакет (состав проверяется по фактическим файлам)"
+    },
+    {
+      "kind": "skill-assets",
+      "componentType": "skill-assets",
+      "normalizedKind": "skill-assets",
+      "strategy": "preserve",
+      "executor": null,
+      "status": "requires-check",
+      "verification": "файлы сохранены (sha256 в инвентаре); подключение к экрану и внешние зависимости — отдельная проверка",
+      "blocker": null,
+      "note": "ассеты навыка/плагина источника"
+    },
+    {
+      "kind": "connector",
+      "componentType": "connector",
+      "normalizedKind": "connector",
+      "strategy": "convert",
+      "executor": "cloud",
+      "status": "blocked",
+      "verification": null,
+      "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+      "note": "коннектор источника"
+    },
+    {
+      "kind": "gpt",
+      "componentType": "gpt",
+      "normalizedKind": "gpt",
+      "strategy": "preserve",
+      "executor": null,
+      "status": "blocked",
+      "verification": null,
+      "blocker": "GPT ≠ плагин и ≠ MCP; переносимого сервера нет без доступного API",
+      "note": "GPT источника"
+    },
+    {
+      "kind": "permission-model",
+      "componentType": "permission-model",
+      "normalizedKind": "permission-model",
+      "strategy": "preserve",
+      "executor": null,
+      "status": "not-applicable",
+      "verification": "наблюдение сохранено; права Antigravity задаются собственным списком (Этап 4)",
+      "blocker": null,
+      "note": "модель разрешений источника НЕ копируется вслепую: разрешение установки не расширяет доступ инструментов Antigravity"
+    },
+    {
+      "kind": "catalog-tab",
+      "componentType": "catalog-tab",
+      "normalizedKind": "catalog-tab",
+      "strategy": "preserve",
+      "executor": null,
+      "status": "not-applicable",
+      "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+      "blocker": null,
+      "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+    },
+    {
+      "kind": "catalog-card",
+      "componentType": "catalog-card",
+      "normalizedKind": "catalog-card",
+      "strategy": "preserve",
+      "executor": null,
+      "status": "not-applicable",
+      "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+      "blocker": null,
+      "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+    },
+    {
+      "kind": "catalog-page",
+      "componentType": "catalog-page",
+      "normalizedKind": "catalog-page",
+      "strategy": "preserve",
+      "executor": null,
+      "status": "not-applicable",
+      "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+      "blocker": null,
+      "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+    },
+    {
+      "kind": "catalog-category",
+      "componentType": "catalog-category",
+      "normalizedKind": "catalog-category",
+      "strategy": "preserve",
+      "executor": null,
+      "status": "not-applicable",
+      "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+      "blocker": null,
+      "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+    },
+    {
+      "kind": "catalog-view",
+      "componentType": "catalog-view",
+      "normalizedKind": "catalog-view",
+      "strategy": "preserve",
+      "executor": null,
+      "status": "not-applicable",
+      "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+      "blocker": null,
+      "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+    },
+    {
+      "kind": "catalog-detail",
+      "componentType": "catalog-detail",
+      "normalizedKind": "catalog-detail",
+      "strategy": "preserve",
+      "executor": null,
+      "status": "not-applicable",
+      "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+      "blocker": null,
+      "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+    },
+    {
+      "kind": "entry-point",
+      "componentType": "entry-point",
+      "normalizedKind": "entry-point",
+      "strategy": "preserve",
+      "executor": null,
+      "status": "not-applicable",
+      "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+      "blocker": null,
+      "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+    },
+    {
+      "kind": "builtin-toggle",
+      "componentType": "builtin-toggle",
+      "normalizedKind": "builtin-toggle",
+      "strategy": "preserve",
+      "executor": null,
+      "status": "not-applicable",
+      "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+      "blocker": null,
+      "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+    },
+    {
+      "kind": "surface",
+      "componentType": "surface",
+      "normalizedKind": "surface",
+      "strategy": "preserve",
+      "executor": null,
+      "status": "not-applicable",
+      "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+      "blocker": null,
+      "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+    },
+    {
+      "kind": "management",
+      "componentType": "management",
+      "normalizedKind": "management",
+      "strategy": "preserve",
+      "executor": null,
+      "status": "not-applicable",
+      "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+      "blocker": null,
+      "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+    },
+    {
+      "kind": "availability-facet",
+      "componentType": "availability-facet",
+      "normalizedKind": "availability-facet",
+      "strategy": "preserve",
+      "executor": null,
+      "status": "not-applicable",
+      "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+      "blocker": null,
+      "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+    },
+    {
+      "kind": "settings-facet",
+      "componentType": "settings-facet",
+      "normalizedKind": "settings-facet",
+      "strategy": "preserve",
+      "executor": null,
+      "status": "not-applicable",
+      "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+      "blocker": null,
+      "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+    }
+  ],
+  "positions": [
+    {
+      "id": "claude-web-catalog-connectors",
+      "name": "Каталог Claude: вкладка Connectors",
+      "sourceProduct": "claude.ai (web)",
+      "availability": "visible",
+      "executionTargets": "облако Anthropic; в Antigravity не подключено",
+      "componentTypes": [
+        "catalog-tab"
+      ],
+      "records": [
+        {
+          "componentType": "catalog-tab",
+          "normalizedKind": "catalog-tab",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано в наблюдении",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "claude-web-catalog-skills",
+      "name": "Каталог Claude: вкладка Skills",
+      "sourceProduct": "claude.ai (web)",
+      "availability": "visible",
+      "executionTargets": "облако Anthropic; в Antigravity не подключено",
+      "componentTypes": [
+        "catalog-tab"
+      ],
+      "records": [
+        {
+          "componentType": "catalog-tab",
+          "normalizedKind": "catalog-tab",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано в наблюдении",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "claude-web-catalog-plugins",
+      "name": "Каталог Claude: вкладка Plugins",
+      "sourceProduct": "claude.ai (web)",
+      "availability": "visible",
+      "executionTargets": "облако Anthropic; в Antigravity не подключено",
+      "componentTypes": [
+        "catalog-tab"
+      ],
+      "records": [
+        {
+          "componentType": "catalog-tab",
+          "normalizedKind": "catalog-tab",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано в наблюдении",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "claude-web-card-figma",
+      "name": "Figma",
+      "sourceProduct": "claude.ai (web)",
+      "availability": "visible",
+      "executionTargets": "не проверено (ожидаемо сервер поставщика/облако Anthropic)",
+      "componentTypes": [
+        "catalog-card"
+      ],
+      "records": [
+        {
+          "componentType": "catalog-card",
+          "normalizedKind": "catalog-card",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "claude-web-card-desktop-commander",
+      "name": "Desktop Commander",
+      "sourceProduct": "claude.ai (web)",
+      "availability": "visible",
+      "executionTargets": "не проверено",
+      "componentTypes": [
+        "catalog-card"
+      ],
+      "records": [
+        {
+          "componentType": "catalog-card",
+          "normalizedKind": "catalog-card",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "claude-web-card-searchfit-seo",
+      "name": "SearchFit SEO",
+      "sourceProduct": "claude.ai (web)",
+      "availability": "visible",
+      "executionTargets": "не проверено",
+      "componentTypes": [
+        "catalog-card"
+      ],
+      "records": [
+        {
+          "componentType": "catalog-card",
+          "normalizedKind": "catalog-card",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "claude-web-card-bright-data",
+      "name": "Bright Data",
+      "sourceProduct": "claude.ai (web)",
+      "availability": "visible",
+      "executionTargets": "не проверено",
+      "componentTypes": [
+        "catalog-card"
+      ],
+      "records": [
+        {
+          "componentType": "catalog-card",
+          "normalizedKind": "catalog-card",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "claude-web-card-zoom",
+      "name": "Zoom",
+      "sourceProduct": "claude.ai (web)",
+      "availability": "visible",
+      "executionTargets": "не проверено",
+      "componentTypes": [
+        "catalog-card"
+      ],
+      "records": [
+        {
+          "componentType": "catalog-card",
+          "normalizedKind": "catalog-card",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "claude-web-card-product-tracking",
+      "name": "Product Tracking",
+      "sourceProduct": "claude.ai (web)",
+      "availability": "visible",
+      "executionTargets": "не проверено",
+      "componentTypes": [
+        "catalog-card"
+      ],
+      "records": [
+        {
+          "componentType": "catalog-card",
+          "normalizedKind": "catalog-card",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "claude-web-card-learn",
+      "name": "learn",
+      "sourceProduct": "claude.ai (web)",
+      "availability": "visible",
+      "executionTargets": "не проверено",
+      "componentTypes": [
+        "catalog-card"
+      ],
+      "records": [
+        {
+          "componentType": "catalog-card",
+          "normalizedKind": "catalog-card",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "claude-web-card-doc-coauthoring",
+      "name": "doc-coauthoring",
+      "sourceProduct": "claude.ai (web)",
+      "availability": "visible",
+      "executionTargets": "не проверено",
+      "componentTypes": [
+        "catalog-card"
+      ],
+      "records": [
+        {
+          "componentType": "catalog-card",
+          "normalizedKind": "catalog-card",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "claude-web-card-web-artifacts-builder",
+      "name": "web-artifacts-builder",
+      "sourceProduct": "claude.ai (web)",
+      "availability": "visible",
+      "executionTargets": "не проверено",
+      "componentTypes": [
+        "catalog-card"
+      ],
+      "records": [
+        {
+          "componentType": "catalog-card",
+          "normalizedKind": "catalog-card",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "claude-web-card-productivity",
+      "name": "Productivity",
+      "sourceProduct": "claude.ai (web)",
+      "availability": "visible",
+      "executionTargets": "не проверено",
+      "componentTypes": [
+        "catalog-card"
+      ],
+      "records": [
+        {
+          "componentType": "catalog-card",
+          "normalizedKind": "catalog-card",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "claude-web-card-marketing",
+      "name": "Marketing",
+      "sourceProduct": "claude.ai (web)",
+      "availability": "visible",
+      "executionTargets": "не проверено",
+      "componentTypes": [
+        "catalog-card"
+      ],
+      "records": [
+        {
+          "componentType": "catalog-card",
+          "normalizedKind": "catalog-card",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "claude-web-card-finance",
+      "name": "Finance",
+      "sourceProduct": "claude.ai (web)",
+      "availability": "visible",
+      "executionTargets": "не проверено",
+      "componentTypes": [
+        "catalog-card"
+      ],
+      "records": [
+        {
+          "componentType": "catalog-card",
+          "normalizedKind": "catalog-card",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "claude-web-entry-skills",
+      "name": "Меню плюса: Skills",
+      "sourceProduct": "claude.ai (web)",
+      "availability": "visible",
+      "executionTargets": "облако Anthropic",
+      "componentTypes": [
+        "entry-point"
+      ],
+      "records": [
+        {
+          "componentType": "entry-point",
+          "normalizedKind": "entry-point",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "n/a",
+        "classification": "not-applicable",
+        "rightToRedistribute": "not-applicable",
+        "note": "лицензия неприменима (встроенная функция/модель данных)"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "claude-web-entry-add-connector",
+      "name": "Меню плюса: Add connector",
+      "sourceProduct": "claude.ai (web)",
+      "availability": "visible",
+      "executionTargets": "облако Anthropic",
+      "componentTypes": [
+        "entry-point"
+      ],
+      "records": [
+        {
+          "componentType": "entry-point",
+          "normalizedKind": "entry-point",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "n/a",
+        "classification": "not-applicable",
+        "rightToRedistribute": "not-applicable",
+        "note": "лицензия неприменима (встроенная функция/модель данных)"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "claude-web-entry-add-plugins",
+      "name": "Меню плюса: Add plugins",
+      "sourceProduct": "claude.ai (web)",
+      "availability": "visible",
+      "executionTargets": "облако Anthropic",
+      "componentTypes": [
+        "entry-point"
+      ],
+      "records": [
+        {
+          "componentType": "entry-point",
+          "normalizedKind": "entry-point",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "n/a",
+        "classification": "not-applicable",
+        "rightToRedistribute": "not-applicable",
+        "note": "лицензия неприменима (встроенная функция/модель данных)"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "claude-web-entry-design-system",
+      "name": "Меню плюса: Design system",
+      "sourceProduct": "claude.ai (web)",
+      "availability": "visible",
+      "executionTargets": "облако Anthropic",
+      "componentTypes": [
+        "entry-point"
+      ],
+      "records": [
+        {
+          "componentType": "entry-point",
+          "normalizedKind": "entry-point",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "n/a",
+        "classification": "not-applicable",
+        "rightToRedistribute": "not-applicable",
+        "note": "лицензия неприменима (встроенная функция/модель данных)"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "claude-web-entry-get-apps-extensions",
+      "name": "Боковая навигация: Get apps and extensions",
+      "sourceProduct": "claude.ai (web)",
+      "availability": "visible",
+      "executionTargets": "не проверено",
+      "componentTypes": [
+        "entry-point"
+      ],
+      "records": [
+        {
+          "componentType": "entry-point",
+          "normalizedKind": "entry-point",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "n/a",
+        "classification": "not-applicable",
+        "rightToRedistribute": "not-applicable",
+        "note": "лицензия неприменима (встроенная функция/модель данных)"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "claude-web-toggle-web-search",
+      "name": "Web search (переключатель)",
+      "sourceProduct": "claude.ai (web)",
+      "availability": "builtin",
+      "executionTargets": "облако Anthropic",
+      "componentTypes": [
+        "builtin-toggle"
+      ],
+      "records": [
+        {
+          "componentType": "builtin-toggle",
+          "normalizedKind": "builtin-toggle",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "встроенная функция, лицензия не применима",
+        "classification": "not-applicable",
+        "rightToRedistribute": "not-applicable",
+        "note": "лицензия неприменима (встроенная функция/модель данных)"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "claude-web-toggle-memory",
+      "name": "Memory (переключатель)",
+      "sourceProduct": "claude.ai (web)",
+      "availability": "builtin",
+      "executionTargets": "облако Anthropic",
+      "componentTypes": [
+        "builtin-toggle"
+      ],
+      "records": [
+        {
+          "componentType": "builtin-toggle",
+          "normalizedKind": "builtin-toggle",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "встроенная функция, лицензия не применима",
+        "classification": "not-applicable",
+        "rightToRedistribute": "not-applicable",
+        "note": "лицензия неприменима (встроенная функция/модель данных)"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "claude-web-surface-cowork",
+      "name": "Поверхность Cowork (переключатель Chat/Cowork)",
+      "sourceProduct": "claude.ai (web)",
+      "availability": "unknown",
+      "executionTargets": "облако Anthropic",
+      "componentTypes": [
+        "surface"
+      ],
+      "records": [
+        {
+          "componentType": "surface",
+          "normalizedKind": "surface",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "claude-web-code-upgrade",
+      "name": "Code (Code Upgrade)",
+      "sourceProduct": "claude.ai (web)",
+      "availability": "subscription-gated",
+      "executionTargets": "облако Anthropic",
+      "componentTypes": [
+        "entry-point"
+      ],
+      "records": [
+        {
+          "componentType": "entry-point",
+          "normalizedKind": "entry-point",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "claude-android-connector-custom",
+      "name": "Add custom connector (MCP URL)",
+      "sourceProduct": "Claude for Android 1.261029.20",
+      "availability": "unknown",
+      "executionTargets": "Android-клиент Claude ↔ сервер поставщика; в Antigravity не подключено",
+      "componentTypes": [
+        "connector"
+      ],
+      "records": [
+        {
+          "componentType": "connector",
+          "normalizedKind": "connector",
+          "strategy": "convert",
+          "executor": "cloud",
+          "status": "blocked",
+          "verification": null,
+          "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+          "note": "коннектор источника"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано в ресурсах APK",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "blocked",
+      "blockers": [
+        {
+          "componentType": "connector",
+          "reason": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+        }
+      ],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "claude-android-connector-catalog",
+      "name": "Каталог коннекторов Android (Browse/Search/Discovery)",
+      "sourceProduct": "Claude for Android 1.261029.20",
+      "availability": "unknown",
+      "executionTargets": "облако Anthropic",
+      "componentTypes": [
+        "catalog-page"
+      ],
+      "records": [
+        {
+          "componentType": "catalog-page",
+          "normalizedKind": "catalog-page",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "claude-android-skills",
+      "name": "Навыки Claude (Android)",
+      "sourceProduct": "Claude for Android 1.261029.20",
+      "availability": "unknown",
+      "executionTargets": "Android-клиент/облако Anthropic; в Antigravity не подключено",
+      "componentTypes": [
+        "skill"
+      ],
+      "records": [
+        {
+          "componentType": "skill",
+          "normalizedKind": "skill",
+          "strategy": "preserve",
+          "executor": "pc-bridge",
+          "status": "verified",
+          "verification": "инструкции навыка: выбор /имя и загрузка только выбранного (Этап 4); скрипты навыка: script-runner с зависимостями и изоляцией рабочего каталога (Этап 5, запуск подтверждён тестами)",
+          "blocker": null,
+          "note": "SKILL.md + scripts/references/assets переносятся как есть (Agent Skills)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "partial",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "claude-android-mcp-servers",
+      "name": "MCP-серверы и MCP tools (Android)",
+      "sourceProduct": "Claude for Android 1.261029.20",
+      "availability": "unknown",
+      "executionTargets": "Android-клиент ↔ удалённый сервер; в Antigravity не подключено",
+      "componentTypes": [
+        "mcp-server"
+      ],
+      "records": [
+        {
+          "componentType": "mcp-server",
+          "normalizedKind": "mcp-server",
+          "strategy": "own-executor",
+          "executor": "pc-bridge",
+          "status": "verified",
+          "verification": "живой MCP-handshake и tools/call (Этап 3: initialize → tools/list → вызов, все транспорты)",
+          "blocker": null,
+          "note": "stdio — только ПК (pc-bridge); удалённый Streamable HTTP — через реестр подключений"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "partial",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "claude-android-plugin-label",
+      "name": "Plugin (единственная метка в Android-клиенте)",
+      "sourceProduct": "Claude for Android 1.261029.20",
+      "availability": "unknown",
+      "executionTargets": "неизвестно",
+      "componentTypes": [
+        "plugin"
+      ],
+      "records": [
+        {
+          "componentType": "plugin",
+          "normalizedKind": "plugin",
+          "strategy": "own-executor",
+          "executor": "pc-bridge",
+          "status": "requires-check",
+          "verification": "составной: разложение по компонентам (analyzePluginAdapters); «поддержан полностью» — только после проверки всего состава",
+          "blocker": "в строках Android только одиночная метка «Plugin» — экран каталога плагинов не найден; нельзя утверждать наличие плагинов в Android-клиенте",
+          "note": "плагин-пакет (состав проверяется по фактическим файлам)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "blocked",
+      "blockers": [
+        {
+          "componentType": "plugin",
+          "reason": "в строках Android только одиночная метка «Plugin» — экран каталога плагинов не найден; нельзя утверждать наличие плагинов в Android-клиенте"
+        }
+      ],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "claude-android-connector-figma",
+      "name": "Figma-коннектор (упоминание в Android)",
+      "sourceProduct": "Claude for Android 1.261029.20",
+      "availability": "unknown",
+      "executionTargets": "Android-клиент ↔ сервис Figma",
+      "componentTypes": [
+        "connector"
+      ],
+      "records": [
+        {
+          "componentType": "connector",
+          "normalizedKind": "connector",
+          "strategy": "convert",
+          "executor": "cloud",
+          "status": "blocked",
+          "verification": null,
+          "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+          "note": "коннектор источника"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "blocked",
+      "blockers": [
+        {
+          "componentType": "connector",
+          "reason": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+        }
+      ],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "claude-android-github-app",
+      "name": "Claude GitHub App (интеграция)",
+      "sourceProduct": "Claude for Android 1.261029.20",
+      "availability": "unknown",
+      "executionTargets": "облако Claude + GitHub; облачные сессии",
+      "componentTypes": [
+        "connector"
+      ],
+      "records": [
+        {
+          "componentType": "connector",
+          "normalizedKind": "connector",
+          "strategy": "convert",
+          "executor": "cloud",
+          "status": "blocked",
+          "verification": null,
+          "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+          "note": "коннектор источника"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "blocked",
+      "blockers": [
+        {
+          "componentType": "connector",
+          "reason": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+        }
+      ],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "claude-android-connector-calendar",
+      "name": "Calendar (доступ к календарю)",
+      "sourceProduct": "Claude for Android 1.261029.20",
+      "availability": "unknown",
+      "executionTargets": "Android-клиент (локальные календари)",
+      "componentTypes": [
+        "connector"
+      ],
+      "records": [
+        {
+          "componentType": "connector",
+          "normalizedKind": "connector",
+          "strategy": "convert",
+          "executor": "cloud",
+          "status": "blocked",
+          "verification": null,
+          "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+          "note": "коннектор источника"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "blocked",
+      "blockers": [
+        {
+          "componentType": "connector",
+          "reason": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+        }
+      ],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "claude-android-connector-google-drive",
+      "name": "Google Drive (упоминание в Android)",
+      "sourceProduct": "Claude for Android 1.261029.20",
+      "availability": "unknown",
+      "executionTargets": "не проверено",
+      "componentTypes": [
+        "connector"
+      ],
+      "records": [
+        {
+          "componentType": "connector",
+          "normalizedKind": "connector",
+          "strategy": "convert",
+          "executor": "cloud",
+          "status": "blocked",
+          "verification": null,
+          "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+          "note": "коннектор источника"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "blocked",
+      "blockers": [
+        {
+          "componentType": "connector",
+          "reason": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+        }
+      ],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "claude-android-settings-integrations",
+      "name": "Раздел настроек: integrations / mcp / tools / google drive / gmail / calendar",
+      "sourceProduct": "Claude for Android 1.261029.20",
+      "availability": "unknown",
+      "executionTargets": "Android-клиент",
+      "componentTypes": [
+        "settings-facet"
+      ],
+      "records": [
+        {
+          "componentType": "settings-facet",
+          "normalizedKind": "settings-facet",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "chatgpt-plugin-directory",
+      "name": "Каталог плагинов ChatGPT (Directory)",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "availability": "unknown",
+      "executionTargets": "облако OpenAI; в Antigravity не подключено",
+      "componentTypes": [
+        "catalog-page"
+      ],
+      "records": [
+        {
+          "componentType": "catalog-page",
+          "normalizedKind": "catalog-page",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано в ресурсах APK",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "chatgpt-cat-business-analytics",
+      "name": "Категория: Business and Analytics",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "availability": "unknown",
+      "executionTargets": "облако OpenAI",
+      "componentTypes": [
+        "catalog-category"
+      ],
+      "records": [
+        {
+          "componentType": "catalog-category",
+          "normalizedKind": "catalog-category",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "chatgpt-cat-creativity-design",
+      "name": "Категория: Creativity and Design",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "availability": "unknown",
+      "executionTargets": "облако OpenAI",
+      "componentTypes": [
+        "catalog-category"
+      ],
+      "records": [
+        {
+          "componentType": "catalog-category",
+          "normalizedKind": "catalog-category",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "chatgpt-cat-developer-tools",
+      "name": "Категория: Developer Tools",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "availability": "unknown",
+      "executionTargets": "облако OpenAI",
+      "componentTypes": [
+        "catalog-category"
+      ],
+      "records": [
+        {
+          "componentType": "catalog-category",
+          "normalizedKind": "catalog-category",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "chatgpt-cat-messaging-social",
+      "name": "Категория: Messaging and Social",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "availability": "unknown",
+      "executionTargets": "облако OpenAI",
+      "componentTypes": [
+        "catalog-category"
+      ],
+      "records": [
+        {
+          "componentType": "catalog-category",
+          "normalizedKind": "catalog-category",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "chatgpt-cat-productivity",
+      "name": "Категория: Productivity",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "availability": "unknown",
+      "executionTargets": "облако OpenAI",
+      "componentTypes": [
+        "catalog-category"
+      ],
+      "records": [
+        {
+          "componentType": "catalog-category",
+          "normalizedKind": "catalog-category",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "chatgpt-cat-research-knowledge",
+      "name": "Категория: Research and Knowledge",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "availability": "unknown",
+      "executionTargets": "облако OpenAI",
+      "componentTypes": [
+        "catalog-category"
+      ],
+      "records": [
+        {
+          "componentType": "catalog-category",
+          "normalizedKind": "catalog-category",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "chatgpt-plugin-directory-views",
+      "name": "Разделы каталога: Installed / Created by me / Shared / Workspace / Popular",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "availability": "unknown",
+      "executionTargets": "облако OpenAI",
+      "componentTypes": [
+        "catalog-view"
+      ],
+      "records": [
+        {
+          "componentType": "catalog-view",
+          "normalizedKind": "catalog-view",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "chatgpt-plugin-detail",
+      "name": "Карточка плагина: Version / Developer / Capabilities / Privacy Policy",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "availability": "unknown",
+      "executionTargets": "облако OpenAI",
+      "componentTypes": [
+        "catalog-detail"
+      ],
+      "records": [
+        {
+          "componentType": "catalog-detail",
+          "normalizedKind": "catalog-detail",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "в карточке есть Privacy Policy и Terms of Service (#7680), лицензия пакета не показывается",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия \"в карточке есть Privacy Policy и Terms of Service (#7680), л\" не распознана — право не подтверждено"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "chatgpt-plugin-permissions",
+      "name": "Разрешения плагинов (Always ask → Allow all, Read/Write actions)",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "availability": "unknown",
+      "executionTargets": "облако OpenAI",
+      "componentTypes": [
+        "permission-model"
+      ],
+      "records": [
+        {
+          "componentType": "permission-model",
+          "normalizedKind": "permission-model",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено; права Antigravity задаются собственным списком (Этап 4)",
+          "blocker": null,
+          "note": "модель разрешений источника НЕ копируется вслепую: разрешение установки не расширяет доступ инструментов Antigravity"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "n/a",
+        "classification": "not-applicable",
+        "rightToRedistribute": "not-applicable",
+        "note": "лицензия неприменима (встроенная функция/модель данных)"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "chatgpt-plugin-management",
+      "name": "Управление плагинами: установка/удаление/счётчики",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "availability": "unknown",
+      "executionTargets": "облако OpenAI",
+      "componentTypes": [
+        "management"
+      ],
+      "records": [
+        {
+          "componentType": "management",
+          "normalizedKind": "management",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "n/a",
+        "classification": "not-applicable",
+        "rightToRedistribute": "not-applicable",
+        "note": "лицензия неприменима (встроенная функция/модель данных)"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "chatgpt-component-app",
+      "name": "Компонент App (приложения внутри плагина)",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "availability": "unknown",
+      "executionTargets": "облако OpenAI ↔ внешние сервисы",
+      "componentTypes": [
+        "app"
+      ],
+      "records": [
+        {
+          "componentType": "app",
+          "normalizedKind": "app",
+          "strategy": "convert",
+          "executor": "cloud",
+          "status": "blocked",
+          "verification": null,
+          "blocker": "путь — подключение сервиса через MCP-реестр (Этап 3); формат .app.json/apps и переносимый сервер для Antigravity не подтверждены",
+          "note": "зарегистрированные MCP-маппинги источника"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "blocked",
+      "blockers": [
+        {
+          "componentType": "app",
+          "reason": "путь — подключение сервиса через MCP-реестр (Этап 3); формат .app.json/apps и переносимый сервер для Antigravity не подтверждены"
+        }
+      ],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "chatgpt-component-skill",
+      "name": "Компонент Skill (навыки ChatGPT)",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "availability": "unknown",
+      "executionTargets": "облако OpenAI; формат файлов не подтверждён как SKILL.md",
+      "componentTypes": [
+        "skill"
+      ],
+      "records": [
+        {
+          "componentType": "skill",
+          "normalizedKind": "skill",
+          "strategy": "preserve",
+          "executor": "pc-bridge",
+          "status": "verified",
+          "verification": "инструкции навыка: выбор /имя и загрузка только выбранного (Этап 4); скрипты навыка: script-runner с зависимостями и изоляцией рабочего каталога (Этап 5, запуск подтверждён тестами)",
+          "blocker": null,
+          "note": "SKILL.md + scripts/references/assets переносятся как есть (Agent Skills)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "partial",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "chatgpt-connectors",
+      "name": "Connectors (подключённые аккаунты)",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "availability": "unknown",
+      "executionTargets": "облако OpenAI ↔ сервисы поставщиков; в Antigravity не подключено",
+      "componentTypes": [
+        "connector"
+      ],
+      "records": [
+        {
+          "componentType": "connector",
+          "normalizedKind": "connector",
+          "strategy": "convert",
+          "executor": "cloud",
+          "status": "blocked",
+          "verification": null,
+          "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+          "note": "коннектор источника"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "blocked",
+      "blockers": [
+        {
+          "componentType": "connector",
+          "reason": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+        }
+      ],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "chatgpt-connector-gmail",
+      "name": "Gmail (коннектор)",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "availability": "unknown",
+      "executionTargets": "облако OpenAI ↔ Gmail API; в Antigravity не подключено",
+      "componentTypes": [
+        "connector"
+      ],
+      "records": [
+        {
+          "componentType": "connector",
+          "normalizedKind": "connector",
+          "strategy": "convert",
+          "executor": "cloud",
+          "status": "blocked",
+          "verification": null,
+          "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+          "note": "коннектор источника"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "blocked",
+      "blockers": [
+        {
+          "componentType": "connector",
+          "reason": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+        }
+      ],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "chatgpt-connector-google-calendar",
+      "name": "Google Calendar (коннектор)",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "availability": "unknown",
+      "executionTargets": "облако OpenAI ↔ Calendar; в Antigravity не подключено",
+      "componentTypes": [
+        "connector"
+      ],
+      "records": [
+        {
+          "componentType": "connector",
+          "normalizedKind": "connector",
+          "strategy": "convert",
+          "executor": "cloud",
+          "status": "blocked",
+          "verification": null,
+          "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+          "note": "коннектор источника"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "blocked",
+      "blockers": [
+        {
+          "componentType": "connector",
+          "reason": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+        }
+      ],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "chatgpt-connector-outlook",
+      "name": "Outlook (коннектор)",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "availability": "unknown",
+      "executionTargets": "облако OpenAI ↔ Outlook; в Antigravity не подключено",
+      "componentTypes": [
+        "connector"
+      ],
+      "records": [
+        {
+          "componentType": "connector",
+          "normalizedKind": "connector",
+          "strategy": "convert",
+          "executor": "cloud",
+          "status": "blocked",
+          "verification": null,
+          "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+          "note": "коннектор источника"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "blocked",
+      "blockers": [
+        {
+          "componentType": "connector",
+          "reason": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+        }
+      ],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "chatgpt-connector-1password",
+      "name": "1Password (подключение для входа на сайты)",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "availability": "unknown",
+      "executionTargets": "облако OpenAI ↔ облачный браузер; в Antigravity не подключено",
+      "componentTypes": [
+        "connector"
+      ],
+      "records": [
+        {
+          "componentType": "connector",
+          "normalizedKind": "connector",
+          "strategy": "convert",
+          "executor": "cloud",
+          "status": "blocked",
+          "verification": null,
+          "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+          "note": "коннектор источника"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "blocked",
+      "blockers": [
+        {
+          "componentType": "connector",
+          "reason": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+        }
+      ],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "chatgpt-file-sources",
+      "name": "Источники файлов: Box / Dropbox / Google Drive / SharePoint",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "availability": "unknown",
+      "executionTargets": "облако OpenAI ↔ хранилища; в Antigravity не подключено",
+      "componentTypes": [
+        "connector"
+      ],
+      "records": [
+        {
+          "componentType": "connector",
+          "normalizedKind": "connector",
+          "strategy": "convert",
+          "executor": "cloud",
+          "status": "blocked",
+          "verification": null,
+          "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+          "note": "коннектор источника"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "blocked",
+      "blockers": [
+        {
+          "componentType": "connector",
+          "reason": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+        }
+      ],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "chatgpt-gpts",
+      "name": "GPTs (My GPTs / Public GPTs)",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "availability": "unknown",
+      "executionTargets": "облако OpenAI; в Antigravity не подключено",
+      "componentTypes": [
+        "gpt"
+      ],
+      "records": [
+        {
+          "componentType": "gpt",
+          "normalizedKind": "gpt",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "blocked",
+          "verification": null,
+          "blocker": "GPT ≠ плагин и ≠ MCP; переносимого сервера нет без доступного API",
+          "note": "GPT источника"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "blocked",
+      "blockers": [
+        {
+          "componentType": "gpt",
+          "reason": "GPT ≠ плагин и ≠ MCP; переносимого сервера нет без доступного API"
+        }
+      ],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "chatgpt-finance-connections",
+      "name": "Финансовые подключения (connect accounts)",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "availability": "unknown",
+      "executionTargets": "облако OpenAI ↔ поставщик данных; в Antigravity не подключено",
+      "componentTypes": [
+        "connector"
+      ],
+      "records": [
+        {
+          "componentType": "connector",
+          "normalizedKind": "connector",
+          "strategy": "convert",
+          "executor": "cloud",
+          "status": "blocked",
+          "verification": null,
+          "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+          "note": "коннектор источника"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "blocked",
+      "blockers": [
+        {
+          "componentType": "connector",
+          "reason": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+        }
+      ],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "chatgpt-availability-gates",
+      "name": "Гейты доступа каталога: план, админ, офлайн",
+      "sourceProduct": "ChatGPT for Android 1.2026.293",
+      "availability": "unknown",
+      "executionTargets": "облако OpenAI",
+      "componentTypes": [
+        "availability-facet"
+      ],
+      "records": [
+        {
+          "componentType": "availability-facet",
+          "normalizedKind": "availability-facet",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "not-applicable",
+          "verification": "наблюдение сохранено в инвентаре (Этап 0)",
+          "blocker": null,
+          "note": "продуктовый UI-компонент источника; в Antigravity не исполняется; сохранён как наблюдение (сохранение исходника)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "n/a",
+        "classification": "not-applicable",
+        "rightToRedistribute": "not-applicable",
+        "note": "лицензия неприменима (встроенная функция/модель данных)"
+      },
+      "supportStatus": "observation",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "codex-remote-composer-extensions",
+      "name": "Remote-композер: skills / MCP servers / plugins ($ и @)",
+      "sourceProduct": "Codex (Remote), в составе APK ChatGPT",
+      "availability": "unknown",
+      "executionTargets": "удалённая Codex-сессия; в Antigravity не подключено",
+      "componentTypes": [
+        "plugin"
+      ],
+      "records": [
+        {
+          "componentType": "plugin",
+          "normalizedKind": "plugin",
+          "strategy": "own-executor",
+          "executor": "pc-bridge",
+          "status": "requires-check",
+          "verification": "составной: разложение по компонентам (analyzePluginAdapters); «поддержан полностью» — только после проверки всего состава",
+          "blocker": "блок строк относится к Remote-композеру: по плану §2 плагин Codex нельзя считать плагином Android ChatGPT; атрибуция внутри APK дампом не разделена",
+          "note": "плагин-пакет (состав проверяется по фактическим файлам)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не зафиксировано",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "blocked",
+      "blockers": [
+        {
+          "componentType": "plugin",
+          "reason": "блок строк относится к Remote-композеру: по плану §2 плагин Codex нельзя считать плагином Android ChatGPT; атрибуция внутри APK дампом не разделена"
+        }
+      ],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "codex-visualize-plugin-assets",
+      "name": "Ассеты bundled-plugin Codex «visualize» в проекте",
+      "sourceProduct": "Codex (bundled plugin), ассеты в проекте",
+      "availability": "imported",
+      "executionTargets": "Android host грузит файлы и рендерит в opaque iframe (по README)",
+      "componentTypes": [
+        "skill-assets"
+      ],
+      "records": [
+        {
+          "componentType": "skill-assets",
+          "normalizedKind": "skill-assets",
+          "strategy": "preserve",
+          "executor": null,
+          "status": "blocked",
+          "verification": "importPath: app/src/main/assets/spaces/{README.md,visualize.html,visualize.css}",
+          "blocker": "сетевая зависимость от unpkg.com и отсутствие лицензии; сквозной запуск визуализации не выполнялся",
+          "note": "ассеты навыка/плагина источника"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не указана; копирование из monorepo задокументировано в README, право распространения не проверено",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "blocked",
+      "blockers": [
+        {
+          "componentType": "skill-assets",
+          "reason": "сетевая зависимость от unpkg.com и отсутствие лицензии; сквозной запуск визуализации не выполнялся"
+        }
+      ],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "local-skill-autonomous-software-engineer",
+      "name": "autonomous-software-engineer (навык)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "availability": "installed",
+      "executionTargets": "PC (корень ~/.gemini/config/skills читает listSkills); телефонный цикл не подтверждён",
+      "componentTypes": [
+        "skill"
+      ],
+      "records": [
+        {
+          "componentType": "skill",
+          "normalizedKind": "skill",
+          "strategy": "preserve",
+          "executor": "pc-bridge",
+          "status": "verified",
+          "verification": "инструкции навыка: выбор /имя и загрузка только выбранного (Этап 4); скрипты навыка: script-runner с зависимостями и изоляцией рабочего каталога (Этап 5, запуск подтверждён тестами)",
+          "blocker": null,
+          "note": "SKILL.md + scripts/references/assets переносятся как есть (Agent Skills)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не указана в файле",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "partial",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "local-skill-reverse-engineer-anything",
+      "name": "reverse-engineer-anything (навык)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "availability": "installed",
+      "executionTargets": "PC (корень ~/.gemini/config/skills); телефонный цикл не подтверждён",
+      "componentTypes": [
+        "skill"
+      ],
+      "records": [
+        {
+          "componentType": "skill",
+          "normalizedKind": "skill",
+          "strategy": "preserve",
+          "executor": "pc-bridge",
+          "status": "verified",
+          "verification": "инструкции навыка: выбор /имя и загрузка только выбранного (Этап 4); скрипты навыка: script-runner с зависимостями и изоляцией рабочего каталога (Этап 5, запуск подтверждён тестами)",
+          "blocker": null,
+          "note": "SKILL.md + scripts/references/assets переносятся как есть (Agent Skills)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не указана в файле",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "partial",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "local-skill-rigorous-programming-reasoner",
+      "name": "rigorous-programming-reasoner (навык, активный)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "availability": "installed",
+      "executionTargets": "PC (корень ~/.gemini/config/skills)",
+      "componentTypes": [
+        "skill"
+      ],
+      "records": [
+        {
+          "componentType": "skill",
+          "normalizedKind": "skill",
+          "strategy": "preserve",
+          "executor": "pc-bridge",
+          "status": "verified",
+          "verification": "инструкции навыка: выбор /имя и загрузка только выбранного (Этап 4); скрипты навыка: script-runner с зависимостями и изоляцией рабочего каталога (Этап 5, запуск подтверждён тестами)",
+          "blocker": null,
+          "note": "SKILL.md + scripts/references/assets переносятся как есть (Agent Skills)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не указана в файле",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "partial",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "local-skill-rigorous-programming-reasoner-disabled",
+      "name": "rigorous-programming-reasoner (отключённая копия)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "availability": "installed",
+      "executionTargets": "PC",
+      "componentTypes": [
+        "skill"
+      ],
+      "records": [
+        {
+          "componentType": "skill",
+          "normalizedKind": "skill",
+          "strategy": "preserve",
+          "executor": "pc-bridge",
+          "status": "verified",
+          "verification": "инструкции навыка: выбор /имя и загрузка только выбранного (Этап 4); скрипты навыка: script-runner с зависимостями и изоляцией рабочего каталога (Этап 5, запуск подтверждён тестами)",
+          "blocker": null,
+          "note": "SKILL.md + scripts/references/assets переносятся как есть (Agent Skills)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не указана в файле",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "partial",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "local-skill-workstation-diagnostics",
+      "name": "workstation-diagnostics (навык)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "availability": "installed",
+      "executionTargets": "PC (сквозной сценарий уже выполнялся: audit_matrix.md, verification.md)",
+      "componentTypes": [
+        "skill"
+      ],
+      "records": [
+        {
+          "componentType": "skill",
+          "normalizedKind": "skill",
+          "strategy": "preserve",
+          "executor": "pc-bridge",
+          "status": "verified",
+          "verification": "инструкции навыка: выбор /имя и загрузка только выбранного (Этап 4); скрипты навыка: script-runner с зависимостями и изоляцией рабочего каталога (Этап 5, запуск подтверждён тестами)",
+          "blocker": null,
+          "note": "SKILL.md + scripts/references/assets переносятся как есть (Agent Skills)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не указана в файле",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "partial",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "local-skill-builtin-agy-customizations",
+      "name": "agy-customizations (встроенный)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "availability": "installed",
+      "executionTargets": "PC (builtin-корень читает listSkills)",
+      "componentTypes": [
+        "skill"
+      ],
+      "records": [
+        {
+          "componentType": "skill",
+          "normalizedKind": "skill",
+          "strategy": "preserve",
+          "executor": "pc-bridge",
+          "status": "verified",
+          "verification": "инструкции навыка: выбор /имя и загрузка только выбранного (Этап 4); скрипты навыка: script-runner с зависимостями и изоляцией рабочего каталога (Этап 5, запуск подтверждён тестами)",
+          "blocker": null,
+          "note": "SKILL.md + scripts/references/assets переносятся как есть (Agent Skills)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не указана в файле",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "partial",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "local-skill-builtin-antigravity-guide",
+      "name": "antigravity-guide (встроенный)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "availability": "installed",
+      "executionTargets": "PC",
+      "componentTypes": [
+        "skill"
+      ],
+      "records": [
+        {
+          "componentType": "skill",
+          "normalizedKind": "skill",
+          "strategy": "preserve",
+          "executor": "pc-bridge",
+          "status": "verified",
+          "verification": "инструкции навыка: выбор /имя и загрузка только выбранного (Этап 4); скрипты навыка: script-runner с зависимостями и изоляцией рабочего каталога (Этап 5, запуск подтверждён тестами)",
+          "blocker": null,
+          "note": "SKILL.md + scripts/references/assets переносятся как есть (Agent Skills)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не указана в файле",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "partial",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "local-skill-builtin-automation",
+      "name": "automation (встроенный)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "availability": "installed",
+      "executionTargets": "PC",
+      "componentTypes": [
+        "skill"
+      ],
+      "records": [
+        {
+          "componentType": "skill",
+          "normalizedKind": "skill",
+          "strategy": "preserve",
+          "executor": "pc-bridge",
+          "status": "verified",
+          "verification": "инструкции навыка: выбор /имя и загрузка только выбранного (Этап 4); скрипты навыка: script-runner с зависимостями и изоляцией рабочего каталога (Этап 5, запуск подтверждён тестами)",
+          "blocker": null,
+          "note": "SKILL.md + scripts/references/assets переносятся как есть (Agent Skills)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не указана в файле",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "partial",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "local-skill-builtin-generative-ui",
+      "name": "generative_ui (встроенный)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "availability": "installed",
+      "executionTargets": "PC",
+      "componentTypes": [
+        "skill"
+      ],
+      "records": [
+        {
+          "componentType": "skill",
+          "normalizedKind": "skill",
+          "strategy": "preserve",
+          "executor": "pc-bridge",
+          "status": "verified",
+          "verification": "инструкции навыка: выбор /имя и загрузка только выбранного (Этап 4); скрипты навыка: script-runner с зависимостями и изоляцией рабочего каталога (Этап 5, запуск подтверждён тестами)",
+          "blocker": null,
+          "note": "SKILL.md + scripts/references/assets переносятся как есть (Agent Skills)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не указана в файле",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "partial",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "local-skill-builtin-migrate-workflows",
+      "name": "migrate-workflows (встроенный)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "availability": "installed",
+      "executionTargets": "PC (модифицирует файлы конфигурации)",
+      "componentTypes": [
+        "skill"
+      ],
+      "records": [
+        {
+          "componentType": "skill",
+          "normalizedKind": "skill",
+          "strategy": "preserve",
+          "executor": "pc-bridge",
+          "status": "verified",
+          "verification": "инструкции навыка: выбор /имя и загрузка только выбранного (Этап 4); скрипты навыка: script-runner с зависимостями и изоляцией рабочего каталога (Этап 5, запуск подтверждён тестами)",
+          "blocker": null,
+          "note": "SKILL.md + scripts/references/assets переносятся как есть (Agent Skills)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не указана в файле",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "partial",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "local-skill-builtin-permissioned-github",
+      "name": "permissioned-github (встроенный)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "availability": "installed",
+      "executionTargets": "PC",
+      "componentTypes": [
+        "skill"
+      ],
+      "records": [
+        {
+          "componentType": "skill",
+          "normalizedKind": "skill",
+          "strategy": "preserve",
+          "executor": "pc-bridge",
+          "status": "verified",
+          "verification": "инструкции навыка: выбор /имя и загрузка только выбранного (Этап 4); скрипты навыка: script-runner с зависимостями и изоляцией рабочего каталога (Этап 5, запуск подтверждён тестами)",
+          "blocker": null,
+          "note": "SKILL.md + scripts/references/assets переносятся как есть (Agent Skills)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не указана в файле",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "partial",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "local-skill-builtin-plugin",
+      "name": "plugin (встроенный справочник по плагинам)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "availability": "installed",
+      "executionTargets": "PC",
+      "componentTypes": [
+        "skill"
+      ],
+      "records": [
+        {
+          "componentType": "skill",
+          "normalizedKind": "skill",
+          "strategy": "preserve",
+          "executor": "pc-bridge",
+          "status": "verified",
+          "verification": "инструкции навыка: выбор /имя и загрузка только выбранного (Этап 4); скрипты навыка: script-runner с зависимостями и изоляцией рабочего каталога (Этап 5, запуск подтверждён тестами)",
+          "blocker": null,
+          "note": "SKILL.md + scripts/references/assets переносятся как есть (Agent Skills)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не указана в файле",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "partial",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "local-skill-builtin-run-workflow",
+      "name": "run-workflow (встроенный)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "availability": "installed",
+      "executionTargets": "PC",
+      "componentTypes": [
+        "skill"
+      ],
+      "records": [
+        {
+          "componentType": "skill",
+          "normalizedKind": "skill",
+          "strategy": "preserve",
+          "executor": "pc-bridge",
+          "status": "verified",
+          "verification": "инструкции навыка: выбор /имя и загрузка только выбранного (Этап 4); скрипты навыка: script-runner с зависимостями и изоляцией рабочего каталога (Этап 5, запуск подтверждён тестами)",
+          "blocker": null,
+          "note": "SKILL.md + scripts/references/assets переносятся как есть (Agent Skills)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не указана в файле",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "partial",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "local-skill-builtin-ui-plugin-navigation",
+      "name": "ui-plugin-navigation (встроенный)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "availability": "installed",
+      "executionTargets": "PC",
+      "componentTypes": [
+        "skill"
+      ],
+      "records": [
+        {
+          "componentType": "skill",
+          "normalizedKind": "skill",
+          "strategy": "preserve",
+          "executor": "pc-bridge",
+          "status": "verified",
+          "verification": "инструкции навыка: выбор /имя и загрузка только выбранного (Этап 4); скрипты навыка: script-runner с зависимостями и изоляцией рабочего каталога (Этап 5, запуск подтверждён тестами)",
+          "blocker": null,
+          "note": "SKILL.md + scripts/references/assets переносятся как есть (Agent Skills)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не указана в файле",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "partial",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "local-import-uploads-skill-md",
+      "name": "uploads/SKILL.md (пользовательский импорт)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "availability": "imported",
+      "executionTargets": "не подключено (файл не читается как навык)",
+      "componentTypes": [
+        "skill"
+      ],
+      "records": [
+        {
+          "componentType": "skill",
+          "normalizedKind": "skill",
+          "strategy": "preserve",
+          "executor": "pc-bridge",
+          "status": "verified",
+          "verification": "инструкции навыка: выбор /имя и загрузка только выбранного (Этап 4); скрипты навыка: script-runner с зависимостями и изоляцией рабочего каталога (Этап 5, запуск подтверждён тестами)",
+          "blocker": null,
+          "note": "SKILL.md + scripts/references/assets переносятся как есть (Agent Skills)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не указана в файле",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "partial",
+      "blockers": [],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "local-plugin-antigravity-workspace-guard",
+      "name": "antigravity-workspace-guard (плагин)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "availability": "installed",
+      "executionTargets": "PC (agy plugin); телефон получает список через /api/plugins",
+      "componentTypes": [
+        "plugin"
+      ],
+      "records": [
+        {
+          "componentType": "plugin",
+          "normalizedKind": "plugin",
+          "strategy": "own-executor",
+          "executor": "pc-bridge",
+          "status": "blocked",
+          "verification": "состав просмотрен по файлам: 1 файл(ов), записей 1",
+          "blocker": "состав пуст: только manifest (plugin.json); заявленные возможности не обеспечены компонентами (skills/agents/rules/hooks/mcp) — пути исполнения нет",
+          "note": "плагин-пакет (состав проверяется по фактическим файлам)"
+        },
+        {
+          "componentType": "plugin",
+          "normalizedKind": "plugin",
+          "strategy": "own-executor",
+          "executor": "pc-bridge",
+          "status": "blocked",
+          "verification": "фактический состав просмотрен (analyzePluginComposition)",
+          "blocker": "состав пуст: только manifest (plugin.json); заявленные возможности не обеспечены компонентами (skills/agents/rules/hooks/mcp) — пути исполнения нет",
+          "note": "плагин-пакет (состав проверяется по фактическим файлам)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не указана в manifest",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "blocked",
+      "blockers": [
+        {
+          "componentType": "plugin",
+          "reason": "состав пуст: только manifest (plugin.json); заявленные возможности не обеспечены компонентами (skills/agents/rules/hooks/mcp) — пути исполнения нет"
+        },
+        {
+          "componentType": "plugin",
+          "reason": "состав пуст: только manifest (plugin.json); заявленные возможности не обеспечены компонентами (skills/agents/rules/hooks/mcp) — пути исполнения нет"
+        }
+      ],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "local-plugin-kotlin-compose-inspector",
+      "name": "kotlin-compose-inspector (плагин)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "availability": "installed",
+      "executionTargets": "PC (agy plugin)",
+      "componentTypes": [
+        "plugin"
+      ],
+      "records": [
+        {
+          "componentType": "plugin",
+          "normalizedKind": "plugin",
+          "strategy": "own-executor",
+          "executor": "pc-bridge",
+          "status": "blocked",
+          "verification": "состав просмотрен по файлам: 1 файл(ов), записей 1",
+          "blocker": "состав пуст: только manifest (plugin.json); заявленные возможности не обеспечены компонентами (skills/agents/rules/hooks/mcp) — пути исполнения нет",
+          "note": "плагин-пакет (состав проверяется по фактическим файлам)"
+        },
+        {
+          "componentType": "plugin",
+          "normalizedKind": "plugin",
+          "strategy": "own-executor",
+          "executor": "pc-bridge",
+          "status": "blocked",
+          "verification": "фактический состав просмотрен (analyzePluginComposition)",
+          "blocker": "состав пуст: только manifest (plugin.json); заявленные возможности не обеспечены компонентами (skills/agents/rules/hooks/mcp) — пути исполнения нет",
+          "note": "плагин-пакет (состав проверяется по фактическим файлам)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не указана в manifest",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "blocked",
+      "blockers": [
+        {
+          "componentType": "plugin",
+          "reason": "состав пуст: только manifest (plugin.json); заявленные возможности не обеспечены компонентами (skills/agents/rules/hooks/mcp) — пути исполнения нет"
+        },
+        {
+          "componentType": "plugin",
+          "reason": "состав пуст: только manifest (plugin.json); заявленные возможности не обеспечены компонентами (skills/agents/rules/hooks/mcp) — пути исполнения нет"
+        }
+      ],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "local-plugin-staging-antigravity-workspace-guard",
+      "name": "staging-копия antigravity-workspace-guard",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "availability": "imported",
+      "executionTargets": "PC (используется действием create как staging-каталог)",
+      "componentTypes": [
+        "plugin"
+      ],
+      "records": [
+        {
+          "componentType": "plugin",
+          "normalizedKind": "plugin",
+          "strategy": "own-executor",
+          "executor": "pc-bridge",
+          "status": "requires-check",
+          "verification": "составной: разложение по компонентам (analyzePluginAdapters); «поддержан полностью» — только после проверки всего состава",
+          "blocker": "байт-в-байт совпадает с установленным manifest — считать одним пакетом с двумя путями, а не двумя",
+          "note": "плагин-пакет (состав проверяется по фактическим файлам)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не указана",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "blocked",
+      "blockers": [
+        {
+          "componentType": "plugin",
+          "reason": "байт-в-байт совпадает с установленным manifest — считать одним пакетом с двумя путями, а не двумя"
+        }
+      ],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "local-plugin-staging-kotlin-compose-inspector",
+      "name": "staging-копия kotlin-compose-inspector",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "availability": "imported",
+      "executionTargets": "PC (staging)",
+      "componentTypes": [
+        "plugin"
+      ],
+      "records": [
+        {
+          "componentType": "plugin",
+          "normalizedKind": "plugin",
+          "strategy": "own-executor",
+          "executor": "pc-bridge",
+          "status": "requires-check",
+          "verification": "составной: разложение по компонентам (analyzePluginAdapters); «поддержан полностью» — только после проверки всего состава",
+          "blocker": "байт-в-байт совпадает с установленным manifest — один пакет, два пути",
+          "note": "плагин-пакет (состав проверяется по фактическим файлам)"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "не указана",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+      },
+      "supportStatus": "blocked",
+      "blockers": [
+        {
+          "componentType": "plugin",
+          "reason": "байт-в-байт совпадает с установленным manifest — один пакет, два пути"
+        }
+      ],
+      "fullSupportAllowed": false
+    },
+    {
+      "id": "local-mcp-ag-workstation-info",
+      "name": "ag-workstation-info (MCP, stdio)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "availability": "installed",
+      "executionTargets": "PC (Node stdio); телефон обращается через мост ПК, не локально",
+      "componentTypes": [
+        "mcp-server"
+      ],
+      "records": [
+        {
+          "componentType": "mcp-server",
+          "normalizedKind": "mcp-server",
+          "strategy": "own-executor",
+          "executor": "pc-bridge",
+          "status": "verified",
+          "verification": "живой MCP-handshake и tools/call (Этап 3: initialize → tools/list → вызов, все транспорты)",
+          "blocker": null,
+          "note": "stdio — только ПК (pc-bridge); удалённый Streamable HTTP — через реестр подключений"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "собственный код проекта; лицензия сторонняя не применима",
+        "classification": "own-code",
+        "rightToRedistribute": "granted",
+        "note": "собственный код проекта — распространение разрешено"
+      },
+      "supportStatus": "fully-supported",
+      "blockers": [],
+      "fullSupportAllowed": true
+    },
+    {
+      "id": "local-mcp-rea",
+      "name": "rea (MCP, stdio)",
+      "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
+      "availability": "installed",
+      "executionTargets": "PC (Node stdio)",
+      "componentTypes": [
+        "mcp-server"
+      ],
+      "records": [
+        {
+          "componentType": "mcp-server",
+          "normalizedKind": "mcp-server",
+          "strategy": "own-executor",
+          "executor": "pc-bridge",
+          "status": "verified",
+          "verification": "живой MCP-handshake и tools/call (Этап 3: initialize → tools/list → вызов, все транспорты)",
+          "blocker": null,
+          "note": "stdio — только ПК (pc-bridge); удалённый Streamable HTTP — через реестр подключений"
+        }
+      ],
+      "licenseCheck": {
+        "raw": "лицензия пакета npm в проекте не зафиксирована",
+        "classification": "unknown",
+        "rightToRedistribute": "unknown",
+        "note": "лицензия \"лицензия пакета npm в проекте не зафиксирована\" не распознана — право не подтверждено"
+      },
+      "supportStatus": "partial",
+      "blockers": [],
+      "fullSupportAllowed": false
+    }
+  ],
+  "summary": {
+    "positionsTotal": 79,
+    "recordsTotal": 81,
+    "bySupportStatus": {
+      "observation": 38,
+      "blocked": 21,
+      "partial": 19,
+      "fully-supported": 1
+    },
+    "byStrategy": {
+      "preserve": 57,
+      "convert": 13,
+      "own-executor": 11
+    },
+    "fullySupported": [
+      "local-mcp-ag-workstation-info"
+    ],
+    "licenseUnknown": [
+      "claude-web-catalog-connectors",
+      "claude-web-catalog-skills",
+      "claude-web-catalog-plugins",
+      "claude-web-card-figma",
+      "claude-web-card-desktop-commander",
+      "claude-web-card-searchfit-seo",
+      "claude-web-card-bright-data",
+      "claude-web-card-zoom",
+      "claude-web-card-product-tracking",
+      "claude-web-card-learn",
+      "claude-web-card-doc-coauthoring",
+      "claude-web-card-web-artifacts-builder",
+      "claude-web-card-productivity",
+      "claude-web-card-marketing",
+      "claude-web-card-finance",
+      "claude-web-surface-cowork",
+      "claude-web-code-upgrade",
+      "claude-android-connector-custom",
+      "claude-android-connector-catalog",
+      "claude-android-skills",
+      "claude-android-mcp-servers",
+      "claude-android-plugin-label",
+      "claude-android-connector-figma",
+      "claude-android-github-app",
+      "claude-android-connector-calendar",
+      "claude-android-connector-google-drive",
+      "claude-android-settings-integrations",
+      "chatgpt-plugin-directory",
+      "chatgpt-cat-business-analytics",
+      "chatgpt-cat-creativity-design",
+      "chatgpt-cat-developer-tools",
+      "chatgpt-cat-messaging-social",
+      "chatgpt-cat-productivity",
+      "chatgpt-cat-research-knowledge",
+      "chatgpt-plugin-directory-views",
+      "chatgpt-plugin-detail",
+      "chatgpt-component-app",
+      "chatgpt-component-skill",
+      "chatgpt-connectors",
+      "chatgpt-connector-gmail",
+      "chatgpt-connector-google-calendar",
+      "chatgpt-connector-outlook",
+      "chatgpt-connector-1password",
+      "chatgpt-file-sources",
+      "chatgpt-gpts",
+      "chatgpt-finance-connections",
+      "codex-remote-composer-extensions",
+      "codex-visualize-plugin-assets",
+      "local-skill-autonomous-software-engineer",
+      "local-skill-reverse-engineer-anything",
+      "local-skill-rigorous-programming-reasoner",
+      "local-skill-rigorous-programming-reasoner-disabled",
+      "local-skill-workstation-diagnostics",
+      "local-skill-builtin-agy-customizations",
+      "local-skill-builtin-antigravity-guide",
+      "local-skill-builtin-automation",
+      "local-skill-builtin-generative-ui",
+      "local-skill-builtin-migrate-workflows",
+      "local-skill-builtin-permissioned-github",
+      "local-skill-builtin-plugin",
+      "local-skill-builtin-run-workflow",
+      "local-skill-builtin-ui-plugin-navigation",
+      "local-import-uploads-skill-md",
+      "local-plugin-antigravity-workspace-guard",
+      "local-plugin-kotlin-compose-inspector",
+      "local-plugin-staging-antigravity-workspace-guard",
+      "local-plugin-staging-kotlin-compose-inspector",
+      "local-mcp-rea"
+    ]
+  }
+}

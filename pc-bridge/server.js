@@ -3,6 +3,9 @@ const { readJsonBody } = require('./lib/read-json-body');
 const extensionRegistry = require('./lib/extension-registry');
 const mcpClientLib = require('./lib/mcp-client');
 const extensionRuntime = require('./lib/extension-runtime');
+// Этап 5: собственный исполнитель hooks и адаптеры компонентов плагинов.
+const hookEngine = require('./lib/hook-engine');
+const componentAdapters = require('./lib/component-adapters');
 const https = require('https');
 const { spawn, exec } = require('child_process');
 const fs = require('fs');
@@ -1462,6 +1465,144 @@ async function buildOpenRouterToolSet() {
         return empty;
     }
 }
+
+// Этап 5 (EXTENSIONS_INTEGRATION_PLAN.md): собственный исполнитель lifecycle
+// hooks по проверенному контракту builtin/skills/agy-customizations/docs/hooks.md.
+// Политика: недопустимые/неподдерживаемые hooks НИКОГДА не запускаются молча —
+// каждый отказ (неизвестное событие, тип ≠ "command", enabled:false, запрет
+// прав, тайм-аут, не-JSON на stdout) видимо попадает в события хода.
+// Источники hooks.json (docs/plugins.md + docs/hooks.md):
+//   ~/.gemini/config/hooks.json — пользовательский customization root;
+//   <workspace>/.agents/hooks.json — рабочий каталог;
+//   <plugin>/hooks.json — только ВКЛЮЧЁННЫХ плагинов (config.json выигрывает
+//   у plugin.json disabled — docs/plugins.md).
+function collectPluginHookSources() {
+    const sources = [];
+    let configPlugins = {};
+    try {
+        const cfg = JSON.parse(fs.readFileSync(path.join(GEMINI_ROOT_DIR, 'config', 'config.json'), 'utf8'));
+        if (cfg.plugins && typeof cfg.plugins === 'object') configPlugins = cfg.plugins;
+    } catch (_) {}
+    let pluginDirs = [];
+    try { pluginDirs = fs.readdirSync(PLUGINS_DIR); } catch (_) { return sources; }
+    for (const dirName of pluginDirs) {
+        const pluginDir = path.join(PLUGINS_DIR, dirName);
+        const hooksPath = path.join(pluginDir, 'hooks.json');
+        if (!fs.existsSync(hooksPath)) continue;
+        let enabled;
+        const cfgEntry = configPlugins[dirName];
+        if (cfgEntry && typeof cfgEntry === 'object' && typeof cfgEntry.enabled === 'boolean') {
+            enabled = cfgEntry.enabled;
+        } else {
+            // Фолбэк на plugin.json («disabled»): manifest может быть JSONC —
+            // без полного JSONC-парсера честно пробуем строгий JSON.
+            enabled = true;
+            try {
+                const manifest = JSON.parse(fs.readFileSync(path.join(pluginDir, 'plugin.json'), 'utf8'));
+                if (manifest && manifest.disabled === true) enabled = false;
+            } catch (_) {}
+        }
+        if (!enabled) continue; // отключённый плагин не грузит hooks (docs/plugins.md)
+        sources.push({ path: hooksPath, origin: `plugin:${dirName}` });
+    }
+    return sources;
+}
+
+function loadExtensionHooks({ workspace = DEFAULT_WORKSPACE } = {}) {
+    const sources = [
+        { path: path.join(GEMINI_ROOT_DIR, 'config', 'hooks.json'), origin: 'user-config' },
+        { path: path.join(workspace, '.agents', 'hooks.json'), origin: 'workspace' },
+        ...collectPluginHookSources()
+    ].filter(s => fs.existsSync(s.path));
+    return hookEngine.loadHooksFromSources(sources);
+}
+
+// Контекст полезной нагрузки hook'ов (hooks.md, Common Input Fields).
+// Пути transcript — реальные пути моста (brain/<conv>/.system_generated/logs),
+// не выдуманный путь из примера документации.
+function buildHookPayloadContext({ conversationId = '', modelName = 'auto', lastUserInput = '' } = {}) {
+    return {
+        conversationId,
+        workspacePaths: [DEFAULT_WORKSPACE],
+        modelName,
+        lastUserInput,
+        transcriptPath: conversationId
+            ? path.join(BRAIN_DIR, conversationId, '.system_generated', 'logs', 'transcript.jsonl')
+            : undefined
+    };
+}
+
+// Runner для runToolCallLoop: события PreToolUse/PostToolUse/PreInvocation/
+// PostInvocation/Stop/SessionStart. CLI-ходы (agy) используют собственную
+// систему кастомизаций CLI — мост свои hooks там НЕ запускает (без двойного
+// исполнения).
+function buildHookRunner(ctx = {}) {
+    let loaded = { namedHooks: [], refusals: [], issues: [] };
+    try {
+        loaded = loadExtensionHooks();
+    } catch (err) {
+        loaded = { namedHooks: [], refusals: [], issues: [`hooks не загружены: ${err.message}`] };
+    }
+    let perms = {};
+    try { perms = loadAiPermissionsConfig() || {}; } catch (_) {}
+    const permissions = {
+        pcMcpToolsExec: perms.pcMcpToolsExec !== false && perms.pcPluginsMcpSkillsAccess !== false,
+        pcTerminalExec: perms.pcTerminalExec !== false && perms.pcPowerShellExecution !== false
+    };
+    const payloadCtx = buildHookPayloadContext(ctx);
+    const run = (event, inputCtx) => hookEngine.runEventHooks(
+        loaded.namedHooks,
+        event,
+        Object.assign({}, payloadCtx, inputCtx || {}),
+        { permissions, homeDir: os.homedir() }
+    );
+    return {
+        // Парсинг-отказы видимы сразу при построении runner'а.
+        initialRefusals: loaded.refusals.concat(
+            loaded.issues.map(msg => ({ hookName: null, event: null, sourcePath: null, code: 'load_error', reason: msg }))
+        ),
+        async onSessionStart() {
+            const r = await run('SessionStart', {});
+            return { injectSteps: r.injectSteps, refusals: r.refusals };
+        },
+        async beforeToolCall({ ref, args, callId, stepIdx } = {}) {
+            const r = await run('PreToolUse', { toolCall: { name: ref, args }, stepIdx, callId });
+            const d = r.decision || { decision: 'allow', reason: '', notice: null, overwrite: {} };
+            const overwrite = d.overwrite || {};
+            const argsOut = Object.keys(overwrite).length > 0 ? Object.assign({}, args, overwrite) : args;
+            return {
+                allow: d.decision === 'allow',
+                args: argsOut,
+                notice: d.notice,
+                reason: d.reason,
+                permissionOverrides: d.permissionOverrides,
+                refusals: r.refusals
+            };
+        },
+        async afterToolCall({ ref, args, callId, result, stepIdx, error } = {}) {
+            const r = await run('PostToolUse', { toolCall: { name: ref, args }, stepIdx, callId, error });
+            return { refusals: r.refusals };
+        },
+        async onInvocation({ event, invocationNum, initialNumSteps, wouldStop } = {}) {
+            const r = await run(event === 'PostInvocation' ? 'PostInvocation' : 'PreInvocation', {
+                invocationNum,
+                initialNumSteps
+            });
+            return { injectSteps: r.injectSteps, terminationBehavior: r.terminationBehavior, refusals: r.refusals };
+        },
+        async onStop({ terminationReason } = {}) {
+            const r = await run('Stop', { executionNum: 1, terminationReason });
+            return {
+                shouldContinue: Boolean(r.stopDecision && r.stopDecision.shouldContinue),
+                reason: (r.stopDecision && r.stopDecision.reason) || '',
+                refusals: r.refusals
+            };
+        }
+    };
+}
+
+// SessionStart выполняется один раз на разговор за жизнь процесса моста.
+const hookSessionsStarted = new Set();
 
 // Реестр активных и недавно завершённых ходов для бесшовного восстановления при обрыве SSE
 const activeTurnsById = new Map();
@@ -3717,6 +3858,14 @@ async function executeOpenRouterStreamingTurn(options, onEvent = () => {}) {
     const resolvedConvId = conversationId || require('crypto').randomUUID();
     const cleanModelId = String(model || '').replace(/^openrouter\//i, '').trim() || 'google/gemini-2.0-flash-exp:free';
     const orConfig = loadOpenRouterConfig();
+    // Этап 5: собственный исполнитель hooks (docs/hooks.md). В CLI-ходах agy
+    // мост свои hooks не запускает — там действует система кастомизаций CLI.
+    const hookRunner = (typeof buildHookRunner === 'function')
+        ? buildHookRunner({ conversationId: resolvedConvId, modelName: cleanModelId, lastUserInput: cleanUserPrompt })
+        : null;
+    if (hookRunner && Array.isArray(hookRunner.initialRefusals) && hookRunner.initialRefusals.length > 0) {
+        try { onEvent({ type: 'hook-refusal', turnId, refusals: hookRunner.initialRefusals }); } catch (_) {}
+    }
 
     const initEvt = {
         type: 'init',
@@ -3757,6 +3906,25 @@ async function executeOpenRouterStreamingTurn(options, onEvent = () => {}) {
                         role: (m.role === 'USER' || m.role === 'user') ? 'user' : 'assistant',
                         content: String(m.content || '')
                     });
+                }
+            }
+            // Этап 5: SessionStart — один раз на разговор (hooks.md).
+            if (hookRunner && typeof hookRunner.onSessionStart === 'function') {
+                let alreadyStarted = false;
+                if (typeof hookSessionsStarted !== 'undefined' && hookSessionsStarted) {
+                    alreadyStarted = hookSessionsStarted.has(resolvedConvId);
+                    hookSessionsStarted.add(resolvedConvId);
+                }
+                if (!alreadyStarted) {
+                    try {
+                        const sess = await hookRunner.onSessionStart();
+                        if (sess && Array.isArray(sess.injectSteps) && sess.injectSteps.length > 0) {
+                            messagesPayload.push(...extensionRuntime.injectStepsToMessages(sess.injectSteps));
+                        }
+                        if (sess && Array.isArray(sess.refusals) && sess.refusals.length > 0) {
+                            try { onEvent({ type: 'hook-refusal', turnId, refusals: sess.refusals }); } catch (_) {}
+                        }
+                    } catch (_) {}
                 }
             }
             messagesPayload.push({ role: 'user', content: cleanUserPrompt });
@@ -3808,6 +3976,7 @@ async function executeOpenRouterStreamingTurn(options, onEvent = () => {}) {
                 nameToRef: toolSet.nameToRef,
                 maxRounds: 6,
                 signal: abortController.signal,
+                hookRunner,
                 chat: async (msgs, toolSchemas) => {
                     const resp = await orRequest(msgs, toolSchemas);
                     const parsed = JSON.parse(resp.body || '{}');
@@ -3827,6 +3996,22 @@ async function executeOpenRouterStreamingTurn(options, onEvent = () => {}) {
                     });
                 },
                 onToolEvent: (evt) => {
+                    // Этап 5: события hooks — в поток хода (видимые отказы и
+                    // блокировки, ничего не запускается молча).
+                    if (evt.type === 'hook-refusal') {
+                        try {
+                            onEvent({ type: 'hook-refusal', turnId, refusals: evt.refusals, elapsedMs: Date.now() - startMs });
+                        } catch (_) {}
+                        return;
+                    }
+                    if (evt.type === 'hook') {
+                        try {
+                            onEvent({ type: 'hook', turnId, id: evt.callId ? `hook_${evt.callId}` : `hook_${Date.now()}`,
+                                toolName: evt.ref, status: evt.status || 'COMPLETED', summary: `hook ${evt.status || ''}`,
+                                details: evt.reason || '', elapsedMs: Date.now() - startMs });
+                        } catch (_) {}
+                        return;
+                    }
                     if (evt.type !== 'end') return;
                     const summary = extensionRuntime.toolResultToText(evt.result).slice(0, 400);
                     try {
@@ -4987,6 +5172,45 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && urlObj.pathname === '/api/plugins') {
         const plugins = await listPlugins();
+        // Этап 5: у каждого плагина — проверенный путь исполнения компонента
+        // либо конкретный блокер (адаптеры компонентов по реальным файлам).
+        for (const p of plugins) {
+            try {
+                const pluginJson = p.path ? path.join(p.path, 'plugin.json') : null;
+                if (pluginJson && fs.existsSync(pluginJson)) {
+                    const a = componentAdapters.analyzePluginAdapters(p.path, { name: p.id, enabled: p.enabled });
+                    p.composition = {
+                        supportStatus: a.support.supportStatus,
+                        fullSupportAllowed: a.support.fullSupportAllowed,
+                        records: a.records.map(r => ({
+                            componentType: r.componentType,
+                            strategy: r.strategy,
+                            status: r.status,
+                            blocker: r.blocker,
+                            verification: r.verification
+                        })),
+                        license: a.licenseCheck,
+                        blockers: a.support.blockers
+                    };
+                } else {
+                    p.composition = {
+                        supportStatus: 'unknown',
+                        fullSupportAllowed: false,
+                        records: [],
+                        license: null,
+                        blockers: [{ componentType: 'plugin', reason: 'plugin.json не найден — состав не проверен' }]
+                    };
+                }
+            } catch (err) {
+                p.composition = {
+                    supportStatus: 'unknown',
+                    fullSupportAllowed: false,
+                    records: [],
+                    license: null,
+                    blockers: [{ componentType: 'plugin', reason: `состав не проверен: ${err.message}` }]
+                };
+            }
+        }
         return sendJson(res, 200, {
             ok: true,
             plugins
@@ -5034,6 +5258,30 @@ const server = http.createServer(async (req, res) => {
             inventory
         });
         return sendJson(res, 200, { ok: true, registry: registryData });
+    }
+
+    // Этап 5: матрица адаптеров компонентов — у каждого компонента инвентаря
+    // стратегия (preserve/convert/own-executor) и проверенный путь либо
+    // конкретный блокер; право переиспользования/распространения — отдельно.
+    if (req.method === 'GET' && urlObj.pathname === '/api/extensions/adapters') {
+        let inventory = null;
+        const invPath = path.join(DEFAULT_WORKSPACE, 'extensions-inventory.json');
+        if (fs.existsSync(invPath)) {
+            try { inventory = JSON.parse(fs.readFileSync(invPath, 'utf8')); } catch (_) {}
+        }
+        const pluginAnalyses = [];
+        for (const root of [PLUGINS_DIR, path.join(UPLOADS_DIR, 'plugin-staging')]) {
+            let dirs = [];
+            try { dirs = fs.readdirSync(root); } catch (_) { continue; }
+            for (const dirName of dirs) {
+                const pluginDir = path.join(root, dirName);
+                if (fs.existsSync(path.join(pluginDir, 'plugin.json'))) {
+                    try { pluginAnalyses.push(componentAdapters.analyzePluginAdapters(pluginDir, { name: dirName })); } catch (_) {}
+                }
+            }
+        }
+        const matrix = componentAdapters.buildAdapterMatrix(inventory, { pluginAnalyses });
+        return sendJson(res, 200, { ok: true, matrix });
     }
 
     if (req.method === 'GET' && urlObj.pathname === '/api/system-prompt') {

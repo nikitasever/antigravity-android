@@ -356,3 +356,46 @@ AntigravityViewModel / карточка MCP в MainScreen). Обе целевы�
 Механизм CLI проверен на реальном `agy`: инструменты — через зарегистрированные
 MCP-серверы, инъекции схем нет (и не выдумывается); `--settings` отвергает
 `mcpServers` — посессионный поднабор MCP у CLI невозможен (зафиксировано).
+
+## 12. Этап 5 — адаптеры компонентов и Android-runtime (2 ноября 2026)
+
+- Матрица адаптеров `extensions-adapter-matrix.json` (генератор
+  `pc-bridge/scripts/build-adapter-matrix.js`, отдаётся
+  `GET /api/extensions/adapters`): у каждой из 79 позиций (81 запись
+  компонентов) — стратегия preserve/convert/own-executor и статус
+  verified/blocked/requires-check/not-applicable с конкретным блокером; сводная
+  таблица отдельно проверенных видов: commands, agents, hooks, LSP, локальные
+  программы, переменные конфигурации, продуктовые UI-компоненты.
+- Итоги: fully-supported — 1 (`local-mcp-ag-workstation-info`: собственный код +
+  живое MCP-рукопожатие); blocked — 21; partial — 20 (`local-mcp-rea` — лицензия
+  npm-пакета не подтверждена; `local-skill-*` — лицензии в файлах не указаны);
+  observation — 38 (продуктовые UI-компоненты источников). «Полностью» не
+  выдаётся без проверенного состава И права распространения (68 позиций с
+  неподтверждённой лицензией — право переиспользования/распространения проверяется
+  отдельно, `checkRedistributionRight`).
+- Установленные плагины `antigravity-workspace-guard` и `kotlin-compose-inspector`:
+  состав просмотрен по реальным файлам — blocked: только plugin.json,
+  заявленные возможности не обеспечены компонентами (skills/agents/rules/hooks/mcp
+  отсутствуют) — defect №1 подтверждён на уровне адаптеров.
+- Hooks: собственный исполнитель `pc-bridge/lib/hook-engine.js` по проверенному
+  официальному контракту (`builtin/skills/agy-customizations/docs/hooks.md`).
+  Неподдерживаемое не запускается молча: тип ≠ "command", неизвестное событие,
+  enabled:false, запрет прав (pcPluginsMcpSkillsAccess + pcPowerShellExecution),
+  тайм-аут, не-JSON выход — видимые отказы. «ask»/«force_ask» → честный отказ;
+  отмена пользователя hook'ами не продлевается. Deny/overwrite/PostToolUse/
+  Pre-PostInvocation (injectSteps, terminationBehavior)/Stop/SessionStart
+  подключены к циклу инструментов (`runToolCallLoop`).
+- Скрипты/локальные программы: `pc-bridge/lib/script-runner.js` — зависимости
+  проверяются до запуска (реальный probe интерпретатора; node-импорты против
+  node_modules/package.json), рабочий каталог изолирован (служебный временный
+  каталог, allowlist окружения), нехватка зависимостей — блокер, не прогон.
+- Android-runtime: компоненты расширений исполняются на ПК; телефонная сторона —
+  phone_action приложения (Этап 4, не перенаправляются на ПК). Доказательство
+  запуском: эмулятор Pixel_8a → install app-debug.apk → COLD-запуск
+  `com.google.antigravity/.MainActivity` (12.5 с) → работоспособный интерфейс
+  чата (`verification_screenshots/stage5_android_launch.png`); Android-тесты
+  прогнаны принудительно: 84 теста, 21 набор, 0 падений.
+- Проверено: 18 тестов `pc-bridge/test/extensions-stage5.test.js` (hook-engine и
+  script-runner на настоящих процессах, матрица по реальному инвентарю,
+  vm-склейка server.js; тест поймал и исправил дефект `loadExtensionHooks`);
+  полная коллекция Node-тестов зелёная.

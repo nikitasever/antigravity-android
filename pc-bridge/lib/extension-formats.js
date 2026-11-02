@@ -421,6 +421,11 @@ const COMPONENT_SUPPORT = {
         status: 'поддержан',
         note: 'SKILL.md + scripts/references/assets переносятся как есть (Agent Skills)'
     },
+    rule: {
+        support: 'supported',
+        status: 'поддержан',
+        note: 'rules/AGENTS.md (или GEMINI.md) — markdown без frontmatter, всегда активен при включённом плагине (docs/rules.md)'
+    },
     command: {
         support: 'convert',
         status: 'требует преобразования в навык',
@@ -653,9 +658,10 @@ function classifyLayoutPath(relPath) {
     const parts = relPath.split('/');
     const top = parts[0];
     if (relPath === 'plugin.json' || top === '.claude-plugin' || top === '.codex-plugin') return 'manifest';
-    if (relPath === '.mcp.json' || relPath === 'mcp.json' || relPath === '.mcpb') return 'mcp-server';
+    if (relPath === '.mcp.json' || relPath === 'mcp.json' || relPath === 'mcp_config.json' || relPath === '.mcpb') return 'mcp-server';
     if (relPath === '.lsp.json') return 'lsp-server';
     if (relPath === 'hooks.json' || top === 'hooks') return 'hook';
+    if (top === 'rules') return 'rule';
     if (relPath === '.app.json' || relPath === 'apps.json') return 'app';
     if (relPath === 'settings.json' || relPath === 'CLAUDE.md') return 'settings';
     if (top === 'skills') return 'skill';
@@ -667,6 +673,7 @@ function classifyLayoutPath(relPath) {
     if (top === 'monitors') return 'monitor';
     if (top === 'bin') return 'executable';
     if (top === 'assets') return 'asset';
+    if (relPath === 'README.md') return 'asset';
     if (top === 'scripts') return 'executable';
     return 'unknown';
 }
