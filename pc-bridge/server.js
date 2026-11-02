@@ -2,6 +2,7 @@ const http = require('http');
 const { readJsonBody } = require('./lib/read-json-body');
 const extensionRegistry = require('./lib/extension-registry');
 const mcpClientLib = require('./lib/mcp-client');
+const extensionRuntime = require('./lib/extension-runtime');
 const https = require('https');
 const { spawn, exec } = require('child_process');
 const fs = require('fs');
@@ -1376,6 +1377,92 @@ function parseStreamingThinkingAndReply(rawText, nativeThinkingParts = []) {
     };
 }
 
+// --- Этап 4: реестр расширений → модели и дочерние задачи -------------------
+
+// Выбор навыка по `/имя-навыка`: каталог — только метаданные, полные
+// инструкции загружаются ТОЛЬКО выбранного навыка. Отключённый/отсутствующий —
+// явный отказ (запрет доступа действует), без выдуманных инструкций.
+function selectSkillForPrompt(promptText) {
+    try {
+        const catalog = extensionRuntime.buildSkillCatalog([
+            { dir: path.join(DEFAULT_WORKSPACE, '.agents', 'skills'), source: 'workspace' },
+            { dir: SKILLS_DIR, source: 'global' },
+            { dir: path.join(IDE_BASE_DIR, 'builtin', 'skills'), source: 'builtin' }
+        ]);
+        const det = extensionRuntime.detectSkillInvocation(promptText, catalog);
+        if (!det.skillId) {
+            return { skillId: null, restPrompt: promptText, block: '', refusal: null };
+        }
+        const sel = extensionRuntime.loadSelectedSkill(det.skillId, { catalog });
+        if (sel.status !== 'ok') {
+            return { skillId: det.skillId, restPrompt: det.restPrompt, block: '', refusal: sel.refusal };
+        }
+        return {
+            skillId: det.skillId,
+            restPrompt: det.restPrompt,
+            block: extensionRuntime.composeSkillInstructionBlock(sel.skill),
+            refusal: null
+        };
+    } catch (_) {
+        return { skillId: null, restPrompt: promptText, block: '', refusal: null };
+    }
+}
+
+// Вызов MCP-инструмента через реестр: строго по serverId, без взаимозамены
+// одноимённых инструментов; авторизация — из конфига (без утечек).
+function callMcpToolViaRegistry(serverId, toolName, args, { signal, timeoutMs } = {}) {
+    const raw = findRawMcpEntry(serverId);
+    const descriptor = raw ? mcpClientLib.buildMcpDescriptor(serverId, raw.cfg) : undefined;
+    return mcpClientManager.callTool(serverId, toolName, (args && typeof args === 'object') ? args : {}, {
+        descriptor,
+        signal,
+        requestTimeoutMs: timeoutMs
+    });
+}
+
+// Реальные схемы разрешённых инструментов для адаптеров с нативным tool-calling
+// (OpenRouter). Источник схем — только живой tools/list включённых серверов
+// реестра (рукопожатие Этапа 3); ничего не угадывается. Политика: запрет
+// pcMcpToolsExec → пустой набор (запрет доступа действует). Инструменты
+// смартфона в function-схемы не включаются — они выполняются только на
+// смартфоне (phone_action) и на ПК не перенаправляются.
+async function buildOpenRouterToolSet() {
+    const empty = { tools: [], nameToRef: new Map(), catalog: [], allowedRefs: new Set() };
+    try {
+        const perms = loadAiPermissionsConfig();
+        if (perms && perms.pcMcpToolsExec === false) return empty;
+    } catch (_) {}
+    try {
+        const servers = await listMcpServers();
+        const liveServers = [];
+        for (const s of servers) {
+            if (!s.enabled) continue;
+            const live = mcpClientManager.getLive(s.name);
+            if (live && live.status === 'connected' && Array.isArray(live.toolsDetailed) && live.toolsDetailed.length > 0) {
+                liveServers.push({ id: s.name, tools: live.toolsDetailed });
+                continue;
+            }
+            // Нет живого tools/list — свежее реальное рукопожатие, не догадки.
+            const raw = findRawMcpEntry(s.name);
+            if (!raw) continue;
+            const probe = await mcpClientManager.probe(mcpClientLib.buildMcpDescriptor(s.name, raw.cfg), {
+                handshakeTimeoutMs: 8000,
+                requestTimeoutMs: 15000
+            });
+            mcpLiveState.set(s.name, probe);
+            if (probe.ok && probe.toolsDetailed.length > 0) {
+                liveServers.push({ id: s.name, tools: probe.toolsDetailed });
+            }
+        }
+        const catalog = extensionRuntime.buildToolCatalog({ mcpServers: liveServers, includePhoneTools: false });
+        const { allowed } = extensionRuntime.filterAllowedTools(catalog, { allowAllPc: true });
+        const { tools, nameToRef } = extensionRuntime.toOpenAiToolSchemas(allowed);
+        return { tools, nameToRef, catalog, allowedRefs: new Set(allowed.map(t => t.ref)) };
+    } catch (_) {
+        return empty;
+    }
+}
+
 // Реестр активных и недавно завершённых ходов для бесшовного восстановления при обрыве SSE
 const activeTurnsById = new Map();
 const turnCancellations = new Map();
@@ -1434,8 +1521,18 @@ async function executeAgyTurnStreaming(options, onEvent = () => {}) {
         phoneStepIndex = 0
     } = options;
 
-    const effectivePromptText = (cleanUserPrompt || rawUserPrompt || '').trim() ||
+    let effectivePromptText = (cleanUserPrompt || rawUserPrompt || '').trim() ||
         (Array.isArray(attachments) && attachments.length > 0 ? 'Проанализируй прикреплённые файлы и выполни задачу.' : 'Продолжай выполнение задачи.');
+
+    // Этап 4: выбор навыка реестра. Метаданные — всегда, инструкции — только
+    // выбранного навыка. Токен `/имя-навыка` из запроса убирается, чтобы
+    // инструкции не дублировались раскрытием слэш-команд самого CLI.
+    const skillSelection = (typeof selectSkillForPrompt === 'function')
+        ? selectSkillForPrompt(effectivePromptText)
+        : { skillId: null, restPrompt: effectivePromptText, block: '', refusal: null };
+    if (skillSelection.skillId && skillSelection.restPrompt.trim()) {
+        effectivePromptText = skillSelection.restPrompt.trim();
+    }
 
     // Если выбрана модель OpenRouter (или префикс openrouter/ или содержит слэш провайдера вроде anthropic/, openai/, deepseek/, meta-llama/, qwen/, black-forest-labs/, google/ и т.д.)
     const isOpenRouterModel = Boolean(
@@ -1447,7 +1544,9 @@ async function executeAgyTurnStreaming(options, onEvent = () => {}) {
         return executeOpenRouterStreamingTurn({
             ...options,
             turnId,
-            cleanUserPrompt: effectivePromptText
+            cleanUserPrompt: effectivePromptText,
+            skillInstructionBlock: skillSelection.block,
+            skillRefusal: skillSelection.refusal
         }, onEvent);
     }
 
@@ -1605,6 +1704,14 @@ async function executeAgyTurnStreaming(options, onEvent = () => {}) {
 
     if (!isPhoneMode && phoneContext) {
         promptForCli += `\n\n<ANDROID_CLIENT_CONTEXT>\n${phoneContext}\n</ANDROID_CLIENT_CONTEXT>`;
+    }
+
+    // Этап 4: инструкции выбранного навыка (только его) либо явный отказ в
+    // доступе. Клиентский протокол phone_action при этом сохраняется.
+    if (skillSelection.refusal) {
+        promptForCli += `\n\n<SKILL_ACCESS_REFUSAL>\n${skillSelection.refusal}\n</SKILL_ACCESS_REFUSAL>`;
+    } else if (skillSelection.block) {
+        promptForCli += `\n\n${skillSelection.block}`;
     }
 
     if (wasContextReset && conversationId) {
@@ -3630,9 +3737,17 @@ async function executeOpenRouterStreamingTurn(options, onEvent = () => {}) {
         classifyOpenRouterModel({ id: cleanModelId, name: cleanModelId });
     // Если задан API-ключ OpenRouter — обращаемся напрямую к https://openrouter.ai/api/v1/chat/completions
     if (orConfig.apiKey && orConfig.apiKey.trim().length > 10) {
+        const abortController = new AbortController();
+        turnCancellations.set(turnId, () => abortController.abort());
         try {
-            const sysContent = loadAgentSystemPrompt() +
+            let sysContent = loadAgentSystemPrompt() +
                 `\n\nТы работаешь как модель ${modelProfile.name || cleanModelId} (${cleanModelId}) через OpenRouter. Адаптируй ответы под свой профиль (${modelProfile.primaryCategory || 'TEXT'}, модальность ${modelProfile.modality || 'text->text'}).`;
+            // Этап 4: инструкции выбранного навыка (только его) или отказ в доступе.
+            if (options.skillRefusal) {
+                sysContent += `\n\n<SKILL_ACCESS_REFUSAL>\n${options.skillRefusal}\n</SKILL_ACCESS_REFUSAL>`;
+            } else if (options.skillInstructionBlock) {
+                sysContent += `\n\n${options.skillInstructionBlock}`;
+            }
             const messagesPayload = [
                 { role: 'system', content: sysContent }
             ];
@@ -3646,12 +3761,20 @@ async function executeOpenRouterStreamingTurn(options, onEvent = () => {}) {
             }
             messagesPayload.push({ role: 'user', content: cleanUserPrompt });
 
-            const orRes = await new Promise((resolve, reject) => {
-                const bodyStr = JSON.stringify({
+            // Этап 4: реальные схемы разрешённых инструментов (живой tools/list
+            // реестра) и цикл вызовов с возвратом результатов в тот же цикл.
+            const toolSet = await buildOpenRouterToolSet();
+            let lastUsage = null;
+            const orRequest = (msgs, toolSchemas) => new Promise((resolve, reject) => {
+                const payload = {
                     model: cleanModelId,
-                    messages: messagesPayload,
+                    messages: msgs,
                     include_reasoning: true
-                });
+                };
+                if (Array.isArray(toolSchemas) && toolSchemas.length > 0) {
+                    payload.tools = toolSchemas;
+                }
+                const bodyStr = JSON.stringify(payload);
                 const r = https.request('https://openrouter.ai/api/v1/chat/completions', {
                     method: 'POST',
                     headers: {
@@ -3668,18 +3791,76 @@ async function executeOpenRouterStreamingTurn(options, onEvent = () => {}) {
                 });
                 r.on('error', reject);
                 r.on('timeout', () => r.destroy(new Error('OpenRouter request timed out')));
-                turnCancellations.set(turnId, () => r.destroy(new Error('Generation cancelled')));
+                const onAbort = () => r.destroy(new Error('Generation cancelled'));
+                if (abortController.signal.aborted) {
+                    r.destroy();
+                    reject(new Error('Generation cancelled'));
+                    return;
+                }
+                abortController.signal.addEventListener('abort', onAbort, { once: true });
                 r.write(bodyStr);
                 r.end();
             });
 
-            const parsedOr = JSON.parse(orRes.body || '{}');
-            const choice = parsedOr.choices && parsedOr.choices[0] && parsedOr.choices[0].message;
-            if (choice && choice.content) {
-                const extracted = extractThinkingAndCleanReply(choice.content, choice.reasoning || '');
-                const finalReplyText = extracted.reply || choice.content;
+            const loop = await extensionRuntime.runToolCallLoop({
+                messages: messagesPayload,
+                tools: toolSet.tools,
+                nameToRef: toolSet.nameToRef,
+                maxRounds: 6,
+                signal: abortController.signal,
+                chat: async (msgs, toolSchemas) => {
+                    const resp = await orRequest(msgs, toolSchemas);
+                    const parsed = JSON.parse(resp.body || '{}');
+                    lastUsage = parsed.usage || lastUsage;
+                    const choice = parsed.choices && parsed.choices[0] && parsed.choices[0].message;
+                    if (!choice) {
+                        throw new Error('OpenRouter не вернул ответ выбранной модели');
+                    }
+                    return { message: choice };
+                },
+                execute: (ref, args, { signal } = {}) => {
+                    return extensionRuntime.executeBrokerToolCall(ref, args, {
+                        catalog: toolSet.catalog,
+                        allowedRefs: toolSet.allowedRefs,
+                        callPcTool: callMcpToolViaRegistry,
+                        signal
+                    });
+                },
+                onToolEvent: (evt) => {
+                    if (evt.type !== 'end') return;
+                    const summary = extensionRuntime.toolResultToText(evt.result).slice(0, 400);
+                    try {
+                        onEvent({
+                            type: 'tool',
+                            turnId,
+                            id: `or_${evt.callId}`,
+                            toolName: evt.ref,
+                            summary: formatToolSummary(evt.ref.split(':').pop() || evt.ref, {}),
+                            details: summary,
+                            status: evt.result && evt.result.ok ? 'COMPLETED' : 'FAILED',
+                            elapsedMs: Date.now() - startMs
+                        });
+                    } catch (_) {}
+                }
+            });
+
+            if (loop.cancelled || abortController.signal.aborted) {
+                const cancelError = 'Остановлено пользователем (Stop).';
+                const cancelled = { type: 'done', ok: false, turnId, conversationId: resolvedConvId,
+                    model: cleanModelId, reply: cancelError, error: cancelError,
+                    thinking: '', toolCalls: [], createdDiffs: [], generatedMedia: [] };
+                recordActiveTurnSnapshot(turnId, resolvedConvId, { status: 'cancelled', ...cancelled });
+                try { onEvent(cancelled); } catch (_) {}
+                turnCancellations.delete(turnId);
+                return cancelled;
+            }
+
+            const choice = loop.finalMessage;
+            if (choice && (choice.content || loop.toolCalls.length > 0)) {
+                const extracted = extractThinkingAndCleanReply(String(choice.content || ''), choice.reasoning || '');
+                const finalReplyText = extracted.reply || String(choice.content || '');
                 const totalMs = Math.max(200, Date.now() - startMs);
-                const outTokens = Number(parsedOr.usage && parsedOr.usage.completion_tokens) || 0;
+                const outTokens = Number(lastUsage && lastUsage.completion_tokens) || 0;
                 const tokPerSec = Number((outTokens / Math.max(0.25, totalMs / 1000)).toFixed(1));
                 try {
                     onEvent({
@@ -3703,7 +3884,13 @@ async function executeOpenRouterStreamingTurn(options, onEvent = () => {}) {
                     thinking: extracted.thinking || '',
                     thinkingDurationSec: Math.max(1, Math.round(totalMs / 1000)),
                     reply: finalReplyText,
-                    toolCalls: [],
+                    toolCalls: loop.toolCalls.map(tc => ({
+                        id: tc.callId,
+                        name: tc.ref,
+                        summary: tc.ref,
+                        output: tc.ok ? 'выполнен' : (tc.code || 'ошибка'),
+                        status: tc.ok ? 'COMPLETED' : 'FAILED'
+                    })),
                     createdDiffs: [],
                     generatedMedia: [],
                     phoneActions: extractPhoneActionsFromText(finalReplyText),
@@ -3718,7 +3905,20 @@ async function executeOpenRouterStreamingTurn(options, onEvent = () => {}) {
                 if (options.allowTranscriptWrite !== false) ensureTranscriptUpdated(resolvedConvId, cleanUserPrompt, finalReplyText, Math.round(totalMs / 1000), extracted.thinking || "");
                 return donePayload;
             }
-        } catch (_) {}
+        } catch (err) {
+            if (abortController.signal.aborted) {
+                const cancelError = 'Остановлено пользователем (Stop).';
+                const cancelled = { type: 'done', ok: false, turnId, conversationId: resolvedConvId,
+                    model: cleanModelId, reply: cancelError, error: cancelError,
+                    thinking: '', toolCalls: [], createdDiffs: [], generatedMedia: [] };
+                recordActiveTurnSnapshot(turnId, resolvedConvId, { status: 'cancelled', ...cancelled });
+                try { onEvent(cancelled); } catch (_) {}
+                turnCancellations.delete(turnId);
+                return cancelled;
+            }
+        } finally {
+            turnCancellations.delete(turnId);
+        }
     }
 
     turnCancellations.delete(turnId);
@@ -4257,7 +4457,15 @@ const { AgentWorkspace } = require('./lib/agent-workspace');
 const { createSubagentRunner } = require('./lib/subagent-cli');
 const agentWorkspaces = new AgentWorkspace(DEFAULT_WORKSPACE, path.join(SCRATCH_DIR, 'agent-workspaces'));
 const subagentRuntime = new SubagentRuntime({
-    run: createSubagentRunner({ executable: AGY_BIN, repository: DEFAULT_WORKSPACE, workspaces: agentWorkspaces }),
+    // Этап 4: дочерние задачи получают только нужный поднабор прав.
+    // По умолчанию анализ/код — без MCP-инструментов (пустой поднабор —
+    // явный запрет); аннотации MCP прав не дают.
+    run: createSubagentRunner({
+        executable: AGY_BIN,
+        repository: DEFAULT_WORKSPACE,
+        workspaces: agentWorkspaces,
+        permissions: { allowedServers: [], allowedRefs: [] }
+    }),
     onChange: state => {
         const temporary = SWARM_STATE_FILE + '.tmp';
         try { fs.writeFileSync(temporary, JSON.stringify(state), 'utf8'); fs.renameSync(temporary, SWARM_STATE_FILE); }

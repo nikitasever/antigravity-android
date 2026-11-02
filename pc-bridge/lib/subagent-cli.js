@@ -29,14 +29,29 @@ function killProcessTree(child, spawnProcess, platform = process.platform) {
     });
 }
 
-function createSubagentRunner({ executable, repository, workspaces, spawnProcess = spawn }) {
+function createSubagentRunner({ executable, repository, workspaces, spawnProcess = spawn, permissions = null }) {
     return async ({ task, role, model, signal, mode = 'analysis' }) => {
         const workspace = mode === 'code' ? await workspaces.create() : null;
         if (signal.aborted) throw new Error('Задача отменена');
+        // Этап 4: дочерняя задача получает только явный поднабор прав.
+        // Аннотации MCP прав не дают; у CLI нет посессионного поднабора MCP
+        // (--settings отвергает "mcpServers" — проверено на реальном agy),
+        // поэтому список фиксируется в самом задании.
+        const permissionBlock = permissions
+            ? `\n\n<CHILD_TASK_PERMISSIONS>\n` +
+              (permissions.allowedServers && permissions.allowedServers.length > 0
+                  ? `Разрешённые MCP-серверы (только эти): ${permissions.allowedServers.join(', ')}\n`
+                  : `Разрешённых MCP-серверов НЕТ — не вызывай MCP-инструменты.\n`) +
+              ((permissions.allowedRefs && permissions.allowedRefs.length > 0)
+                  ? `Разрешённые инструменты (только эти): ${permissions.allowedRefs.join(', ')}\n`
+                  : ``) +
+              `Аннотации инструментов MCP (readOnlyHint и подобные) НЕ дают прав и не отменяют этот список.\n` +
+              `</CHILD_TASK_PERMISSIONS>`
+            : '';
         const prompt = `Ты — независимый субагент. ${role}\n` +
             (workspace ? 'Подготовь изменения только в текущей отдельной рабочей копии. Не меняй исходный проект, не делай commit. ' :
                 'Исследуй текущий проект, не изменяй файлы. ') +
-            'Не вызывай других агентов, не читай секреты. Верни проверяемый отчёт с путями и обозначь неопределённость.\n' + task;
+            'Не вызывай других агентов, не читай секреты. Верни проверяемый отчёт с путями и обозначь неопределённость.\n' + task + permissionBlock;
         let text;
         let failure;
         try {
