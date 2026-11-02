@@ -179,6 +179,7 @@ import com.google.antigravity.ui.components.ChatGptStyleGoogleLoginScreen
 import com.google.antigravity.ui.components.CodeBackgroundTasksEntryPoint
 import com.google.antigravity.ui.components.ContextWindowBadge
 import com.google.antigravity.ui.components.ContextWindowSheet
+import com.google.antigravity.ui.components.ExtensionsScreen
 import com.google.antigravity.ui.components.FloatingVoiceCallPill
 import com.google.antigravity.ui.components.GeneratedMediaCard
 import com.google.antigravity.ui.components.GoogleDriveSheet
@@ -221,6 +222,7 @@ fun MainScreen(
     val isMcpToolCallRunning by viewModel.isMcpToolCallRunning.collectAsState()
     val extensionsError by viewModel.extensionsError.collectAsState()
     val isExtensionsLoading by viewModel.isExtensionsLoading.collectAsState()
+    val extensionCatalog by viewModel.extensionCatalog.collectAsState()
     val pendingAttachments by viewModel.pendingAttachments.collectAsState()
     val pcBridgeStatus by viewModel.pcBridgeStatus.collectAsState()
     val drawerSection by viewModel.drawerSection.collectAsState()
@@ -321,7 +323,7 @@ fun MainScreen(
         }
     }
 
-    // Системные лончеры Android для загрузки любых файлов, фотографий и съёмки камерой
+    // РЎРёСЃС‚РµРјРЅС‹Рµ Р»РѕРЅС‡РµСЂС‹ Android РґР»СЏ Р·Р°РіСЂСѓР·РєРё Р»СЋР±С‹С… С„Р°Р№Р»РѕРІ, С„РѕС‚РѕРіСЂР°С„РёР№ Рё СЃСЉС‘РјРєРё РєР°РјРµСЂРѕР№
     val multipleFilesLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenMultipleDocuments()
     ) { uris ->
@@ -342,7 +344,7 @@ fun MainScreen(
         }
     }
 
-    // Документ контекста проекта: системный выбор файла привязывается к целевому проекту.
+    // Р”РѕРєСѓРјРµРЅС‚ РєРѕРЅС‚РµРєСЃС‚Р° РїСЂРѕРµРєС‚Р°: СЃРёСЃС‚РµРјРЅС‹Р№ РІС‹Р±РѕСЂ С„Р°Р№Р»Р° РїСЂРёРІСЏР·С‹РІР°РµС‚СЃСЏ Рє С†РµР»РµРІРѕРјСѓ РїСЂРѕРµРєС‚Сѓ.
     var projectDocTargetId by remember { mutableStateOf<String?>(null) }
     val projectDocLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -471,7 +473,7 @@ fun MainScreen(
                     onEndCall = { viewModel.stopLiveVoiceCall() }
                 )
 
-                // Временный чат (как в ChatGPT): переписка не сохраняется.
+                // Р’СЂРµРјРµРЅРЅС‹Р№ С‡Р°С‚ (РєР°Рє РІ ChatGPT): РїРµСЂРµРїРёСЃРєР° РЅРµ СЃРѕС…СЂР°РЅСЏРµС‚СЃСЏ.
                 if (temporaryChatActive &&
                     (drawerSection == DrawerSection.CHAT || drawerSection == DrawerSection.PROJECTS)
                 ) {
@@ -481,12 +483,12 @@ fun MainScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                Icons.Default.VisibilityOff, contentDescription = "Временный чат",
+                                Icons.Default.VisibilityOff, contentDescription = "Р’СЂРµРјРµРЅРЅС‹Р№ С‡Р°С‚",
                                 tint = Color(0xFF93C5FD), modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
-                                "Временный чат — переписка не сохраняется и не синхронизируется",
+                                "Р’СЂРµРјРµРЅРЅС‹Р№ С‡Р°С‚ вЂ” РїРµСЂРµРїРёСЃРєР° РЅРµ СЃРѕС…СЂР°РЅСЏРµС‚СЃСЏ Рё РЅРµ СЃРёРЅС…СЂРѕРЅРёР·РёСЂСѓРµС‚СЃСЏ",
                                 color = Color(0xFF93C5FD), fontSize = 12.sp,
                                 modifier = Modifier.weight(1f)
                             )
@@ -494,8 +496,8 @@ fun MainScreen(
                     }
                 }
 
-                // Работа без сети: после реальной проверки мост недоступен — честный
-                // баннер с повтором подключения; переписка продолжает храниться на телефоне.
+                // Р Р°Р±РѕС‚Р° Р±РµР· СЃРµС‚Рё: РїРѕСЃР»Рµ СЂРµР°Р»СЊРЅРѕР№ РїСЂРѕРІРµСЂРєРё РјРѕСЃС‚ РЅРµРґРѕСЃС‚СѓРїРµРЅ вЂ” С‡РµСЃС‚РЅС‹Р№
+                // Р±Р°РЅРЅРµСЂ СЃ РїРѕРІС‚РѕСЂРѕРј РїРѕРґРєР»СЋС‡РµРЅРёСЏ; РїРµСЂРµРїРёСЃРєР° РїСЂРѕРґРѕР»Р¶Р°РµС‚ С…СЂР°РЅРёС‚СЊСЃСЏ РЅР° С‚РµР»РµС„РѕРЅРµ.
                 if (pcBridgeStatus.checked && !pcBridgeStatus.connected &&
                     settings.executionTarget == AgentExecutionTarget.PC_REMOTE_SESSION &&
                     (drawerSection == DrawerSection.CHAT || drawerSection == DrawerSection.PROJECTS)
@@ -506,17 +508,17 @@ fun MainScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                Icons.Default.CloudOff, contentDescription = "Мост ПК недоступен",
+                                Icons.Default.CloudOff, contentDescription = "РњРѕСЃС‚ РџРљ РЅРµРґРѕСЃС‚СѓРїРµРЅ",
                                 tint = Color(0xFFFFB74D), modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
-                                "Мост ПК недоступен — переписка сохраняется на телефоне",
+                                "РњРѕСЃС‚ РџРљ РЅРµРґРѕСЃС‚СѓРїРµРЅ вЂ” РїРµСЂРµРїРёСЃРєР° СЃРѕС…СЂР°РЅСЏРµС‚СЃСЏ РЅР° С‚РµР»РµС„РѕРЅРµ",
                                 color = Color(0xFFFFB74D), fontSize = 12.sp,
                                 modifier = Modifier.weight(1f)
                             )
                             TextButton(onClick = { viewModel.syncRemoteSessionsFromPc() }) {
-                                Text("Повторить", color = Color(0xFFFFB74D))
+                                Text("РџРѕРІС‚РѕСЂРёС‚СЊ", color = Color(0xFFFFB74D))
                             }
                         }
                     }
@@ -617,29 +619,39 @@ fun MainScreen(
                     }
 
                     DrawerSection.PLUGINS -> {
-                        ChatGptPluginsScreen(
+                        // Р­С‚Р°Рї 6: РµРґРёРЅС‹Р№ РёРЅС‚РµСЂС„РµР№СЃ СЂР°СЃС€РёСЂРµРЅРёР№ вЂ” РџРѕРґРєР»СЋС‡РµРЅРёСЏ /
+                        // РќР°РІС‹РєРё / РџР»Р°РіРёРЅС‹; РІРЅСѓС‚СЂРё РњРѕРё / РљР°С‚Р°Р»РѕРі СЃ РїРѕРёСЃРєРѕРј.
+                        ExtensionsScreen(
                             plugins = installedPlugins,
                             skills = installedSkills,
                             mcpServers = mcpServers,
+                            catalog = extensionCatalog,
                             errorText = extensionsError,
                             isLoading = isExtensionsLoading,
                             onOpenDrawer = { scope.launch { drawerState.open() } },
                             onRefresh = { viewModel.refreshExtensionsFromPc() },
                             onDismissError = { viewModel.clearExtensionsError() },
                             onTogglePlugin = { id -> viewModel.togglePluginEnabled(id) },
+                            onUpdatePlugin = { id -> viewModel.updatePluginOnPc(id) },
                             onAddPlugin = { src, desc -> viewModel.addPluginOnPc(src, desc) },
                             onDeletePlugin = { id -> viewModel.deletePluginOnPc(id) },
                             onToggleSkill = { id -> viewModel.toggleSkillEnabled(id) },
                             onAddSkill = { name, desc, instr -> viewModel.addSkillOnPc(name, desc, instr) },
                             onDeleteSkill = { id -> viewModel.deleteSkillOnPc(id) },
+                            onInsertSkillIntoChat = { name ->
+                                viewModel.setComposerDraft("/$name ")
+                                viewModel.selectDrawerSection(DrawerSection.CHAT)
+                            },
                             onToggleMcp = { id -> viewModel.toggleMcpServerEnabled(id) },
                             onAddMcp = { name, cmd, args -> viewModel.addMcpServerOnPc(name, cmd, args) },
                             onDeleteMcp = { id -> viewModel.deleteMcpServerOnPc(id) },
                             onCheckMcp = { id -> viewModel.checkMcpServer(id) },
+                            onLoginMcp = { id -> viewModel.checkMcpServer(id) },
                             onCallMcpTool = { id, tool -> viewModel.callMcpTool(id, tool) },
                             mcpToolResult = mcpToolResult,
                             isMcpToolCallRunning = isMcpToolCallRunning,
-                            onDismissToolResult = { viewModel.dismissMcpToolResult() }
+                            onDismissToolResult = { viewModel.dismissMcpToolResult() },
+                            onInstallCatalogItem = { item -> viewModel.installCatalogExtension(item) }
                         )
                     }
 
@@ -747,7 +759,7 @@ fun MainScreen(
             }
         }
 
-        // Модальное меню прикрепления файлов и фото (кнопка `+` как в ChatGPT)
+        // РњРѕРґР°Р»СЊРЅРѕРµ РјРµРЅСЋ РїСЂРёРєСЂРµРїР»РµРЅРёСЏ С„Р°Р№Р»РѕРІ Рё С„РѕС‚Рѕ (РєРЅРѕРїРєР° `+` РєР°Рє РІ ChatGPT)
         if (showAttachmentSheet) {
             ChatGptAttachmentPickerDialog(
                 onTakePhoto = {
@@ -855,7 +867,7 @@ fun MainScreen(
                 onDeleteFile = { fileName -> viewModel.deleteGoogleDriveFile(fileName) },
                 onInsertInChat = { mentionText ->
                     viewModel.sendUserPrompt(
-                        "${mentionText.trim()} Проанализируй содержимое этого облачного файла из Google Диска (/AntigravityCloud)",
+                        "${mentionText.trim()} РџСЂРѕР°РЅР°Р»РёР·РёСЂСѓР№ СЃРѕРґРµСЂР¶РёРјРѕРµ СЌС‚РѕРіРѕ РѕР±Р»Р°С‡РЅРѕРіРѕ С„Р°Р№Р»Р° РёР· Google Р”РёСЃРєР° (/AntigravityCloud)",
                         viaVoice = false
                     )
                     showGoogleDriveSheet = false
@@ -873,7 +885,7 @@ fun MainScreen(
                     viewModel.dispatchSwarmTask(taskPrompt)
                 },
                 onInsertMention = { mentionText ->
-                    viewModel.sendUserPrompt("${mentionText.trim()} Доложи текущий статус", viaVoice = false)
+                    viewModel.sendUserPrompt("${mentionText.trim()} Р”РѕР»РѕР¶Рё С‚РµРєСѓС‰РёР№ СЃС‚Р°С‚СѓСЃ", viaVoice = false)
                 }
             )
         }
@@ -914,10 +926,10 @@ fun MainScreen(
 }
 
 /**
- * Главный экран Чата 1:1 как в официальном ChatGPT Android 1.2026.293 и Claude Android 1.261029.20:
- * - Чистый верхний бар `Чат | Работа` + выбор модели `Antigravity ▾` с компактным индикатором контекста и скорости `⚡ ток/с` (без перегруженных рядов плашек сверху — Раздел 11.1)
- * - Компактная плашка `CodeBackgroundTasksEntryPoint` в правом нижнем углу прямо над строкой ввода (Разделы 11.2, 11.6, 11.7)
- * - Нижняя капсула `+ Спросить Antigravity 🎤 |||`.
+ * Р“Р»Р°РІРЅС‹Р№ СЌРєСЂР°РЅ Р§Р°С‚Р° 1:1 РєР°Рє РІ РѕС„РёС†РёР°Р»СЊРЅРѕРј ChatGPT Android 1.2026.293 Рё Claude Android 1.261029.20:
+ * - Р§РёСЃС‚С‹Р№ РІРµСЂС…РЅРёР№ Р±Р°СЂ `Р§Р°С‚ | Р Р°Р±РѕС‚Р°` + РІС‹Р±РѕСЂ РјРѕРґРµР»Рё `Antigravity в–ѕ` СЃ РєРѕРјРїР°РєС‚РЅС‹Рј РёРЅРґРёРєР°С‚РѕСЂРѕРј РєРѕРЅС‚РµРєСЃС‚Р° Рё СЃРєРѕСЂРѕСЃС‚Рё `вљЎ С‚РѕРє/СЃ` (Р±РµР· РїРµСЂРµРіСЂСѓР¶РµРЅРЅС‹С… СЂСЏРґРѕРІ РїР»Р°С€РµРє СЃРІРµСЂС…Сѓ вЂ” Р Р°Р·РґРµР» 11.1)
+ * - РљРѕРјРїР°РєС‚РЅР°СЏ РїР»Р°С€РєР° `CodeBackgroundTasksEntryPoint` РІ РїСЂР°РІРѕРј РЅРёР¶РЅРµРј СѓРіР»Сѓ РїСЂСЏРјРѕ РЅР°Рґ СЃС‚СЂРѕРєРѕР№ РІРІРѕРґР° (Р Р°Р·РґРµР»С‹ 11.2, 11.6, 11.7)
+ * - РќРёР¶РЅСЏСЏ РєР°РїСЃСѓР»Р° `+ РЎРїСЂРѕСЃРёС‚СЊ Antigravity рџЋ¤ |||`.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1009,20 +1021,20 @@ private fun ChatGptMainChatScreen(
     }
     val adaptiveInputPlaceholder = remember(isOpenRouterModel, isVideoModel, isImageModel, shortModelSubtitle) {
         when {
-            isVideoModel -> "Опишите видео для генерации ($shortModelSubtitle)…"
-            isImageModel -> "Опишите изображение для генерации ($shortModelSubtitle)…"
-            isOpenRouterModel -> "Спросить $shortModelSubtitle (/ скиллы, @ агенты)"
-            else -> "Спросить Antigravity (/ скиллы, @ агенты)"
+            isVideoModel -> "РћРїРёС€РёС‚Рµ РІРёРґРµРѕ РґР»СЏ РіРµРЅРµСЂР°С†РёРё ($shortModelSubtitle)вЂ¦"
+            isImageModel -> "РћРїРёС€РёС‚Рµ РёР·РѕР±СЂР°Р¶РµРЅРёРµ РґР»СЏ РіРµРЅРµСЂР°С†РёРё ($shortModelSubtitle)вЂ¦"
+            isOpenRouterModel -> "РЎРїСЂРѕСЃРёС‚СЊ $shortModelSubtitle (/ СЃРєРёР»Р»С‹, @ Р°РіРµРЅС‚С‹)"
+            else -> "РЎРїСЂРѕСЃРёС‚СЊ Antigravity (/ СЃРєРёР»Р»С‹, @ Р°РіРµРЅС‚С‹)"
         }
     }
     val adaptiveModelModeHint = remember(isOpenRouterModel, isVideoModel, isImageModel, isReasoningModel, isVisionModel, shortModelSubtitle) {
         when {
-            isVideoModel -> "$shortModelSubtitle • Режим генерации видео (MP4)"
-            isImageModel -> "$shortModelSubtitle • Режим генерации изображений (PNG)"
-            isOpenRouterModel && isReasoningModel && isVisionModel -> "$shortModelSubtitle • Reasoning & Vision"
-            isOpenRouterModel && isReasoningModel -> "$shortModelSubtitle • Глубокое рассуждение (Reasoning)"
-            isOpenRouterModel && isVisionModel -> "$shortModelSubtitle • Мультимодальный чат (Vision)"
-            isOpenRouterModel -> "$shortModelSubtitle • Текстовый чат и инструменты"
+            isVideoModel -> "$shortModelSubtitle вЂў Р РµР¶РёРј РіРµРЅРµСЂР°С†РёРё РІРёРґРµРѕ (MP4)"
+            isImageModel -> "$shortModelSubtitle вЂў Р РµР¶РёРј РіРµРЅРµСЂР°С†РёРё РёР·РѕР±СЂР°Р¶РµРЅРёР№ (PNG)"
+            isOpenRouterModel && isReasoningModel && isVisionModel -> "$shortModelSubtitle вЂў Reasoning & Vision"
+            isOpenRouterModel && isReasoningModel -> "$shortModelSubtitle вЂў Р“Р»СѓР±РѕРєРѕРµ СЂР°СЃСЃСѓР¶РґРµРЅРёРµ (Reasoning)"
+            isOpenRouterModel && isVisionModel -> "$shortModelSubtitle вЂў РњСѓР»СЊС‚РёРјРѕРґР°Р»СЊРЅС‹Р№ С‡Р°С‚ (Vision)"
+            isOpenRouterModel -> "$shortModelSubtitle вЂў РўРµРєСЃС‚РѕРІС‹Р№ С‡Р°С‚ Рё РёРЅСЃС‚СЂСѓРјРµРЅС‚С‹"
             else -> ""
         }
     }
@@ -1096,7 +1108,7 @@ private fun ChatGptMainChatScreen(
                                 .clickable { onSelectTopTab(TopModeTab.CHAT) }
                         ) {
                             Text(
-                                text = "Чат",
+                                text = "Р§Р°С‚",
                                 color = if (isChat) Color.White else Color(0xFF9E9E9E),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold
@@ -1113,7 +1125,7 @@ private fun ChatGptMainChatScreen(
                                 .clickable { onSelectTopTab(TopModeTab.WORK_SESSIONS) }
                         ) {
                             Text(
-                                text = "Работа",
+                                text = "Р Р°Р±РѕС‚Р°",
                                 color = if (!isChat) Color.White else Color(0xFF9E9E9E),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold
@@ -1147,15 +1159,15 @@ private fun ChatGptMainChatScreen(
                         Spacer(modifier = Modifier.width(2.dp))
                         Icon(
                             imageVector = Icons.Default.KeyboardArrowDown,
-                            contentDescription = "Выбрать модель",
+                            contentDescription = "Р’С‹Р±СЂР°С‚СЊ РјРѕРґРµР»СЊ",
                             tint = Color(0xFFB0B0B0),
                             modifier = Modifier.size(15.dp)
                         )
                     }
 
-                    // Компактный индикатор контекста в подзаголовке (открывает сжатое Контекстное окно)
+                    // РљРѕРјРїР°РєС‚РЅС‹Р№ РёРЅРґРёРєР°С‚РѕСЂ РєРѕРЅС‚РµРєСЃС‚Р° РІ РїРѕРґР·Р°РіРѕР»РѕРІРєРµ (РѕС‚РєСЂС‹РІР°РµС‚ СЃР¶Р°С‚РѕРµ РљРѕРЅС‚РµРєСЃС‚РЅРѕРµ РѕРєРЅРѕ)
                     Text(
-                        text = "• $compactContextLabel",
+                        text = "вЂў $compactContextLabel",
                         color = Color(0xFF6B7280),
                         fontSize = 11.sp,
                         fontFamily = FontFamily.Monospace,
@@ -1172,13 +1184,13 @@ private fun ChatGptMainChatScreen(
             DashedBubbleCircleButton(onClick = onNewChat)
             Box {
                 IconButton(onClick = { showChatMenu = true }) {
-                    Icon(Icons.Default.MoreHoriz, "Меню чата", tint = Color.White)
+                    Icon(Icons.Default.MoreHoriz, "РњРµРЅСЋ С‡Р°С‚Р°", tint = Color.White)
                 }
                 androidx.compose.material3.DropdownMenu(expanded = showChatMenu, onDismissRequest = { showChatMenu = false }) {
-                    androidx.compose.material3.DropdownMenuItem(text = { Text("Поиск в чате") }, onClick = {
+                    androidx.compose.material3.DropdownMenuItem(text = { Text("РџРѕРёСЃРє РІ С‡Р°С‚Рµ") }, onClick = {
                         showSearch = true; showChatMenu = false
                     })
-                    androidx.compose.material3.DropdownMenuItem(text = { Text("Содержание разговора") }, onClick = {
+                    androidx.compose.material3.DropdownMenuItem(text = { Text("РЎРѕРґРµСЂР¶Р°РЅРёРµ СЂР°Р·РіРѕРІРѕСЂР°") }, onClick = {
                         showOutline = true; showChatMenu = false
                     })
                 }
@@ -1187,7 +1199,7 @@ private fun ChatGptMainChatScreen(
         if (showSearch) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(value = searchQuery, onValueChange = { searchQuery = it; searchPosition = 0 },
-                    placeholder = { Text("Поиск в чате") }, singleLine = true,
+                    placeholder = { Text("РџРѕРёСЃРє РІ С‡Р°С‚Рµ") }, singleLine = true,
                     modifier = Modifier.weight(1f),
                     colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
                         focusedTextColor = Color.White, unfocusedTextColor = Color.White),
@@ -1195,21 +1207,21 @@ private fun ChatGptMainChatScreen(
                         color = Color(0xFF9E9E9E), fontSize = 12.sp) })
                 IconButton(enabled = searchMatches.isNotEmpty(), onClick = {
                     searchPosition = (searchPosition - 1 + searchMatches.size) % searchMatches.size
-                }) { Icon(Icons.Default.ExpandLess, "Предыдущее совпадение", tint = Color(0xFFB4B4B4)) }
+                }) { Icon(Icons.Default.ExpandLess, "РџСЂРµРґС‹РґСѓС‰РµРµ СЃРѕРІРїР°РґРµРЅРёРµ", tint = Color(0xFFB4B4B4)) }
                 IconButton(enabled = searchMatches.isNotEmpty(), onClick = {
                     searchPosition = (searchPosition + 1) % searchMatches.size
-                }) { Icon(Icons.Default.ExpandMore, "Следующее совпадение", tint = Color(0xFFB4B4B4)) }
+                }) { Icon(Icons.Default.ExpandMore, "РЎР»РµРґСѓСЋС‰РµРµ СЃРѕРІРїР°РґРµРЅРёРµ", tint = Color(0xFFB4B4B4)) }
                 IconButton(onClick = { showSearch = false; searchQuery = "" }) {
-                    Icon(Icons.Default.Close, "Закрыть поиск", tint = Color(0xFFB4B4B4))
+                    Icon(Icons.Default.Close, "Р—Р°РєСЂС‹С‚СЊ РїРѕРёСЃРє", tint = Color(0xFFB4B4B4))
                 }
             }
         }
         if (showOutline) {
             ModalBottomSheet(onDismissRequest = { showOutline = false }, containerColor = Color(0xFF1C1C1E), contentColor = Color.White) {
-                Text("Содержание разговора", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(20.dp))
+                Text("РЎРѕРґРµСЂР¶Р°РЅРёРµ СЂР°Р·РіРѕРІРѕСЂР°", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(20.dp))
                 LazyColumn(Modifier.fillMaxWidth().heightIn(max = 480.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
                     val turns = messages.withIndex().filter { it.value.role == MessageRole.USER }
-                    if (turns.isEmpty()) item { Text("В этом чате пока нет сообщений", color = Color.Gray, modifier = Modifier.padding(20.dp)) }
+                    if (turns.isEmpty()) item { Text("Р’ СЌС‚РѕРј С‡Р°С‚Рµ РїРѕРєР° РЅРµС‚ СЃРѕРѕР±С‰РµРЅРёР№", color = Color.Gray, modifier = Modifier.padding(20.dp)) }
                     items(turns, key = { it.value.id }) { turn ->
                         Text(turn.value.content.ifBlank { turn.value.attachments.joinToString { it.name } },
                             maxLines = 2, overflow = TextOverflow.Ellipsis,
@@ -1272,7 +1284,7 @@ private fun ChatGptMainChatScreen(
                     }
                 }
             } else {
-                // Пустое состояние 1:1 как в официальном ChatGPT Android 1.2026.293 (с адаптацией под выбранную модель)
+                // РџСѓСЃС‚РѕРµ СЃРѕСЃС‚РѕСЏРЅРёРµ 1:1 РєР°Рє РІ РѕС„РёС†РёР°Р»СЊРЅРѕРј ChatGPT Android 1.2026.293 (СЃ Р°РґР°РїС‚Р°С†РёРµР№ РїРѕРґ РІС‹Р±СЂР°РЅРЅСѓСЋ РјРѕРґРµР»СЊ)
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -1281,7 +1293,7 @@ private fun ChatGptMainChatScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "Чем я могу помочь?",
+                        text = "Р§РµРј СЏ РјРѕРіСѓ РїРѕРјРѕС‡СЊ?",
                         color = Color.White,
                         fontSize = 24.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -1306,13 +1318,13 @@ private fun ChatGptMainChatScreen(
                         navigationScope.launch { listState.scrollToItem(messages.lastIndex, Int.MAX_VALUE) }
                     }, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp),
                     colors = androidx.compose.material3.IconButtonDefaults.filledIconButtonColors(containerColor = Color(0xFF303030))
-                ) { Icon(Icons.Default.KeyboardArrowDown, "К последнему сообщению", tint = Color.White) }
+                ) { Icon(Icons.Default.KeyboardArrowDown, "Рљ РїРѕСЃР»РµРґРЅРµРјСѓ СЃРѕРѕР±С‰РµРЅРёСЋ", tint = Color.White) }
             }
         }
 
         val isSwarmTaskActive by viewModel.isSwarmTaskActive.collectAsState()
 
-        // Компактная плашка фоновых задач появляется только при реально запущенной фоновой/мультиагентной задаче
+        // РљРѕРјРїР°РєС‚РЅР°СЏ РїР»Р°С€РєР° С„РѕРЅРѕРІС‹С… Р·Р°РґР°С‡ РїРѕСЏРІР»СЏРµС‚СЃСЏ С‚РѕР»СЊРєРѕ РїСЂРё СЂРµР°Р»СЊРЅРѕ Р·Р°РїСѓС‰РµРЅРЅРѕР№ С„РѕРЅРѕРІРѕР№/РјСѓР»СЊС‚РёР°РіРµРЅС‚РЅРѕР№ Р·Р°РґР°С‡Рµ
         if (forceExpandBgTasks || isSwarmTaskActive) {
             CodeBackgroundTasksEntryPoint(
                 agents = swarmAgents,
@@ -1324,7 +1336,7 @@ private fun ChatGptMainChatScreen(
                 onDispatchCodeTask = { viewModel.dispatchSwarmTask(it, prepareChanges = true) },
                 onDispatchSwarmTask = { prompt -> viewModel.dispatchSwarmTask(prompt) },
                 onInsertMention = { mentionText ->
-                    viewModel.sendUserPrompt("${mentionText.trim()} Доложи текущий статус", viaVoice = false)
+                    viewModel.sendUserPrompt("${mentionText.trim()} Р”РѕР»РѕР¶Рё С‚РµРєСѓС‰РёР№ СЃС‚Р°С‚СѓСЃ", viaVoice = false)
                 },
                 forceExpandedInline = forceExpandBgTasks
             )
@@ -1383,31 +1395,31 @@ private fun Round5QuickHubBar(
         )
 
         QuickHubPill(
-            text = "🌐 OpenRouter (${openRouterTotalCount.coerceAtLeast(452)})",
+            text = "рџЊђ OpenRouter (${openRouterTotalCount.coerceAtLeast(452)})",
             accentColor = Color(0xFF58A6FF),
             onClick = onOpenOpenRouterSheet
         )
 
         QuickHubPill(
-            text = "Задачи ($swarmAgentsCount)",
+            text = "Р—Р°РґР°С‡Рё ($swarmAgentsCount)",
             accentColor = Color(0xFFF59E0B),
             onClick = onOpenSwarmSheet
         )
 
         QuickHubPill(
-            text = "💻 Android CLI",
+            text = "рџ’» Android CLI",
             accentColor = Color(0xFF10B981),
             onClick = { onOpenCliSandboxSheet(0) }
         )
 
         QuickHubPill(
-            text = "🧪 Песочница",
+            text = "рџ§Є РџРµСЃРѕС‡РЅРёС†Р°",
             accentColor = Color(0xFFA78BFA),
             onClick = { onOpenCliSandboxSheet(1) }
         )
 
         QuickHubPill(
-            text = "🛡️ Разрешения",
+            text = "рџ›ЎпёЏ Р Р°Р·СЂРµС€РµРЅРёСЏ",
             accentColor = Color(0xFF34D399),
             onClick = onOpenPermissionsSheet
         )
@@ -1441,16 +1453,16 @@ private fun QuickHubPill(
 private fun formatEnvironmentRu(raw: String): String {
     val lower = raw.lowercase()
     return when {
-        lower.contains("phone") || lower.contains("sdcard") || lower.contains("смартфон") -> "Память смартфона"
-        lower.contains("cloud") || lower.contains("облако") -> "Облако Google"
-        lower.contains("cr05318") || lower.contains("base environment") || lower.contains("win-11") -> "Рабочая станция ПК"
+        lower.contains("phone") || lower.contains("sdcard") || lower.contains("СЃРјР°СЂС‚С„РѕРЅ") -> "РџР°РјСЏС‚СЊ СЃРјР°СЂС‚С„РѕРЅР°"
+        lower.contains("cloud") || lower.contains("РѕР±Р»Р°РєРѕ") -> "РћР±Р»Р°РєРѕ Google"
+        lower.contains("cr05318") || lower.contains("base environment") || lower.contains("win-11") -> "Р Р°Р±РѕС‡Р°СЏ СЃС‚Р°РЅС†РёСЏ РџРљ"
         else -> raw
     }
 }
 
 /**
- * Экран уже созданных удалённых сессий (`Работа`).
- * Нажатие на любую сессию сразу открывает Чат со всеми прошлыми сообщениями этой сессии!
+ * Р­РєСЂР°РЅ СѓР¶Рµ СЃРѕР·РґР°РЅРЅС‹С… СѓРґР°Р»С‘РЅРЅС‹С… СЃРµСЃСЃРёР№ (`Р Р°Р±РѕС‚Р°`).
+ * РќР°Р¶Р°С‚РёРµ РЅР° Р»СЋР±СѓСЋ СЃРµСЃСЃРёСЋ СЃСЂР°Р·Сѓ РѕС‚РєСЂС‹РІР°РµС‚ Р§Р°С‚ СЃРѕ РІСЃРµРјРё РїСЂРѕС€Р»С‹РјРё СЃРѕРѕР±С‰РµРЅРёСЏРјРё СЌС‚РѕР№ СЃРµСЃСЃРёРё!
  */
 @Composable
 private fun ChatGptRemoteSessionsCodexScreen(
@@ -1539,7 +1551,7 @@ private fun ChatGptRemoteSessionsCodexScreen(
                             .clickable { onSelectTopTab(TopModeTab.CHAT) }
                     ) {
                         Text(
-                            text = "Чат",
+                            text = "Р§Р°С‚",
                             color = if (isChat) Color.White else Color(0xFF9E9E9E),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold
@@ -1556,7 +1568,7 @@ private fun ChatGptRemoteSessionsCodexScreen(
                             .clickable { onSelectTopTab(TopModeTab.WORK_SESSIONS) }
                     ) {
                         Text(
-                            text = "Работа",
+                            text = "Р Р°Р±РѕС‚Р°",
                             color = if (!isChat) Color.White else Color(0xFF9E9E9E),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold
@@ -1572,7 +1584,7 @@ private fun ChatGptRemoteSessionsCodexScreen(
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = onSearchQueryChange,
-                placeholder = { Text("Поиск удалённой сессии...", color = Color(0xFF8E8E8E)) },
+                placeholder = { Text("РџРѕРёСЃРє СѓРґР°Р»С‘РЅРЅРѕР№ СЃРµСЃСЃРёРё...", color = Color(0xFF8E8E8E)) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 4.dp),
@@ -1671,7 +1683,7 @@ private fun ChatGptRemoteSessionsCodexScreen(
                         .padding(top = 6.dp, bottom = 4.dp)
                 ) {
                     Text(
-                        text = "Недавние",
+                        text = "РќРµРґР°РІРЅРёРµ",
                         color = Color.White,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold
@@ -1707,7 +1719,7 @@ private fun ChatGptRemoteSessionsCodexScreen(
                         Spacer(modifier = Modifier.width(7.dp))
                         Text(
                             text = if (session.messageCount > 0) {
-                                "$cleanEnv • ${session.messageCount} сообщ."
+                                "$cleanEnv вЂў ${session.messageCount} СЃРѕРѕР±С‰."
                             } else {
                                 cleanEnv
                             },
@@ -1720,7 +1732,7 @@ private fun ChatGptRemoteSessionsCodexScreen(
 
             item {
                 Text(
-                    text = "Больше диалогов нет",
+                    text = "Р‘РѕР»СЊС€Рµ РґРёР°Р»РѕРіРѕРІ РЅРµС‚",
                     color = Color(0xFF8E8E8E),
                     fontSize = 14.sp,
                     textAlign = TextAlign.Center,
@@ -1735,7 +1747,7 @@ private fun ChatGptRemoteSessionsCodexScreen(
 
         ChatGptBottomInputPill(
             viewModel = viewModel,
-            placeholderText = "Спросить Antigravity (/ скиллы, @ агенты)",
+            placeholderText = "РЎРїСЂРѕСЃРёС‚СЊ Antigravity (/ СЃРєРёР»Р»С‹, @ Р°РіРµРЅС‚С‹)",
             pendingAttachments = pendingAttachments,
             isDictatingInline = isDictatingInline,
             isStreaming = isAnyMessageStreaming,
@@ -1760,8 +1772,8 @@ private fun ChatGptRemoteSessionsCodexScreen(
 }
 
 /**
- * Боковое меню навигации 1:1 как в ChatGPT Android (Разделы 11.1, 11.5, 11.6):
- * отдельные пункты в левом меню (без дублирования Фоновых задач и субагентов, которые находятся над полем ввода чата).
+ * Р‘РѕРєРѕРІРѕРµ РјРµРЅСЋ РЅР°РІРёРіР°С†РёРё 1:1 РєР°Рє РІ ChatGPT Android (Р Р°Р·РґРµР»С‹ 11.1, 11.5, 11.6):
+ * РѕС‚РґРµР»СЊРЅС‹Рµ РїСѓРЅРєС‚С‹ РІ Р»РµРІРѕРј РјРµРЅСЋ (Р±РµР· РґСѓР±Р»РёСЂРѕРІР°РЅРёСЏ Р¤РѕРЅРѕРІС‹С… Р·Р°РґР°С‡ Рё СЃСѓР±Р°РіРµРЅС‚РѕРІ, РєРѕС‚РѕСЂС‹Рµ РЅР°С…РѕРґСЏС‚СЃСЏ РЅР°Рґ РїРѕР»РµРј РІРІРѕРґР° С‡Р°С‚Р°).
  */
 @Composable
 private fun ChatGptExactNavigationDrawer(
@@ -1821,8 +1833,8 @@ private fun DrawerMenuRow(
 }
 
 /**
- * Нижняя капсула ввода 1:1 как в ChatGPT Android, с поддержкой прикреплённых файлов над строкой текста
- * и реактивным автодополнением `/` (скиллы и команды) и `@` (контекст и суб-агенты роя).
+ * РќРёР¶РЅСЏСЏ РєР°РїСЃСѓР»Р° РІРІРѕРґР° 1:1 РєР°Рє РІ ChatGPT Android, СЃ РїРѕРґРґРµСЂР¶РєРѕР№ РїСЂРёРєСЂРµРїР»С‘РЅРЅС‹С… С„Р°Р№Р»РѕРІ РЅР°Рґ СЃС‚СЂРѕРєРѕР№ С‚РµРєСЃС‚Р°
+ * Рё СЂРµР°РєС‚РёРІРЅС‹Рј Р°РІС‚РѕРґРѕРїРѕР»РЅРµРЅРёРµРј `/` (СЃРєРёР»Р»С‹ Рё РєРѕРјР°РЅРґС‹) Рё `@` (РєРѕРЅС‚РµРєСЃС‚ Рё СЃСѓР±-Р°РіРµРЅС‚С‹ СЂРѕСЏ).
  */
 @Composable
 private fun ChatGptBottomInputPill(
@@ -1853,6 +1865,7 @@ private fun ChatGptBottomInputPill(
     val attachmentError by viewModel.attachmentError.collectAsState()
     val installedSkills by viewModel.installedSkills.collectAsState()
     val mcpServers by viewModel.mcpServers.collectAsState()
+    val selectedMcpConnections by viewModel.selectedMcpConnections.collectAsState()
     val swarmAgents by viewModel.swarmAgents.collectAsState()
     val googleDriveFiles by viewModel.googleDriveFiles.collectAsState()
 
@@ -1913,18 +1926,44 @@ private fun ChatGptBottomInputPill(
     ) {
         currentQueue.forEach { queued ->
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("В очереди: ${queued.prompt}", color = Color(0xFF9E9E9E), maxLines = 1,
+                Text("Р’ РѕС‡РµСЂРµРґРё: ${queued.prompt}", color = Color(0xFF9E9E9E), maxLines = 1,
                     overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                if (!isStreaming) TextButton(onClick = { viewModel.sendQueuedFollowUp(queued.id) }) { Text("Отправить") }
+                if (!isStreaming) TextButton(onClick = { viewModel.sendQueuedFollowUp(queued.id) }) { Text("РћС‚РїСЂР°РІРёС‚СЊ") }
                 IconButton(onClick = { viewModel.removeQueuedFollowUp(queued.id) }) {
-                    Icon(Icons.Default.Close, contentDescription = "Удалить сообщение из очереди", tint = Color.Gray)
+                    Icon(Icons.Default.Close, contentDescription = "РЈРґР°Р»РёС‚СЊ СЃРѕРѕР±С‰РµРЅРёРµ РёР· РѕС‡РµСЂРµРґРё", tint = Color.Gray)
                 }
             }
         }
         attachmentError?.let { error ->
             Text(error, color = Color(0xFFF87171), fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
         }
-        // Реактивное всплывающее меню `/` (скиллы и команды) и `@` (упоминания, суб-агенты роя, файлы)
+        // Этап 6: выбор подключений MCP для разговора (пусто — все включённые).
+        if (selectedMcpConnections.isNotEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Подключения: ", color = Color(0xFF8E8E8E), fontSize = 11.sp)
+                selectedMcpConnections.forEach { id ->
+                    val name = mcpServers.firstOrNull { it.id == id }?.name ?: id
+                    TextButton(
+                        onClick = { viewModel.toggleMcpConnectionSelected(id) },
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
+                    ) {
+                        Text("✕ $name", color = Color(0xFF60A5FA), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                TextButton(
+                    onClick = { viewModel.clearMcpConnectionSelection() },
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
+                ) {
+                    Text("все", color = Color(0xFF8E8E8E), fontSize = 11.sp)
+                }
+            }
+        }
+        // Р РµР°РєС‚РёРІРЅРѕРµ РІСЃРїР»С‹РІР°СЋС‰РµРµ РјРµРЅСЋ `/` (СЃРєРёР»Р»С‹ Рё РєРѕРјР°РЅРґС‹) Рё `@` (СѓРїРѕРјРёРЅР°РЅРёСЏ, СЃСѓР±-Р°РіРµРЅС‚С‹ СЂРѕСЏ, С„Р°Р№Р»С‹)
         if (slashAndMentionSuggestions.isNotEmpty()) {
             SlashAndMentionPopup(
                 suggestions = slashAndMentionSuggestions,
@@ -1963,6 +2002,12 @@ private fun ChatGptBottomInputPill(
                             onOpenPermissionsSheet()
                         }
                         else -> {
+                            // Этап 6: выбор подключения в разговоре — упоминание
+                            // @имя также включает сервер в allowlist хода
+                            // (пустой набор — все включённые).
+                            if (item.id.startsWith("mcp_")) {
+                                viewModel.toggleMcpConnectionSelected(item.id.removePrefix("mcp_"))
+                            }
                             val lastSpace = text.lastIndexOfAny(charArrayOf(' ', '\n'))
                             val prefix = if (lastSpace >= 0) text.substring(0, lastSpace + 1) else ""
                             viewModel.setComposerDraft(prefix + item.insertText)
@@ -1972,7 +2017,7 @@ private fun ChatGptBottomInputPill(
             )
         }
 
-        // Плашки прикреплённых файлов над полем ввода (как в ChatGPT при загрузке файлов)
+        // РџР»Р°С€РєРё РїСЂРёРєСЂРµРїР»С‘РЅРЅС‹С… С„Р°Р№Р»РѕРІ РЅР°Рґ РїРѕР»РµРј РІРІРѕРґР° (РєР°Рє РІ ChatGPT РїСЂРё Р·Р°РіСЂСѓР·РєРµ С„Р°Р№Р»РѕРІ)
         if (pendingAttachments.isNotEmpty()) {
             Row(
                 modifier = Modifier
@@ -2006,7 +2051,7 @@ private fun ChatGptBottomInputPill(
                                     maxLines = 1
                                 )
                                 Text(
-                                    text = "${(att.sizeBytes / 1024).coerceAtLeast(1)} КБ",
+                                    text = "${(att.sizeBytes / 1024).coerceAtLeast(1)} РљР‘",
                                     color = Color(0xFF8E8E8E),
                                     fontSize = 11.sp
                                 )
@@ -2014,7 +2059,7 @@ private fun ChatGptBottomInputPill(
                             Spacer(modifier = Modifier.width(8.dp))
                             Icon(
                                 imageVector = Icons.Default.Close,
-                                contentDescription = "Удалить вложение",
+                                contentDescription = "РЈРґР°Р»РёС‚СЊ РІР»РѕР¶РµРЅРёРµ",
                                 tint = Color(0xFFB0B0B0),
                                 modifier = Modifier
                                     .size(18.dp)
@@ -2047,7 +2092,7 @@ private fun ChatGptBottomInputPill(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Add,
-                        contentDescription = "Загрузить файлы или фото",
+                        contentDescription = "Р—Р°РіСЂСѓР·РёС‚СЊ С„Р°Р№Р»С‹ РёР»Рё С„РѕС‚Рѕ",
                         tint = Color.White,
                         modifier = Modifier.size(22.dp)
                     )
@@ -2061,7 +2106,7 @@ private fun ChatGptBottomInputPill(
                 ) {
                     if (text.isEmpty()) {
                         Text(
-                            text = if (pendingAttachments.isNotEmpty()) "Добавьте сообщение к файлу..." else if (isStreaming) "Сообщение в очередь…" else placeholderText,
+                            text = if (pendingAttachments.isNotEmpty()) "Р”РѕР±Р°РІСЊС‚Рµ СЃРѕРѕР±С‰РµРЅРёРµ Рє С„Р°Р№Р»Сѓ..." else if (isStreaming) "РЎРѕРѕР±С‰РµРЅРёРµ РІ РѕС‡РµСЂРµРґСЊвЂ¦" else placeholderText,
                             color = Color(0xFF8E8E8E),
                             fontSize = 15.sp,
                             maxLines = 1,
@@ -2098,7 +2143,7 @@ private fun ChatGptBottomInputPill(
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Mic,
-                        contentDescription = "Голосовая диктовка в текст",
+                        contentDescription = "Р“РѕР»РѕСЃРѕРІР°СЏ РґРёРєС‚РѕРІРєР° РІ С‚РµРєСЃС‚",
                         tint = Color.White,
                         modifier = Modifier.size(22.dp)
                     )
@@ -2111,7 +2156,7 @@ private fun ChatGptBottomInputPill(
                         val toQueue = text
                         viewModel.setComposerDraft("")
                         onSendPrompt(toQueue)
-                    }) { Icon(Icons.Default.ArrowUpward, "Добавить в очередь", tint = Color.White) }
+                    }) { Icon(Icons.Default.ArrowUpward, "Р”РѕР±Р°РІРёС‚СЊ РІ РѕС‡РµСЂРµРґСЊ", tint = Color.White) }
                     Box(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier
@@ -2122,7 +2167,7 @@ private fun ChatGptBottomInputPill(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Stop,
-                            contentDescription = "Остановить генерацию",
+                            contentDescription = "РћСЃС‚Р°РЅРѕРІРёС‚СЊ РіРµРЅРµСЂР°С†РёСЋ",
                             tint = Color.Black,
                             modifier = Modifier.size(20.dp)
                         )
@@ -2143,7 +2188,7 @@ private fun ChatGptBottomInputPill(
                     ) {
                         Icon(
                             imageVector = Icons.Default.ArrowUpward,
-                            contentDescription = "Отправить",
+                            contentDescription = "РћС‚РїСЂР°РІРёС‚СЊ",
                             tint = Color.Black,
                             modifier = Modifier.size(22.dp)
                         )
@@ -2157,7 +2202,7 @@ private fun ChatGptBottomInputPill(
 }
 
 /**
- * Нижняя шторка выбора вложений по кнопке `+` 1:1 как в ChatGPT Android 1.2026.293 (`ModalBottomSheet`).
+ * РќРёР¶РЅСЏСЏ С€С‚РѕСЂРєР° РІС‹Р±РѕСЂР° РІР»РѕР¶РµРЅРёР№ РїРѕ РєРЅРѕРїРєРµ `+` 1:1 РєР°Рє РІ ChatGPT Android 1.2026.293 (`ModalBottomSheet`).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -2182,26 +2227,26 @@ private fun ChatGptAttachmentPickerDialog(
                 .padding(horizontal = 20.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // 3 большие плитки сверху (Камера | Фотографии | Файлы), как в ChatGPT Android 1.2026.293
+            // 3 Р±РѕР»СЊС€РёРµ РїР»РёС‚РєРё СЃРІРµСЂС…Сѓ (РљР°РјРµСЂР° | Р¤РѕС‚РѕРіСЂР°С„РёРё | Р¤Р°Р№Р»С‹), РєР°Рє РІ ChatGPT Android 1.2026.293
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 AttachmentTileButton(
                     icon = Icons.Default.CameraAlt,
-                    label = "Камера",
+                    label = "РљР°РјРµСЂР°",
                     onClick = onTakePhoto,
                     modifier = Modifier.weight(1f)
                 )
                 AttachmentTileButton(
                     icon = Icons.Default.Image,
-                    label = "Фотографии",
+                    label = "Р¤РѕС‚РѕРіСЂР°С„РёРё",
                     onClick = onPickPhotos,
                     modifier = Modifier.weight(1f)
                 )
                 AttachmentTileButton(
                     icon = Icons.Default.AttachFile,
-                    label = "Файлы",
+                    label = "Р¤Р°Р№Р»С‹",
                     onClick = onPickAnyFiles,
                     modifier = Modifier.weight(1f)
                 )
@@ -2227,13 +2272,13 @@ private fun ChatGptAttachmentPickerDialog(
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
-                            text = "Поиск и файлы в телефоне",
+                            text = "РџРѕРёСЃРє Рё С„Р°Р№Р»С‹ РІ С‚РµР»РµС„РѕРЅРµ",
                             color = Color.White,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
-                            text = "Найти документы, фото, контакты или создать файл на смартфоне",
+                            text = "РќР°Р№С‚Рё РґРѕРєСѓРјРµРЅС‚С‹, С„РѕС‚Рѕ, РєРѕРЅС‚Р°РєС‚С‹ РёР»Рё СЃРѕР·РґР°С‚СЊ С„Р°Р№Р» РЅР° СЃРјР°СЂС‚С„РѕРЅРµ",
                             color = Color(0xFF9E9E9E),
                             fontSize = 12.sp
                         )
@@ -2283,7 +2328,7 @@ private fun AttachmentTileButton(
 }
 
 /**
- * Раздел Бокового Меню: `Библиотека` (Артефакты сессий ПК + файлы смартфона).
+ * Р Р°Р·РґРµР» Р‘РѕРєРѕРІРѕРіРѕ РњРµРЅСЋ: `Р‘РёР±Р»РёРѕС‚РµРєР°` (РђСЂС‚РµС„Р°РєС‚С‹ СЃРµСЃСЃРёР№ РџРљ + С„Р°Р№Р»С‹ СЃРјР°СЂС‚С„РѕРЅР°).
  */
 @Composable
 private fun ChatGptLibraryScreen(
@@ -2311,9 +2356,9 @@ private fun ChatGptImagesScreen(
     onSendImagePrompt: (String) -> Unit
 ) {
     val presets = listOf(
-        "Сгенерируй концепт иконки Android-приложения Antigravity в тёмном стиле",
-        "Нарисуй архитектурную диаграмму голосового движка и моста синхронизации",
-        "Создай UI-макет экрана удалённых сессий в стиле ChatGPT Dark"
+        "РЎРіРµРЅРµСЂРёСЂСѓР№ РєРѕРЅС†РµРїС‚ РёРєРѕРЅРєРё Android-РїСЂРёР»РѕР¶РµРЅРёСЏ Antigravity РІ С‚С‘РјРЅРѕРј СЃС‚РёР»Рµ",
+        "РќР°СЂРёСЃСѓР№ Р°СЂС…РёС‚РµРєС‚СѓСЂРЅСѓСЋ РґРёР°РіСЂР°РјРјСѓ РіРѕР»РѕСЃРѕРІРѕРіРѕ РґРІРёР¶РєР° Рё РјРѕСЃС‚Р° СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёРё",
+        "РЎРѕР·РґР°Р№ UI-РјР°РєРµС‚ СЌРєСЂР°РЅР° СѓРґР°Р»С‘РЅРЅС‹С… СЃРµСЃСЃРёР№ РІ СЃС‚РёР»Рµ ChatGPT Dark"
     )
 
     Column(
@@ -2326,7 +2371,7 @@ private fun ChatGptImagesScreen(
         Row(verticalAlignment = Alignment.CenterVertically) {
             TwoLineMenuCircleButton(onClick = onOpenDrawer)
             Spacer(modifier = Modifier.width(14.dp))
-            Text("Изображения", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text("РР·РѕР±СЂР°Р¶РµРЅРёСЏ", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
@@ -2338,7 +2383,7 @@ private fun ChatGptImagesScreen(
             ) {
                 Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Из галереи")
+                Text("РР· РіР°Р»РµСЂРµРё")
             }
             Button(
                 onClick = onTakeCameraPhoto,
@@ -2348,11 +2393,11 @@ private fun ChatGptImagesScreen(
             ) {
                 Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Камера")
+                Text("РљР°РјРµСЂР°")
             }
         }
 
-        Text("Быстрые шаблоны генерации и анализа изображений", color = Color(0xFF8E8E8E), fontSize = 13.sp)
+        Text("Р‘С‹СЃС‚СЂС‹Рµ С€Р°Р±Р»РѕРЅС‹ РіРµРЅРµСЂР°С†РёРё Рё Р°РЅР°Р»РёР·Р° РёР·РѕР±СЂР°Р¶РµРЅРёР№", color = Color(0xFF8E8E8E), fontSize = 13.sp)
 
         presets.forEach { preset ->
             Surface(
@@ -2374,7 +2419,7 @@ private fun ChatGptImagesScreen(
 }
 
 /**
- * Раздел Бокового Меню: `Запланировано` (фоновые расписания задач).
+ * Р Р°Р·РґРµР» Р‘РѕРєРѕРІРѕРіРѕ РњРµРЅСЋ: `Р—Р°РїР»Р°РЅРёСЂРѕРІР°РЅРѕ` (С„РѕРЅРѕРІС‹Рµ СЂР°СЃРїРёСЃР°РЅРёСЏ Р·Р°РґР°С‡).
  */
 @Composable
 private fun ChatGptScheduledScreen(
@@ -2385,7 +2430,7 @@ private fun ChatGptScheduledScreen(
     onRunTaskNow: (ScheduledAutomationItem) -> Unit
 ) {
     var newTitle by remember { mutableStateOf("") }
-    var newCron by remember { mutableStateOf("Каждый день в 10:00") }
+    var newCron by remember { mutableStateOf("РљР°Р¶РґС‹Р№ РґРµРЅСЊ РІ 10:00") }
 
     Column(
         modifier = Modifier
@@ -2397,7 +2442,7 @@ private fun ChatGptScheduledScreen(
         Row(verticalAlignment = Alignment.CenterVertically) {
             TwoLineMenuCircleButton(onClick = onOpenDrawer)
             Spacer(modifier = Modifier.width(14.dp))
-            Text("Запланировано", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text("Р—Р°РїР»Р°РЅРёСЂРѕРІР°РЅРѕ", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         }
 
         Card(
@@ -2405,11 +2450,11 @@ private fun ChatGptScheduledScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Новое расписание задач", color = Color.White, fontWeight = FontWeight.Bold)
+                Text("РќРѕРІРѕРµ СЂР°СЃРїРёСЃР°РЅРёРµ Р·Р°РґР°С‡", color = Color.White, fontWeight = FontWeight.Bold)
                 OutlinedTextField(
                     value = newTitle,
                     onValueChange = { newTitle = it },
-                    placeholder = { Text("Описание задачи...") },
+                    placeholder = { Text("РћРїРёСЃР°РЅРёРµ Р·Р°РґР°С‡Рё...") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
@@ -2417,7 +2462,7 @@ private fun ChatGptScheduledScreen(
                     OutlinedTextField(
                         value = newCron,
                         onValueChange = { newCron = it },
-                        label = { Text("Периодичность") },
+                        label = { Text("РџРµСЂРёРѕРґРёС‡РЅРѕСЃС‚СЊ") },
                         modifier = Modifier.weight(1f),
                         singleLine = true
                     )
@@ -2428,7 +2473,7 @@ private fun ChatGptScheduledScreen(
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E5BF6))
                     ) {
-                        Text("Добавить")
+                        Text("Р”РѕР±Р°РІРёС‚СЊ")
                     }
                 }
             }
@@ -2452,7 +2497,7 @@ private fun ChatGptScheduledScreen(
                                 .clickable { onRunTaskNow(task) }
                         ) {
                             Text(task.title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                            Text("Расписание: ${task.cronSchedule}", color = Color(0xFF8E8E8E), fontSize = 12.sp)
+                            Text("Р Р°СЃРїРёСЃР°РЅРёРµ: ${task.cronSchedule}", color = Color(0xFF8E8E8E), fontSize = 12.sp)
                         }
                         Switch(checked = task.enabled, onCheckedChange = { onToggleTask(task.id) })
                     }
@@ -2462,595 +2507,8 @@ private fun ChatGptScheduledScreen(
     }
 }
 
-/**
- * Раздел Бокового Меню: `Плагины, Скиллы и MCP` (Реальное управление расширениями ПК — Раздел 6).
- */
 @Composable
-private fun ChatGptPluginsScreen(
-    plugins: List<InstalledPluginItem>,
-    skills: List<PcSkillItem>,
-    mcpServers: List<PcMcpServerItem>,
-    errorText: String?,
-    isLoading: Boolean,
-    onOpenDrawer: () -> Unit,
-    onRefresh: () -> Unit,
-    onDismissError: () -> Unit,
-    onTogglePlugin: (String) -> Unit,
-    onAddPlugin: (String, String) -> Unit,
-    onDeletePlugin: (String) -> Unit,
-    onToggleSkill: (String) -> Unit,
-    onAddSkill: (String, String, String) -> Unit,
-    onDeleteSkill: (String) -> Unit,
-    onToggleMcp: (String) -> Unit,
-    onAddMcp: (String, String, String) -> Unit,
-    onDeleteMcp: (String) -> Unit,
-    onCheckMcp: (String) -> Unit,
-    onCallMcpTool: (String, String) -> Unit,
-    mcpToolResult: String?,
-    isMcpToolCallRunning: Boolean,
-    onDismissToolResult: () -> Unit
-) {
-    var activeTab by remember { mutableIntStateOf(0) } // 0 = Плагины, 1 = Скиллы, 2 = MCP-серверы
-    var showAddDialog by remember { mutableStateOf(false) }
-    // Этап 3: диалог живого вызова MCP-инструментов (tools/call).
-    var mcpToolCallServer by remember { mutableStateOf<PcMcpServerItem?>(null) }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFF000000))
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            TwoLineMenuCircleButton(onClick = onOpenDrawer)
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Плагины, Скиллы и MCP", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Text(
-                    if (isLoading) "Синхронизация с рабочей станцией ПК…" else "Реальные расширения Antigravity",
-                    color = if (isLoading) Color(0xFF10A37F) else Color(0xFF8E8E8E),
-                    fontSize = 12.sp
-                )
-            }
-            IconButton(onClick = onRefresh) {
-                Icon(Icons.Default.Refresh, contentDescription = "Обновить", tint = Color(0xFFECECEC))
-            }
-            Button(
-                onClick = { showAddDialog = true },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10A37F)),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Добавить", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-            }
-        }
-
-        if (!errorText.isNullOrBlank()) {
-            Surface(
-                color = Color(0xFF2D1618),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = errorText,
-                        color = Color(0xFFFCA5A5),
-                        fontSize = 12.sp,
-                        modifier = Modifier.weight(1f)
-                    )
-                    IconButton(onClick = onDismissError, modifier = Modifier.size(24.dp)) {
-                        Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = Color(0xFFFCA5A5))
-                    }
-                }
-            }
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            FilterChip(
-                selected = activeTab == 0,
-                onClick = { activeTab = 0 },
-                label = { Text("Плагины") }
-            )
-            FilterChip(
-                selected = activeTab == 1,
-                onClick = { activeTab = 1 },
-                label = { Text("Скиллы") }
-            )
-            FilterChip(
-                selected = activeTab == 2,
-                onClick = { activeTab = 2 },
-                label = { Text("MCP-серверы") }
-            )
-        }
-
-        LazyColumn(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            when (activeTab) {
-                0 -> {
-                    if (plugins.isEmpty()) {
-                        item {
-                            EmptyExtensionsCard(
-                                title = "Плагины не установлены",
-                                subtitle = "Нажмите «+ Добавить», чтобы установить плагин через agy plugin или подключить локальный модуль."
-                            )
-                        }
-                    } else {
-                        items(plugins, key = { it.id }) { p ->
-                            Surface(
-                                color = Color(0xFF171717),
-                                shape = RoundedCornerShape(16.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(14.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text(
-                                                text = p.name,
-                                                color = Color.White,
-                                                fontSize = 15.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                                modifier = Modifier.weight(1f, fill = false)
-                                            )
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text(
-                                                text = "v${p.version}",
-                                                color = Color(0xFF10A37F),
-                                                fontSize = 11.sp,
-                                                maxLines = 1,
-                                                softWrap = false
-                                            )
-                                        }
-                                        Text("${p.category} • ${p.source}", color = Color(0xFF60A5FA), fontSize = 12.sp)
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(p.description, color = Color(0xFFA0A0A0), fontSize = 12.sp)
-                                        if (p.path.isNotBlank()) {
-                                            Spacer(modifier = Modifier.height(2.dp))
-                                            Text(p.path, color = Color(0xFF6E6E6E), fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                        }
-                                    }
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Switch(checked = p.enabled, onCheckedChange = { onTogglePlugin(p.id) })
-                                    IconButton(onClick = { onDeletePlugin(p.id) }) {
-                                        Icon(Icons.Default.Delete, contentDescription = "Удалить плагин", tint = Color(0xFFF87171))
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                1 -> {
-                    if (skills.isEmpty()) {
-                        item {
-                            EmptyExtensionsCard(
-                                title = "Скиллы не найдены",
-                                subtitle = "Скиллы хранятся в C:\\Users\\st811210\\.gemini\\config\\skills\\<name>\\SKILL.md. Нажмите «+ Добавить», чтобы создать новый скилл."
-                            )
-                        }
-                    } else {
-                        items(skills, key = { it.id }) { s ->
-                            Surface(
-                                color = Color(0xFF171717),
-                                shape = RoundedCornerShape(16.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(14.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(s.name, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                        Text("SKILL.md • ${s.path}", color = Color(0xFF34D399), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(
-                                            s.description.ifBlank { s.instructionsPreview },
-                                            color = Color(0xFFA0A0A0),
-                                            fontSize = 12.sp,
-                                            maxLines = 3,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Switch(checked = s.enabled, onCheckedChange = { onToggleSkill(s.id) })
-                                    IconButton(onClick = { onDeleteSkill(s.id) }) {
-                                        Icon(Icons.Default.Delete, contentDescription = "Удалить скилл", tint = Color(0xFFF87171))
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                2 -> {
-                    if (mcpServers.isEmpty()) {
-                        item {
-                            EmptyExtensionsCard(
-                                title = "MCP-серверы не подключены",
-                                subtitle = "Нажмите «+ Добавить», чтобы зарегистрировать MCP-сервер через agy mcp add и вызывать его инструменты из чата."
-                            )
-                        }
-                    } else {
-                        items(mcpServers, key = { it.id }) { m ->
-                            Surface(
-                                color = Color(0xFF171717),
-                                shape = RoundedCornerShape(16.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(14.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text(
-                                                text = m.name,
-                                                color = Color.White,
-                                                fontSize = 15.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                                modifier = Modifier.weight(1f, fill = false)
-                                            )
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            // Этап 3: честный статус рукопожатия.
-                                            // connected — только после initialize →
-                                            // initialized → tools/list.
-                                            Text(
-                                                text = describeMcpStatus(m.status),
-                                                color = when (m.status) {
-                                                    "connected" -> Color(0xFF10A37F)
-                                                    "failed" -> Color(0xFFF87171)
-                                                    "disabled" -> Color(0xFF6B7280)
-                                                    else -> Color(0xFFF59E0B)
-                                                },
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                maxLines = 1
-                                            )
-                                        }
-                                        Text("${m.transport} • ${m.scope}", color = Color(0xFF60A5FA), fontSize = 11.sp)
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(
-                                            "${m.command} ${m.args.joinToString(" ")}".trim(),
-                                            color = Color(0xFFA0A0A0),
-                                            fontSize = 11.sp,
-                                            fontFamily = FontFamily.Monospace,
-                                            maxLines = 2,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        if (m.tools.isNotEmpty()) {
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            Text(
-                                                "Инструменты (${m.tools.size}): ${m.tools.take(4).joinToString(", ")}",
-                                                color = Color(0xFF10A37F),
-                                                fontSize = 11.sp,
-                                                maxLines = 2,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
-                                        if (m.error.isNotBlank()) {
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            Text(
-                                                m.error,
-                                                color = Color(0xFFF87171),
-                                                fontSize = 11.sp,
-                                                maxLines = 2,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
-                                        if (m.probedAt.isNotBlank()) {
-                                            Spacer(modifier = Modifier.height(2.dp))
-                                            Text(
-                                                "Проверен: ${m.probedAt}",
-                                                color = Color(0xFF6B7280),
-                                                fontSize = 10.sp,
-                                                maxLines = 1
-                                            )
-                                        }
-                                    }
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    // Живая проверка: полное MCP-рукопожатие.
-                                    IconButton(onClick = { onCheckMcp(m.id) }) {
-                                        Icon(Icons.Default.Refresh, contentDescription = "Проверить MCP-соединение", tint = Color(0xFF60A5FA))
-                                    }
-                                    // Вызов инструмента — только по живому списку.
-                                    IconButton(onClick = { mcpToolCallServer = m }, enabled = m.tools.isNotEmpty()) {
-                                        Icon(
-                                            Icons.Default.PlayArrow,
-                                            contentDescription = "Вызвать инструмент MCP",
-                                            tint = if (m.tools.isNotEmpty()) Color(0xFF10A37F) else Color(0xFF4B5563)
-                                        )
-                                    }
-                                    Switch(checked = m.enabled, onCheckedChange = { onToggleMcp(m.id) })
-                                    IconButton(onClick = { onDeleteMcp(m.id) }) {
-                                        Icon(Icons.Default.Delete, contentDescription = "Удалить MCP", tint = Color(0xFFF87171))
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    if (showAddDialog) {
-        AddExtensionModalDialog(
-            initialTab = activeTab,
-            onDismiss = { showAddDialog = false },
-            onAddPlugin = { src, desc ->
-                onAddPlugin(src, desc)
-                activeTab = 0
-                showAddDialog = false
-            },
-            onAddSkill = { name, desc, instr ->
-                onAddSkill(name, desc, instr)
-                activeTab = 1
-                showAddDialog = false
-            },
-            onAddMcp = { name, cmd, args ->
-                onAddMcp(name, cmd, args)
-                activeTab = 2
-                showAddDialog = false
-            }
-        )
-    }
-
-    // Этап 3: вызов реальных MCP-инструментов по живому списку tools/list.
-    mcpToolCallServer?.let { server ->
-        Dialog(onDismissRequest = { mcpToolCallServer = null; onDismissToolResult() }) {
-            Surface(
-                color = Color(0xFF171717),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 520.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .padding(16.dp)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            "Инструменты ${server.name}",
-                            color = Color.White,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.weight(1f)
-                        )
-                        IconButton(onClick = { mcpToolCallServer = null; onDismissToolResult() }) {
-                            Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = Color(0xFFA0A0A0))
-                        }
-                    }
-                    if (server.tools.isEmpty()) {
-                        Text(
-                            "Список инструментов не получен: сначала выполните «Проверить» (живое MCP-рукопожатие).",
-                            color = Color(0xFFF59E0B),
-                            fontSize = 12.sp
-                        )
-                    } else {
-                        Text(
-                            "Инструменты из живого tools/list:",
-                            color = Color(0xFF60A5FA),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        server.tools.forEach { tool ->
-                            Button(
-                                onClick = { onCallMcpTool(server.id, tool) },
-                                enabled = !isMcpToolCallRunning,
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10A37F))
-                            ) {
-                                Text(
-                                    tool,
-                                    color = Color.White,
-                                    fontSize = 13.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-                    }
-                    mcpToolResult?.let { result ->
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("Результат:", color = Color(0xFF60A5FA), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                        Text(result, color = Color(0xFFE5E5E5), fontSize = 12.sp)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun EmptyExtensionsCard(title: String, subtitle: String) {
-    Surface(
-        color = Color(0xFF171717),
-        shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-            Text(subtitle, color = Color(0xFF9E9E9E), fontSize = 12.5.sp)
-        }
-    }
-}
-
-@Composable
-private fun AddExtensionModalDialog(
-    initialTab: Int,
-    onDismiss: () -> Unit,
-    onAddPlugin: (String, String) -> Unit,
-    onAddSkill: (String, String, String) -> Unit,
-    onAddMcp: (String, String, String) -> Unit
-) {
-    var dialogTab by remember { mutableIntStateOf(initialTab) }
-    var pluginSource by remember { mutableStateOf("") }
-    var pluginDesc by remember { mutableStateOf("") }
-
-    var skillName by remember { mutableStateOf("workstation-diagnostics") }
-    var skillDesc by remember { mutableStateOf("Проверка состояния рабочей станции и туннелей") }
-    var skillInstructions by remember {
-        mutableStateOf("# Инструкция скилла\nПроверяй реальный статус процессов ПК через терминальные команды и возвращай точные метрики.")
-    }
-
-    var mcpName by remember { mutableStateOf("ag-workstation-info") }
-    var mcpCommand by remember {
-        mutableStateOf("C:\\Users\\st811210\\AppData\\Local\\Programs\\nodejs\\node.exe")
-    }
-    var mcpArgs by remember {
-        mutableStateOf("C:\\Users\\st811210\\.gemini\\antigravity\\scratch\\antigravity-android\\pc-bridge\\mcp_sysinfo_server.js")
-    }
-
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Surface(
-            color = Color(0xFF171717),
-            shape = RoundedCornerShape(20.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(18.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text("Добавить на компьютер", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = Color.White)
-                    }
-                }
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = dialogTab == 0, onClick = { dialogTab = 0 }, label = { Text("Плагин") })
-                    FilterChip(selected = dialogTab == 1, onClick = { dialogTab = 1 }, label = { Text("Скилл") })
-                    FilterChip(selected = dialogTab == 2, onClick = { dialogTab = 2 }, label = { Text("MCP-сервер") })
-                }
-
-                when (dialogTab) {
-                    0 -> {
-                        OutlinedTextField(
-                            value = pluginSource,
-                            onValueChange = { pluginSource = it },
-                            label = { Text("Имя пакета / Git URL / путь") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-                        OutlinedTextField(
-                            value = pluginDesc,
-                            onValueChange = { pluginDesc = it },
-                            label = { Text("Описание плагина") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Button(
-                            onClick = { onAddPlugin(pluginSource, pluginDesc) },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10A37F)),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Установить плагин на ПК", fontWeight = FontWeight.Bold)
-                        }
-                    }
-
-                    1 -> {
-                        OutlinedTextField(
-                            value = skillName,
-                            onValueChange = { skillName = it },
-                            label = { Text("Имя скилла (папка в .gemini/config/skills)") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-                        OutlinedTextField(
-                            value = skillDesc,
-                            onValueChange = { skillDesc = it },
-                            label = { Text("Краткое описание (frontmatter)") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        OutlinedTextField(
-                            value = skillInstructions,
-                            onValueChange = { skillInstructions = it },
-                            label = { Text("Инструкции SKILL.md") },
-                            modifier = Modifier.fillMaxWidth(),
-                            minLines = 3
-                        )
-                        Button(
-                            onClick = { onAddSkill(skillName, skillDesc, skillInstructions) },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10A37F)),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Создать SKILL.md на ПК", fontWeight = FontWeight.Bold)
-                        }
-                    }
-
-                    2 -> {
-                        OutlinedTextField(
-                            value = mcpName,
-                            onValueChange = { mcpName = it },
-                            label = { Text("Имя MCP-сервера") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-                        OutlinedTextField(
-                            value = mcpCommand,
-                            onValueChange = { mcpCommand = it },
-                            label = { Text("Исполняемый файл (command)") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-                        OutlinedTextField(
-                            value = mcpArgs,
-                            onValueChange = { mcpArgs = it },
-                            label = { Text("Аргументы запуска (args)") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Button(
-                            onClick = { onAddMcp(mcpName, mcpCommand, mcpArgs) },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10A37F)),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Зарегистрировать в agy mcp", fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun TwoLineMenuCircleButton(onClick: () -> Unit) {
+internal fun TwoLineMenuCircleButton(onClick: () -> Unit) {
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
@@ -3100,7 +2558,7 @@ private fun DashedBubbleCircleButton(onClick: () -> Unit) {
                     cap = StrokeCap.Round
                 )
             )
-            // Хвостик речевого пузыря в левом нижнем углу (как в ChatGPT 1.2026.293)
+            // РҐРІРѕСЃС‚РёРє СЂРµС‡РµРІРѕРіРѕ РїСѓР·С‹СЂСЏ РІ Р»РµРІРѕРј РЅРёР¶РЅРµРј СѓРіР»Сѓ (РєР°Рє РІ ChatGPT 1.2026.293)
             drawLine(
                 color = Color.White,
                 start = Offset(size.width * 0.25f, size.height * 0.75f),
@@ -3124,7 +2582,7 @@ private fun SearchCircleButton(onClick: () -> Unit, sizeDp: Int = 46) {
     ) {
         Icon(
             imageVector = Icons.Default.Search,
-            contentDescription = "Поиск",
+            contentDescription = "РџРѕРёСЃРє",
             tint = Color.White,
             modifier = Modifier.size(22.dp)
         )
@@ -3223,7 +2681,7 @@ private fun ChatGptMessageBubble(
                 putExtra(Intent.EXTRA_TEXT, message.content)
             }
             context.startActivity(
-                Intent.createChooser(sendIntent, "Поделиться сообщением")
+                Intent.createChooser(sendIntent, "РџРѕРґРµР»РёС‚СЊСЃСЏ СЃРѕРѕР±С‰РµРЅРёРµРј")
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
         } catch (_: Throwable) {
@@ -3282,7 +2740,7 @@ private fun ChatGptMessageBubble(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "${att.name} (${(att.sizeBytes / 1024).coerceAtLeast(1)} КБ)",
+                                text = "${att.name} (${(att.sizeBytes / 1024).coerceAtLeast(1)} РљР‘)",
                                 color = Color.White,
                                 fontSize = 12.sp
                             )
@@ -3295,17 +2753,17 @@ private fun ChatGptMessageBubble(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(enabled = !message.isStreaming && versions.selected > 0,
                         onClick = { onSelectVersion(versions.selected - 1) }) {
-                        Icon(Icons.Default.KeyboardArrowLeft, "Предыдущая версия", tint = Color.Gray)
+                        Icon(Icons.Default.KeyboardArrowLeft, "РџСЂРµРґС‹РґСѓС‰Р°СЏ РІРµСЂСЃРёСЏ", tint = Color.Gray)
                     }
                     Text("${versions.selected + 1} / ${versions.branches.size}", color = Color.Gray, fontSize = 12.sp)
                     IconButton(enabled = !message.isStreaming && versions.selected < versions.branches.lastIndex,
                         onClick = { onSelectVersion(versions.selected + 1) }) {
-                        Icon(Icons.Default.KeyboardArrowRight, "Следующая версия", tint = Color.Gray)
+                        Icon(Icons.Default.KeyboardArrowRight, "РЎР»РµРґСѓСЋС‰Р°СЏ РІРµСЂСЃРёСЏ", tint = Color.Gray)
                     }
                 }
             }
             if (isEditingPrompt) {
-                Text("Сохранение создаст новую версию в этом разговоре.", color = Color.Gray, fontSize = 12.sp)
+                Text("РЎРѕС…СЂР°РЅРµРЅРёРµ СЃРѕР·РґР°СЃС‚ РЅРѕРІСѓСЋ РІРµСЂСЃРёСЋ РІ СЌС‚РѕРј СЂР°Р·РіРѕРІРѕСЂРµ.", color = Color.Gray, fontSize = 12.sp)
                 Surface(
                     color = Color(0xFF242424),
                     shape = RoundedCornerShape(18.dp),
@@ -3328,7 +2786,7 @@ private fun ChatGptMessageBubble(
                                 editedText = message.content
                                 isEditingPrompt = false
                             }) {
-                                Text("Отмена", color = Color.White, fontSize = 12.sp)
+                                Text("РћС‚РјРµРЅР°", color = Color.White, fontSize = 12.sp)
                             }
                             Spacer(modifier = Modifier.width(8.dp))
                             Button(
@@ -3339,13 +2797,13 @@ private fun ChatGptMessageBubble(
                                 enabled = editedText.isNotBlank(),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)
                             ) {
-                                Text("Отправить", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text("РћС‚РїСЂР°РІРёС‚СЊ", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
                 }
             } else {
-                // Пузырь сообщения пользователя 1:1 как в ChatGPT Android 1.2026.293 (#2F2F2F, с поддержкой кликабельных ссылок)
+                // РџСѓР·С‹СЂСЊ СЃРѕРѕР±С‰РµРЅРёСЏ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ 1:1 РєР°Рє РІ ChatGPT Android 1.2026.293 (#2F2F2F, СЃ РїРѕРґРґРµСЂР¶РєРѕР№ РєР»РёРєР°Р±РµР»СЊРЅС‹С… СЃСЃС‹Р»РѕРє)
                 Surface(
                     color = Color(0xFF2F2F2F),
                     shape = RoundedCornerShape(22.dp),
@@ -3409,9 +2867,9 @@ private fun ChatGptMessageBubble(
                     }
                     Text(
                         text = if (isReceivingThinking) {
-                            "Думаю… ${message.thinkingDurationSec.coerceAtLeast(1)} с"
+                            "Р”СѓРјР°СЋвЂ¦ ${message.thinkingDurationSec.coerceAtLeast(1)} СЃ"
                         } else {
-                            "Думал ${message.thinkingDurationSec.coerceAtLeast(1)} с"
+                            "Р”СѓРјР°Р» ${message.thinkingDurationSec.coerceAtLeast(1)} СЃ"
                         },
                         color = if (message.isStreaming) Color(0xFFD4D4D4) else Color(0xFF9E9E9E),
                         fontSize = 13.5.sp,
@@ -3421,14 +2879,14 @@ private fun ChatGptMessageBubble(
                         Spacer(modifier = Modifier.width(4.dp))
                         Icon(
                             imageVector = if (message.isThinkingExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                            contentDescription = if (message.isThinkingExpanded) "Свернуть размышление" else "Развернуть размышление",
+                            contentDescription = if (message.isThinkingExpanded) "РЎРІРµСЂРЅСѓС‚СЊ СЂР°Р·РјС‹С€Р»РµРЅРёРµ" else "Р Р°Р·РІРµСЂРЅСѓС‚СЊ СЂР°Р·РјС‹С€Р»РµРЅРёРµ",
                             tint = Color(0xFF9E9E9E),
                             modifier = Modifier.size(16.dp)
                         )
                     }
                 }
 
-                // Раскрываем только данные размышления, полученные от провайдера.
+                // Р Р°СЃРєСЂС‹РІР°РµРј С‚РѕР»СЊРєРѕ РґР°РЅРЅС‹Рµ СЂР°Р·РјС‹С€Р»РµРЅРёСЏ, РїРѕР»СѓС‡РµРЅРЅС‹Рµ РѕС‚ РїСЂРѕРІР°Р№РґРµСЂР°.
                 AnimatedVisibility(visible = message.isThinkingExpanded && thinkingText.isNotEmpty()) {
                     Row(
                         modifier = Modifier
@@ -3460,7 +2918,7 @@ private fun ChatGptMessageBubble(
             }
 
             if (message.isStreaming && thinkingText.isEmpty() && message.content.isBlank() && message.toolCalls.isEmpty()) {
-                Text("Ожидание ответа…", color = Color(0xFF9E9E9E), fontSize = 13.sp,
+                Text("РћР¶РёРґР°РЅРёРµ РѕС‚РІРµС‚Р°вЂ¦", color = Color(0xFF9E9E9E), fontSize = 13.sp,
                     modifier = Modifier.padding(vertical = 4.dp))
             }
 
@@ -3501,13 +2959,13 @@ private fun ChatGptMessageBubble(
                                             else -> Icons.Default.MoreHoriz
                                         },
                                         contentDescription = when (tc.status) {
-                                            ToolCallStatus.COMPLETED -> "Завершено"
-                                            ToolCallStatus.FAILED -> "Ошибка"
-                                            ToolCallStatus.CANCELLED -> "Остановлено"
-                                            ToolCallStatus.DENIED -> "Отклонено"
-                                            ToolCallStatus.RUNNING -> "Выполняется"
-                                            ToolCallStatus.AWAITING_APPROVAL -> "Ожидает разрешения"
-                                            ToolCallStatus.APPROVED -> "Разрешено"
+                                            ToolCallStatus.COMPLETED -> "Р—Р°РІРµСЂС€РµРЅРѕ"
+                                            ToolCallStatus.FAILED -> "РћС€РёР±РєР°"
+                                            ToolCallStatus.CANCELLED -> "РћСЃС‚Р°РЅРѕРІР»РµРЅРѕ"
+                                            ToolCallStatus.DENIED -> "РћС‚РєР»РѕРЅРµРЅРѕ"
+                                            ToolCallStatus.RUNNING -> "Р’С‹РїРѕР»РЅСЏРµС‚СЃСЏ"
+                                            ToolCallStatus.AWAITING_APPROVAL -> "РћР¶РёРґР°РµС‚ СЂР°Р·СЂРµС€РµРЅРёСЏ"
+                                            ToolCallStatus.APPROVED -> "Р Р°Р·СЂРµС€РµРЅРѕ"
                                         },
                                         tint = when (tc.status) {
                                             ToolCallStatus.COMPLETED -> Color(0xFF10A37F)
@@ -3528,7 +2986,7 @@ private fun ChatGptMessageBubble(
                                     if (hasDetails) {
                                         Icon(
                                             imageVector = if (detailsExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                            contentDescription = "Детали инструмента",
+                                            contentDescription = "Р”РµС‚Р°Р»Рё РёРЅСЃС‚СЂСѓРјРµРЅС‚Р°",
                                             tint = Color(0xFF8E8E8E),
                                             modifier = Modifier.size(15.dp)
                                         )
@@ -3543,14 +3001,14 @@ private fun ChatGptMessageBubble(
                                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                                             modifier = Modifier.height(30.dp)
                                         ) {
-                                            Text("Разрешить", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            Text("Р Р°Р·СЂРµС€РёС‚СЊ", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                         }
                                         OutlinedButton(
                                             onClick = { onDecideToolCall(tc.id, ApprovalDecision.DENIED) },
                                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                                             modifier = Modifier.height(30.dp)
                                         ) {
-                                            Text("Отклонить", color = Color(0xFFF87171), fontSize = 11.sp)
+                                            Text("РћС‚РєР»РѕРЅРёС‚СЊ", color = Color(0xFFF87171), fontSize = 11.sp)
                                         }
                                     }
                                 }
@@ -3581,7 +3039,7 @@ private fun ChatGptMessageBubble(
                 }
             }
 
-            // Карточки созданных/изменённых файлов с diff (+added зелёный / -removed красный) (Раздел 5.2 и 11.5)
+            // РљР°СЂС‚РѕС‡РєРё СЃРѕР·РґР°РЅРЅС‹С…/РёР·РјРµРЅС‘РЅРЅС‹С… С„Р°Р№Р»РѕРІ СЃ diff (+added Р·РµР»С‘РЅС‹Р№ / -removed РєСЂР°СЃРЅС‹Р№) (Р Р°Р·РґРµР» 5.2 Рё 11.5)
             if (message.createdDiffs.isNotEmpty()) {
                 Column(
                     modifier = Modifier
@@ -3599,7 +3057,7 @@ private fun ChatGptMessageBubble(
                 }
             }
 
-            if (message.content.isNotBlank() && message.content != "Думаю…") {
+            if (message.content.isNotBlank() && message.content != "Р”СѓРјР°СЋвЂ¦") {
                 ChatGptMarkdownText(
                     markdown = message.content,
                     textColor = Color(0xFFECECEC),
@@ -3609,7 +3067,7 @@ private fun ChatGptMessageBubble(
                 )
             }
 
-            // Сгенерированные ИИ фото и видео с предпросмотром и скачиванием в память телефона (Разделы 2 и 8.1)
+            // РЎРіРµРЅРµСЂРёСЂРѕРІР°РЅРЅС‹Рµ РР С„РѕС‚Рѕ Рё РІРёРґРµРѕ СЃ РїСЂРµРґРїСЂРѕСЃРјРѕС‚СЂРѕРј Рё СЃРєР°С‡РёРІР°РЅРёРµРј РІ РїР°РјСЏС‚СЊ С‚РµР»РµС„РѕРЅР° (Р Р°Р·РґРµР»С‹ 2 Рё 8.1)
             if (message.generatedMedia.isNotEmpty()) {
                 Column(
                     modifier = Modifier
@@ -3626,10 +3084,10 @@ private fun ChatGptMessageBubble(
                 }
             }
 
-            // Живая скорость генерации во время стриминга (Раздел 11.4)
+            // Р–РёРІР°СЏ СЃРєРѕСЂРѕСЃС‚СЊ РіРµРЅРµСЂР°С†РёРё РІРѕ РІСЂРµРјСЏ СЃС‚СЂРёРјРёРЅРіР° (Р Р°Р·РґРµР» 11.4)
             if (message.isStreaming && message.tokensPerSecond > 0f) {
                 Text(
-                    text = "${String.format(Locale.US, "%.1f", message.tokensPerSecond)} ток/с • ${message.outputTokensCount} ток.",
+                    text = "${String.format(Locale.US, "%.1f", message.tokensPerSecond)} С‚РѕРє/СЃ вЂў ${message.outputTokensCount} С‚РѕРє.",
                     color = Color(0xFF34D399),
                     fontSize = 11.2.sp,
                     fontFamily = FontFamily.Monospace,
@@ -3637,7 +3095,7 @@ private fun ChatGptMessageBubble(
                 )
             }
 
-            // Нижний ряд иконок действий 1:1 как в ChatGPT Android 1.2026.293 + скорость генерации ⚡ ток/с (Раздел 11.4)
+            // РќРёР¶РЅРёР№ СЂСЏРґ РёРєРѕРЅРѕРє РґРµР№СЃС‚РІРёР№ 1:1 РєР°Рє РІ ChatGPT Android 1.2026.293 + СЃРєРѕСЂРѕСЃС‚СЊ РіРµРЅРµСЂР°С†РёРё вљЎ С‚РѕРє/СЃ (Р Р°Р·РґРµР» 11.4)
             if (!message.isStreaming && message.content.isNotBlank()) {
                 val effectiveTps = if (message.tokensPerSecond > 0f) message.tokensPerSecond else 0f
                 val effectiveOutTokens = if (message.outputTokensCount > 0) message.outputTokensCount else (message.content.length / 4).coerceAtLeast(12)
@@ -3655,7 +3113,7 @@ private fun ChatGptMessageBubble(
                     ) {
                         Icon(
                             imageVector = if (copiedToast) Icons.Default.Check else Icons.Default.ContentCopy,
-                            contentDescription = "Копировать",
+                            contentDescription = "РљРѕРїРёСЂРѕРІР°С‚СЊ",
                             tint = if (copiedToast) Color(0xFF10A37F) else Color(0xFF9E9E9E),
                             modifier = Modifier
                                 .size(18.dp)
@@ -3667,7 +3125,7 @@ private fun ChatGptMessageBubble(
 
                         Icon(
                             imageVector = if (isSpeakingAloud) Icons.Default.StopCircle else Icons.AutoMirrored.Filled.VolumeUp,
-                            contentDescription = "Прочитать вслух",
+                            contentDescription = "РџСЂРѕС‡РёС‚Р°С‚СЊ РІСЃР»СѓС…",
                             tint = if (isSpeakingAloud) Color.White else Color(0xFF9E9E9E),
                             modifier = Modifier
                                 .size(19.dp)
@@ -3676,7 +3134,7 @@ private fun ChatGptMessageBubble(
 
                         Icon(
                             imageVector = Icons.Default.Share,
-                            contentDescription = "Поделиться",
+                            contentDescription = "РџРѕРґРµР»РёС‚СЊСЃСЏ",
                             tint = Color(0xFF9E9E9E),
                             modifier = Modifier
                                 .size(18.dp)
@@ -3685,7 +3143,7 @@ private fun ChatGptMessageBubble(
 
                         Icon(
                             imageVector = Icons.Default.MoreHoriz,
-                            contentDescription = "Другие действия",
+                            contentDescription = "Р”СЂСѓРіРёРµ РґРµР№СЃС‚РІРёСЏ",
                             tint = Color(0xFF9E9E9E),
                             modifier = Modifier
                                 .size(18.dp)
@@ -3694,7 +3152,7 @@ private fun ChatGptMessageBubble(
                     }
 
                     if (message.tokensPerSecond > 0f) Text(
-                        text = "${String.format(Locale.US, "%.1f", effectiveTps)} ток/с • $effectiveOutTokens ток.",
+                        text = "${String.format(Locale.US, "%.1f", effectiveTps)} С‚РѕРє/СЃ вЂў $effectiveOutTokens С‚РѕРє.",
                         color = Color(0xFF6B7280),
                         fontSize = 11.sp,
                         fontFamily = FontFamily.Monospace,
@@ -3707,7 +3165,7 @@ private fun ChatGptMessageBubble(
         }
     }
 
-    // Контекстное меню сообщения по долгому нажатию 1:1 как в ChatGPT Android 1.2026.293
+    // РљРѕРЅС‚РµРєСЃС‚РЅРѕРµ РјРµРЅСЋ СЃРѕРѕР±С‰РµРЅРёСЏ РїРѕ РґРѕР»РіРѕРјСѓ РЅР°Р¶Р°С‚РёСЋ 1:1 РєР°Рє РІ ChatGPT Android 1.2026.293
     if (showContextMenuSheet) {
         val contextSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ModalBottomSheet(
@@ -3724,7 +3182,7 @@ private fun ChatGptMessageBubble(
             ) {
                 MessageContextMenuRow(
                     icon = Icons.Default.ContentCopy,
-                    label = "Копировать",
+                    label = "РљРѕРїРёСЂРѕРІР°С‚СЊ",
                     onClick = {
                         clipboard.setText(AnnotatedString(message.content))
                         copiedToast = true
@@ -3732,19 +3190,19 @@ private fun ChatGptMessageBubble(
                     }
                 )
                 if (!isUser && !message.isStreaming) MessageContextMenuRow(
-                    icon = Icons.Default.SaveAlt, label = "Сохранить в библиотеку", onClick = {
+                    icon = Icons.Default.SaveAlt, label = "РЎРѕС…СЂР°РЅРёС‚СЊ РІ Р±РёР±Р»РёРѕС‚РµРєСѓ", onClick = {
                         onSaveToLibrary(); showContextMenuSheet = false
                     }
                 )
                 if (!message.isStreaming) MessageContextMenuRow(
-                    icon = Icons.Default.Edit, label = "Ветка в новом чате", onClick = {
+                    icon = Icons.Default.Edit, label = "Р’РµС‚РєР° РІ РЅРѕРІРѕРј С‡Р°С‚Рµ", onClick = {
                         showContextMenuSheet = false
                         onBranch()
                     }
                 )
                 MessageContextMenuRow(
                     icon = Icons.Default.SelectAll,
-                    label = "Выделить текст",
+                    label = "Р’С‹РґРµР»РёС‚СЊ С‚РµРєСЃС‚",
                     onClick = {
                         showContextMenuSheet = false
                         showSelectTextDialog = true
@@ -3752,7 +3210,7 @@ private fun ChatGptMessageBubble(
                 )
                 MessageContextMenuRow(
                     icon = Icons.AutoMirrored.Filled.VolumeUp,
-                    label = if (isSpeakingAloud) "Остановить озвучку" else "Прочитать вслух",
+                    label = if (isSpeakingAloud) "РћСЃС‚Р°РЅРѕРІРёС‚СЊ РѕР·РІСѓС‡РєСѓ" else "РџСЂРѕС‡РёС‚Р°С‚СЊ РІСЃР»СѓС…",
                     onClick = {
                         showContextMenuSheet = false
                         onSpeak()
@@ -3761,7 +3219,7 @@ private fun ChatGptMessageBubble(
                 if (isUser) {
                     MessageContextMenuRow(
                         icon = Icons.Default.Edit,
-                        label = "Редактировать сообщение",
+                        label = "Р РµРґР°РєС‚РёСЂРѕРІР°С‚СЊ СЃРѕРѕР±С‰РµРЅРёРµ",
                         onClick = {
                             showContextMenuSheet = false
                             isEditingPrompt = true
@@ -3770,7 +3228,7 @@ private fun ChatGptMessageBubble(
                 } else {
                     MessageContextMenuRow(
                         icon = Icons.Default.Refresh,
-                        label = "Повторить",
+                        label = "РџРѕРІС‚РѕСЂРёС‚СЊ",
                         onClick = {
                             showContextMenuSheet = false
                             onRegenerate()
@@ -3779,7 +3237,7 @@ private fun ChatGptMessageBubble(
                 }
                 MessageContextMenuRow(
                     icon = Icons.Default.SaveAlt,
-                    label = "Сохранить в файл на телефон",
+                    label = "РЎРѕС…СЂР°РЅРёС‚СЊ РІ С„Р°Р№Р» РЅР° С‚РµР»РµС„РѕРЅ",
                     onClick = {
                         showContextMenuSheet = false
                         onSaveToPhone(
@@ -3790,7 +3248,7 @@ private fun ChatGptMessageBubble(
                 )
                 MessageContextMenuRow(
                     icon = Icons.Default.Share,
-                    label = "Поделиться",
+                    label = "РџРѕРґРµР»РёС‚СЊСЃСЏ",
                     onClick = {
                         showContextMenuSheet = false
                         shareMessageText()
@@ -3801,7 +3259,7 @@ private fun ChatGptMessageBubble(
         }
     }
 
-    // Окно произвольного выделения текста (ChatGPT 1.2026.293 `0x7f130a7c Выделить текст`)
+    // РћРєРЅРѕ РїСЂРѕРёР·РІРѕР»СЊРЅРѕРіРѕ РІС‹РґРµР»РµРЅРёСЏ С‚РµРєСЃС‚Р° (ChatGPT 1.2026.293 `0x7f130a7c Р’С‹РґРµР»РёС‚СЊ С‚РµРєСЃС‚`)
     if (showSelectTextDialog) {
         Dialog(
             onDismissRequest = { showSelectTextDialog = false },
@@ -3822,13 +3280,13 @@ private fun ChatGptMessageBubble(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Выделить текст",
+                            text = "Р’С‹РґРµР»РёС‚СЊ С‚РµРєСЃС‚",
                             color = Color.White,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold
                         )
                         IconButton(onClick = { showSelectTextDialog = false }) {
-                            Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = Color.White)
+                            Icon(Icons.Default.Close, contentDescription = "Р—Р°РєСЂС‹С‚СЊ", tint = Color.White)
                         }
                     }
                     Spacer(modifier = Modifier.height(8.dp))
@@ -3933,22 +3391,22 @@ private fun ModelAndModeSelectorDialog(
                 .padding(horizontal = 20.dp, vertical = 6.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            // Заголовок и подзаголовок из строковых ресурсов ChatGPT 1.2026.293 (0x7f130fab, 0x7f130fa9)
+            // Р—Р°РіРѕР»РѕРІРѕРє Рё РїРѕРґР·Р°РіРѕР»РѕРІРѕРє РёР· СЃС‚СЂРѕРєРѕРІС‹С… СЂРµСЃСѓСЂСЃРѕРІ ChatGPT 1.2026.293 (0x7f130fab, 0x7f130fa9)
             Text(
-                text = "Выбрать модель",
+                text = "Р’С‹Р±СЂР°С‚СЊ РјРѕРґРµР»СЊ",
                 color = Color.White,
                 fontWeight = FontWeight.Bold,
                 fontSize = 19.sp
             )
             Text(
-                text = "Переключайтесь между рекомендуемыми нами моделями",
+                text = "РџРµСЂРµРєР»СЋС‡Р°Р№С‚РµСЃСЊ РјРµР¶РґСѓ СЂРµРєРѕРјРµРЅРґСѓРµРјС‹РјРё РЅР°РјРё РјРѕРґРµР»СЏРјРё",
                 color = Color(0xFF9E9E9E),
                 fontSize = 13.5.sp
             )
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // Переключатель среды выполнения в единой компактной капсуле ChatGPT
+            // РџРµСЂРµРєР»СЋС‡Р°С‚РµР»СЊ СЃСЂРµРґС‹ РІС‹РїРѕР»РЅРµРЅРёСЏ РІ РµРґРёРЅРѕР№ РєРѕРјРїР°РєС‚РЅРѕР№ РєР°РїСЃСѓР»Рµ ChatGPT
             Surface(
                 color = Color(0xFF2A2A2A),
                 shape = RoundedCornerShape(20.dp),
@@ -3963,9 +3421,9 @@ private fun ModelAndModeSelectorDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     val targets = listOf(
-                        AgentExecutionTarget.PC_REMOTE_SESSION to "Сессия ПК",
-                        AgentExecutionTarget.PHONE_LOCAL_RESOURCES to "Смартфон",
-                        AgentExecutionTarget.GOOGLE_WEB_CONSOLE to "Веб-консоль"
+                        AgentExecutionTarget.PC_REMOTE_SESSION to "РЎРµСЃСЃРёСЏ РџРљ",
+                        AgentExecutionTarget.PHONE_LOCAL_RESOURCES to "РЎРјР°СЂС‚С„РѕРЅ",
+                        AgentExecutionTarget.GOOGLE_WEB_CONSOLE to "Р’РµР±-РєРѕРЅСЃРѕР»СЊ"
                     )
                     targets.forEach { (target, shortLabel) ->
                         val isTargetSelected = settings.executionTarget == target
@@ -3993,7 +3451,7 @@ private fun ModelAndModeSelectorDialog(
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // Кнопка перехода в полный живой каталог OpenRouter (450+ моделей 2026: Фото, Видео, Reasoning, Vision)
+            // РљРЅРѕРїРєР° РїРµСЂРµС…РѕРґР° РІ РїРѕР»РЅС‹Р№ Р¶РёРІРѕР№ РєР°С‚Р°Р»РѕРі OpenRouter (450+ РјРѕРґРµР»РµР№ 2026: Р¤РѕС‚Рѕ, Р’РёРґРµРѕ, Reasoning, Vision)
             Surface(
                 color = Color(0xFF132238),
                 shape = RoundedCornerShape(14.dp),
@@ -4015,7 +3473,7 @@ private fun ModelAndModeSelectorDialog(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "Синхронизация openrouter.ai/api/v1/models • Фото, Видео, Reasoning, Free",
+                            text = "РЎРёРЅС…СЂРѕРЅРёР·Р°С†РёСЏ openrouter.ai/api/v1/models вЂў Р¤РѕС‚Рѕ, Р’РёРґРµРѕ, Reasoning, Free",
                             color = Color(0xFFA0B3C8),
                             fontSize = 11.8.sp
                         )
@@ -4025,7 +3483,7 @@ private fun ModelAndModeSelectorDialog(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Чистый список моделей без рамок 1:1 как в ChatGPT Android 1.2026.293
+            // Р§РёСЃС‚С‹Р№ СЃРїРёСЃРѕРє РјРѕРґРµР»РµР№ Р±РµР· СЂР°РјРѕРє 1:1 РєР°Рє РІ ChatGPT Android 1.2026.293
             modelsList.forEach { model ->
                 val selected = settings.selectedModelId == model.id
                 Surface(
@@ -4058,7 +3516,7 @@ private fun ModelAndModeSelectorDialog(
                             Spacer(modifier = Modifier.width(12.dp))
                             Icon(
                                 imageVector = Icons.Default.Check,
-                                contentDescription = "Выбрано",
+                                contentDescription = "Р’С‹Р±СЂР°РЅРѕ",
                                 tint = Color.White,
                                 modifier = Modifier.size(20.dp)
                             )

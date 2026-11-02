@@ -1429,7 +1429,9 @@ function callMcpToolViaRegistry(serverId, toolName, args, { signal, timeoutMs } 
 // pcMcpToolsExec → пустой набор (запрет доступа действует). Инструменты
 // смартфона в function-схемы не включаются — они выполняются только на
 // смартфоне (phone_action) и на ПК не перенаправляются.
-async function buildOpenRouterToolSet() {
+// Этап 6: allowServers — явный выбор подключений в разговоре (пусто/null —
+// все включённые).
+async function buildOpenRouterToolSet(allowServers = null) {
     const empty = { tools: [], nameToRef: new Map(), catalog: [], allowedRefs: new Set() };
     try {
         const perms = loadAiPermissionsConfig();
@@ -1458,7 +1460,9 @@ async function buildOpenRouterToolSet() {
             }
         }
         const catalog = extensionRuntime.buildToolCatalog({ mcpServers: liveServers, includePhoneTools: false });
-        const { allowed } = extensionRuntime.filterAllowedTools(catalog, { allowAllPc: true });
+        const { allowed } = (Array.isArray(allowServers) && allowServers.length > 0)
+            ? extensionRuntime.filterAllowedTools(catalog, { allowServers })
+            : extensionRuntime.filterAllowedTools(catalog, { allowAllPc: true });
         const { tools, nameToRef } = extensionRuntime.toOpenAiToolSchemas(allowed);
         return { tools, nameToRef, catalog, allowedRefs: new Set(allowed.map(t => t.ref)) };
     } catch (_) {
@@ -3929,9 +3933,12 @@ async function executeOpenRouterStreamingTurn(options, onEvent = () => {}) {
             }
             messagesPayload.push({ role: 'user', content: cleanUserPrompt });
 
-            // Этап 4: реальные схемы разрешённых инструментов (живой tools/list
+            // Этап 4/6: реальные схемы разрешённых инструментов (живой tools/list
             // реестра) и цикл вызовов с возвратом результатов в тот же цикл.
-            const toolSet = await buildOpenRouterToolSet();
+            // Этап 6: mcpConnections — явный выбор подключений для этого хода.
+            const toolSet = await buildOpenRouterToolSet(
+                Array.isArray(options.mcpConnections) && options.mcpConnections.length > 0 ? options.mcpConnections : null
+            );
             let lastUsage = null;
             const orRequest = (msgs, toolSchemas) => new Promise((resolve, reject) => {
                 const payload = {
@@ -5578,6 +5585,8 @@ const server = http.createServer(async (req, res) => {
                 const voiceMode = Boolean(payload.voiceMode);
                 const attachments = Array.isArray(payload.attachments) ? payload.attachments : [];
                 const clientHistory = Array.isArray(payload.history) ? payload.history : [];
+                // Этап 6: выбор подключений MCP в разговоре (пусто — все включённые).
+                const mcpConnections = Array.isArray(payload.mcpConnections) ? payload.mcpConnections.map(String) : [];
                 const wantsStream = urlObj.pathname === '/api/chat/stream' ||
                     payload.stream === true ||
                     (req.headers.accept || '').includes('text/event-stream') ||
@@ -5598,7 +5607,8 @@ const server = http.createServer(async (req, res) => {
                     phoneToolObservation,
                     phoneStepIndex,
                     voiceMode,
-                    attachments
+                    attachments,
+                    mcpConnections
                 };
 
                 if (wantsStream) {

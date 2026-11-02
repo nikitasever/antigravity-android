@@ -30,6 +30,7 @@ import com.google.antigravity.model.GoogleAccountProfile
 import com.google.antigravity.model.GoogleDriveFileItem
 import com.google.antigravity.model.GoogleDriveStatus
 import com.google.antigravity.model.InstalledPluginItem
+import com.google.antigravity.model.ExtensionCatalogItem
 import com.google.antigravity.model.readAttachmentBytes
 import com.google.antigravity.model.mergeRemoteChatHistory
 import com.google.antigravity.model.chatHistoryForModel
@@ -476,6 +477,15 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     val mcpToolResult: StateFlow<String?> = _mcpToolResult.asStateFlow()
     private val _isMcpToolCallRunning = MutableStateFlow(false)
     val isMcpToolCallRunning: StateFlow<Boolean> = _isMcpToolCallRunning.asStateFlow()
+
+    // Этап 6: каталог расширений (матрица адаптеров) — наблюдения источников,
+    // не показываются работающими.
+    private val _extensionCatalog = MutableStateFlow<List<ExtensionCatalogItem>>(emptyList())
+    val extensionCatalog: StateFlow<List<ExtensionCatalogItem>> = _extensionCatalog.asStateFlow()
+
+    // Этап 6: выбор подключений MCP в разговоре (пусто — все включённые).
+    private val _selectedMcpConnections = MutableStateFlow<Set<String>>(emptySet())
+    val selectedMcpConnections: StateFlow<Set<String>> = _selectedMcpConnections.asStateFlow()
 
     private val _extensionsError = MutableStateFlow<String?>(null)
     val extensionsError: StateFlow<String?> = _extensionsError.asStateFlow()
@@ -1552,12 +1562,51 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
             val (plugins, pErr) = backendClient.fetchPlugins(url)
             val (skills, sErr) = backendClient.fetchSkills(url)
             val (mcps, mErr) = backendClient.fetchMcpServers(url)
+            val (catalog, cErr) = backendClient.fetchExtensionCatalog(url)
 
             if (plugins.isNotEmpty() || pErr == null) _installedPlugins.value = plugins
             if (skills.isNotEmpty() || sErr == null) _installedSkills.value = skills
             if (mcps.isNotEmpty() || mErr == null) _mcpServers.value = mcps
+            if (catalog.isNotEmpty() || cErr == null) _extensionCatalog.value = catalog
 
-            _extensionsError.value = pErr ?: sErr ?: mErr
+            _extensionsError.value = pErr ?: sErr ?: mErr ?: cErr
+            _isExtensionsLoading.value = false
+        }
+    }
+
+    /**
+     * Этап 6: выбор подключений MCP для разговора. Пустой набор — работают все
+     * включённые; непустой — только выбранные (реальный allowlist в запросе).
+     */
+    fun toggleMcpConnectionSelected(id: String) {
+        _selectedMcpConnections.update { current ->
+            if (current.contains(id)) current - id else current + id
+        }
+    }
+
+    fun clearMcpConnectionSelection() {
+        _selectedMcpConnections.value = emptySet()
+    }
+
+    /**
+     * Этап 6: установка позиции каталога. Только проверенный локальный источник
+     * (installPath); облачные карточки каталога установку не имитируют.
+     */
+    fun installCatalogExtension(item: ExtensionCatalogItem) {
+        if (!item.installable || item.installPath.isBlank()) {
+            _extensionsError.value = "Установка недоступна: у позиции «${item.name}» нет проверенного переносимого источника."
+            return
+        }
+        viewModelScope.launch {
+            _isExtensionsLoading.value = true
+            val (updated, err) = backendClient.managePlugin(
+                pcBridgeUrl = _settings.value.pcBridgeUrl,
+                action = "install",
+                idOrName = item.installPath,
+                enabled = true
+            )
+            if (updated.isNotEmpty()) _installedPlugins.value = updated
+            _extensionsError.value = err
             _isExtensionsLoading.value = false
         }
     }
@@ -1610,6 +1659,32 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                 idOrName = id
             )
             _installedPlugins.value = updated
+            _extensionsError.value = err
+            _isExtensionsLoading.value = false
+        }
+    }
+
+    /**
+     * Этап 6: «обновить». Честный путь есть только у пакетов с источником URL
+     * (переустановка с источника); для локальных — явное сообщение, не фейковое
+     * обновление.
+     */
+    fun updatePluginOnPc(id: String) {
+        val current = _installedPlugins.value.firstOrNull { it.id == id } ?: return
+        val source = current.source.trim()
+        if (!source.startsWith("http://") && !source.startsWith("https://")) {
+            _extensionsError.value = "Обновление недоступно: у пакета «${current.name}» нет источника URL (локальный пакет)."
+            return
+        }
+        viewModelScope.launch {
+            _isExtensionsLoading.value = true
+            val (updated, err) = backendClient.managePlugin(
+                pcBridgeUrl = _settings.value.pcBridgeUrl,
+                action = "install",
+                idOrName = source,
+                enabled = current.enabled
+            )
+            if (updated.isNotEmpty()) _installedPlugins.value = updated
             _extensionsError.value = err
             _isExtensionsLoading.value = false
         }
@@ -2894,6 +2969,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                     openRouterApiKey = _openRouterApiKey.value,
                     extraPhoneContext = combinedExtraContext,
                     transientChat = _temporaryChatActive.value,
+                    mcpConnections = _selectedMcpConnections.value.toList(),
                     onStreamingUpdate = { update ->
                         if (turnRevision != generationRevision) return@executeAgentTurn
                         if (update.tokensPerSecond > 0f) {

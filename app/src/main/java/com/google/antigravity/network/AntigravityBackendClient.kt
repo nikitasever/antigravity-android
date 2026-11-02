@@ -12,7 +12,10 @@ import com.google.antigravity.model.AttachedFileItem
 import com.google.antigravity.model.ChatLibrary
 import com.google.antigravity.model.ChatLibraryPreferences
 import com.google.antigravity.model.ChatMessage
+import com.google.antigravity.model.ComponentAdapterRecord
 import com.google.antigravity.model.ContextWindowStatus
+import com.google.antigravity.model.ExtensionCatalogItem
+import com.google.antigravity.model.ExtensionComposition
 import com.google.antigravity.model.FileDiffItem
 import com.google.antigravity.model.GeneratedMediaAttachment
 import com.google.antigravity.model.GoogleDriveFileItem
@@ -654,11 +657,31 @@ class AntigravityBackendClient(
                     enabled = obj.optBoolean("enabled", true),
                     version = obj.optString("version", "1.0.0"),
                     source = obj.optString("source", "agy"),
-                    path = obj.optString("path", "")
+                    path = obj.optString("path", ""),
+                    composition = parseComposition(obj.optJSONObject("composition"))
                 )
             )
         }
         return out
+    }
+
+    /**
+     * Этап 6: каталог расширений из матрицы адаптеров (GET /api/extensions/adapters).
+     * Позиции каталога — наблюдения источников и НЕ показываются работающими.
+     */
+    suspend fun fetchExtensionCatalog(pcBridgeUrl: String): Pair<List<ExtensionCatalogItem>, String?> = withContext(Dispatchers.IO) {
+        val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext emptyList<ExtensionCatalogItem>() to "Мост ПК недоступен"
+        try {
+            val req = Request.Builder().url("$base/api/extensions/adapters").get().build()
+            clientForUrl(base).newCall(req).useCancellable { resp ->
+                if (!resp.isSuccessful) return@withContext emptyList<ExtensionCatalogItem>() to "Ошибка HTTP ${resp.code}"
+                val json = JSONObject(resp.body?.string() ?: "{}")
+                return@withContext parseExtensionCatalog(json) to null
+            }
+        } catch (e: Throwable) {
+            if (e is kotlinx.coroutines.CancellationException) throw e;
+            emptyList<ExtensionCatalogItem>() to e.localizedMessage
+        }
     }
 
     suspend fun fetchSkills(pcBridgeUrl: String): Pair<List<PcSkillItem>, String?> = withContext(Dispatchers.IO) {
@@ -1805,6 +1828,8 @@ class AntigravityBackendClient(
         openRouterApiKey: String = "",
         extraPhoneContext: String = "",
         transientChat: Boolean = false,
+        /** Этап 6: выбор подключений MCP в разговоре (пусто — все включённые). */
+        mcpConnections: List<String> = emptyList(),
         onStreamingUpdate: suspend (StreamingTurnUpdate) -> Unit = {}
     ): AgentTurnResult = withContext(Dispatchers.IO) {
         val turnStartMs = System.currentTimeMillis()
@@ -1879,6 +1904,7 @@ class AntigravityBackendClient(
                 phoneToolObservation = accumulatedObservations.toString(),
                 phoneStepIndex = stepIndex,
                 transientChat = transientChat,
+                mcpConnections = mcpConnections,
                 onUpdate = { stepUpdate ->
                     if (stepUpdate.tokensPerSecond > 0f) latestTokensPerSecond = stepUpdate.tokensPerSecond
                     if (stepUpdate.outputTokensCount > 0) latestOutputTokensCount = stepUpdate.outputTokensCount
@@ -2529,6 +2555,8 @@ class AntigravityBackendClient(
         phoneToolObservation: String,
         phoneStepIndex: Int,
         transientChat: Boolean = false,
+        /** Этап 6: выбор подключений MCP в разговоре (пусто — все включённые). */
+        mcpConnections: List<String> = emptyList(),
         onUpdate: suspend (StreamingTurnUpdate) -> Unit
     ): PcBridgeChatResponse? {
         val cleanUrl = pcBridgeUrl.trim()
@@ -2574,6 +2602,10 @@ class AntigravityBackendClient(
             put("phoneToolObservation", phoneToolObservation)
             put("phoneStepIndex", phoneStepIndex)
             put("stream", true)
+            // Этап 6: явный выбор подключений для этого хода (пусто — без ограничения).
+            if (mcpConnections.isNotEmpty()) {
+                put("mcpConnections", JSONArray(mcpConnections))
+            }
         }.toString()
 
         val verifiedBase = resolveWorkingBaseUrl(pcBridgeUrl)
@@ -3032,5 +3064,95 @@ internal fun sanitizeStoragePathsInMarkdown(markdown: String, userPrompt: String
         val idx = match.groupValues[1].toIntOrNull() ?: return@replace match.value
         preservedUris.getOrElse(idx) { match.value }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Этап 5/6: парсеры данных расширений (состав плагинов и каталог адаптеров).
+// Вынесены на уровень файла, чтобы юнит-тесты проверяли реальный разбор JSON
+// моста без запуска сети (см. ExtensionDataParsersTest).
+// ---------------------------------------------------------------------------
+
+/** Этап 5/6: состав плагина — проверенный путь компонентов либо блокер. */
+internal fun parseComposition(obj: JSONObject?): ExtensionComposition {
+    if (obj == null) return ExtensionComposition()
+    val recordsArr = obj.optJSONArray("records")
+    val records = mutableListOf<ComponentAdapterRecord>()
+    if (recordsArr != null) {
+        for (i in 0 until recordsArr.length()) {
+            val r = recordsArr.optJSONObject(i) ?: continue
+            records.add(
+                ComponentAdapterRecord(
+                    componentType = r.optString("componentType", "unknown"),
+                    strategy = r.optString("strategy", "preserve"),
+                    status = r.optString("status", "requires-check"),
+                    blocker = r.optString("blocker", ""),
+                    verification = r.optString("verification", "")
+                )
+            )
+        }
+    }
+    val blockersArr = obj.optJSONArray("blockers")
+    val blockers = mutableListOf<String>()
+    if (blockersArr != null) {
+        for (i in 0 until blockersArr.length()) {
+            val b = blockersArr.optJSONObject(i)
+            blockers.add(b?.optString("reason", "") ?: "")
+        }
+    }
+    val license = obj.optJSONObject("license")
+    return ExtensionComposition(
+        supportStatus = obj.optString("supportStatus", "unknown"),
+        fullSupportAllowed = obj.optBoolean("fullSupportAllowed", false),
+        records = records,
+        licenseRight = license?.optString("rightToRedistribute", "unknown") ?: "unknown",
+        licenseNote = license?.optString("note", "") ?: "",
+        blockers = blockers.filter { it.isNotBlank() }
+    )
+}
+
+/** Этап 6: каталог расширений из матрицы адаптеров (/api/extensions/adapters). */
+internal fun parseExtensionCatalog(json: JSONObject): List<ExtensionCatalogItem> {
+    val matrix = json.optJSONObject("matrix") ?: return emptyList()
+    val positions = matrix.optJSONArray("positions") ?: return emptyList()
+    val out = mutableListOf<ExtensionCatalogItem>()
+    for (i in 0 until positions.length()) {
+        val p = positions.optJSONObject(i) ?: continue
+        val types = p.optJSONArray("componentTypes")
+        val category = if (types != null && types.length() > 0) types.getString(0) else "прочее"
+        val blockersArr = p.optJSONArray("blockers")
+        val blockerText = buildString {
+            if (blockersArr != null) {
+                for (j in 0 until blockersArr.length()) {
+                    val b = blockersArr.optJSONObject(j) ?: continue
+                    val reason = b.optString("reason", "")
+                    if (reason.isNotBlank()) {
+                        if (isNotEmpty()) append("; ")
+                        append(reason)
+                    }
+                }
+            }
+        }
+        val license = p.optJSONObject("licenseCheck")
+        val importPath = p.optString("importPath", "")
+        val availability = p.optString("availability", "unknown")
+        // Локальный источник = продукт Antigravity (реальное значение из
+        // инвентаря: «Antigravity / Gemini CLI (локальная установка)»).
+        val localSource = p.optString("sourceProduct", "").startsWith("Antigravity")
+        out.add(
+            ExtensionCatalogItem(
+                id = p.optString("id", "pos_$i"),
+                name = p.optString("name", "Позиция"),
+                sourceProduct = p.optString("sourceProduct", "не записано"),
+                category = category,
+                availability = availability,
+                compatibility = p.optString("supportStatus", "requires-check"),
+                blocker = blockerText,
+                licenseNote = license?.optString("note", "") ?: "",
+                installable = localSource && (availability == "installed" || availability == "imported") && importPath.isNotBlank(),
+                installPath = importPath
+            )
+        )
+    }
+    return out
 }
 

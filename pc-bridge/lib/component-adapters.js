@@ -474,6 +474,7 @@ function buildAdapterMatrix(inventory, { pluginAnalyses = [] } = {}) {
             sourceProduct: p.sourceProduct,
             availability: p.availability,
             executionTargets: p.executionTargets || null,
+            importPath: p.importPath || '',
             componentTypes,
             records,
             licenseCheck,

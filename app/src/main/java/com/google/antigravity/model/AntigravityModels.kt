@@ -106,7 +106,57 @@ data class InstalledPluginItem(
     val enabled: Boolean = true,
     val version: String = "1.0.0",
     val source: String = "antigravity",
-    val path: String = ""
+    val path: String = "",
+    /** Этап 5/6: проверенный путь компонентов либо конкретный блокер. */
+    val composition: ExtensionComposition = ExtensionComposition()
+)
+
+/**
+ * Запись адаптера компонента (Этап 5, `composition.records` в /api/plugins):
+ * стратегия preserve/convert/own-executor и статус verified/blocked/
+ * requires-check/not-applicable с конкретным блокером.
+ */
+data class ComponentAdapterRecord(
+    val componentType: String,
+    val strategy: String = "preserve",
+    val status: String = "requires-check",
+    val blocker: String = "",
+    val verification: String = ""
+)
+
+/**
+ * Состав пакета расширения: «у каждого компонента есть проверенный путь
+ * исполнения либо конкретный блокер»; «полностью» — только при проверенном
+ * составе И праве переиспользования/распространения.
+ */
+data class ExtensionComposition(
+    val supportStatus: String = "unknown",
+    val fullSupportAllowed: Boolean = false,
+    val records: List<ComponentAdapterRecord> = emptyList(),
+    val licenseRight: String = "unknown",
+    val licenseNote: String = "",
+    val blockers: List<String> = emptyList()
+)
+
+/**
+ * Позиция каталога расширений (инвентарь Этапа 0 / матрица Этапа 5).
+ * Каталог — наблюдения источников: не показываются работающими.
+ */
+data class ExtensionCatalogItem(
+    val id: String,
+    val name: String,
+    /** Источник (продукт-источник позиции). */
+    val sourceProduct: String,
+    /** Категория (первый тип компонента позиции). */
+    val category: String,
+    val availability: String = "unknown",
+    /** Совместимость: supportStatus матрицы адаптеров. */
+    val compatibility: String = "requires-check",
+    val blocker: String = "",
+    val licenseNote: String = "",
+    /** Устанавливается только из локального проверенного источника. */
+    val installable: Boolean = false,
+    val installPath: String = ""
 )
 
 data class PcSkillItem(

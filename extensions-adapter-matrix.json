@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "title": "Матрица адаптеров компонентов (Этап 5)",
-  "generatedAt": "2026-11-02T13:30:03.258Z",
+  "generatedAt": "2026-11-02T14:12:33.393Z",
   "strategies": {
     "PRESERVE": "preserve",
     "CONVERT": "convert",
@@ -385,6 +385,7 @@
       "sourceProduct": "claude.ai (web)",
       "availability": "visible",
       "executionTargets": "облако Anthropic; в Antigravity не подключено",
+      "importPath": "n/a",
       "componentTypes": [
         "catalog-tab"
       ],
@@ -416,6 +417,7 @@
       "sourceProduct": "claude.ai (web)",
       "availability": "visible",
       "executionTargets": "облако Anthropic; в Antigravity не подключено",
+      "importPath": "n/a",
       "componentTypes": [
         "catalog-tab"
       ],
@@ -447,6 +449,7 @@
       "sourceProduct": "claude.ai (web)",
       "availability": "visible",
       "executionTargets": "облако Anthropic; в Antigravity не подключено",
+      "importPath": "n/a",
       "componentTypes": [
         "catalog-tab"
       ],
@@ -478,6 +481,7 @@
       "sourceProduct": "claude.ai (web)",
       "availability": "visible",
       "executionTargets": "не проверено (ожидаемо сервер поставщика/облако Anthropic)",
+      "importPath": "n/a",
       "componentTypes": [
         "catalog-card"
       ],
@@ -509,6 +513,7 @@
       "sourceProduct": "claude.ai (web)",
       "availability": "visible",
       "executionTargets": "не проверено",
+      "importPath": "n/a",
       "componentTypes": [
         "catalog-card"
       ],
@@ -540,6 +545,7 @@
       "sourceProduct": "claude.ai (web)",
       "availability": "visible",
       "executionTargets": "не проверено",
+      "importPath": "n/a",
       "componentTypes": [
         "catalog-card"
       ],
@@ -571,6 +577,7 @@
       "sourceProduct": "claude.ai (web)",
       "availability": "visible",
       "executionTargets": "не проверено",
+      "importPath": "n/a",
       "componentTypes": [
         "catalog-card"
       ],
@@ -602,6 +609,7 @@
       "sourceProduct": "claude.ai (web)",
       "availability": "visible",
       "executionTargets": "не проверено",
+      "importPath": "n/a",
       "componentTypes": [
         "catalog-card"
       ],
@@ -633,6 +641,7 @@
       "sourceProduct": "claude.ai (web)",
       "availability": "visible",
       "executionTargets": "не проверено",
+      "importPath": "n/a",
       "componentTypes": [
         "catalog-card"
       ],
@@ -664,6 +673,7 @@
       "sourceProduct": "claude.ai (web)",
       "availability": "visible",
       "executionTargets": "не проверено",
+      "importPath": "n/a",
       "componentTypes": [
         "catalog-card"
       ],
@@ -695,6 +705,7 @@
       "sourceProduct": "claude.ai (web)",
       "availability": "visible",
       "executionTargets": "не проверено",
+      "importPath": "n/a",
       "componentTypes": [
         "catalog-card"
       ],
@@ -726,6 +737,7 @@
       "sourceProduct": "claude.ai (web)",
       "availability": "visible",
       "executionTargets": "не проверено",
+      "importPath": "n/a",
       "componentTypes": [
         "catalog-card"
       ],
@@ -757,6 +769,7 @@
       "sourceProduct": "claude.ai (web)",
       "availability": "visible",
       "executionTargets": "не проверено",
+      "importPath": "n/a",
       "componentTypes": [
         "catalog-card"
       ],
@@ -788,6 +801,7 @@
       "sourceProduct": "claude.ai (web)",
       "availability": "visible",
       "executionTargets": "не проверено",
+      "importPath": "n/a",
       "componentTypes": [
         "catalog-card"
       ],
@@ -819,6 +833,7 @@
       "sourceProduct": "claude.ai (web)",
       "availability": "visible",
       "executionTargets": "не проверено",
+      "importPath": "n/a",
       "componentTypes": [
         "catalog-card"
       ],
@@ -850,6 +865,7 @@
       "sourceProduct": "claude.ai (web)",
       "availability": "visible",
       "executionTargets": "облако Anthropic",
+      "importPath": "n/a",
       "componentTypes": [
         "entry-point"
       ],
@@ -881,6 +897,7 @@
       "sourceProduct": "claude.ai (web)",
       "availability": "visible",
       "executionTargets": "облако Anthropic",
+      "importPath": "n/a",
       "componentTypes": [
         "entry-point"
       ],
@@ -912,6 +929,7 @@
       "sourceProduct": "claude.ai (web)",
       "availability": "visible",
       "executionTargets": "облако Anthropic",
+      "importPath": "n/a",
       "componentTypes": [
         "entry-point"
       ],
@@ -943,6 +961,7 @@
       "sourceProduct": "claude.ai (web)",
       "availability": "visible",
       "executionTargets": "облако Anthropic",
+      "importPath": "n/a",
       "componentTypes": [
         "entry-point"
       ],
@@ -974,6 +993,7 @@
       "sourceProduct": "claude.ai (web)",
       "availability": "visible",
       "executionTargets": "не проверено",
+      "importPath": "n/a",
       "componentTypes": [
         "entry-point"
       ],
@@ -1005,6 +1025,7 @@
       "sourceProduct": "claude.ai (web)",
       "availability": "builtin",
       "executionTargets": "облако Anthropic",
+      "importPath": "n/a",
       "componentTypes": [
         "builtin-toggle"
       ],
@@ -1036,6 +1057,7 @@
       "sourceProduct": "claude.ai (web)",
       "availability": "builtin",
       "executionTargets": "облако Anthropic",
+      "importPath": "n/a",
       "componentTypes": [
         "builtin-toggle"
       ],
@@ -1067,6 +1089,7 @@
       "sourceProduct": "claude.ai (web)",
       "availability": "unknown",
       "executionTargets": "облако Anthropic",
+      "importPath": "n/a",
       "componentTypes": [
         "surface"
       ],
@@ -1098,6 +1121,7 @@
       "sourceProduct": "claude.ai (web)",
       "availability": "subscription-gated",
       "executionTargets": "облако Anthropic",
+      "importPath": "n/a",
       "componentTypes": [
         "entry-point"
       ],
@@ -1129,6 +1153,7 @@
       "sourceProduct": "Claude for Android 1.261029.20",
       "availability": "unknown",
       "executionTargets": "Android-клиент Claude ↔ сервер поставщика; в Antigravity не подключено",
+      "importPath": "n/a",
       "componentTypes": [
         "connector"
       ],
@@ -1165,6 +1190,7 @@
       "sourceProduct": "Claude for Android 1.261029.20",
       "availability": "unknown",
       "executionTargets": "облако Anthropic",
+      "importPath": "n/a",
       "componentTypes": [
         "catalog-page"
       ],
@@ -1196,6 +1222,7 @@
       "sourceProduct": "Claude for Android 1.261029.20",
       "availability": "unknown",
       "executionTargets": "Android-клиент/облако Anthropic; в Antigravity не подключено",
+      "importPath": "n/a",
       "componentTypes": [
         "skill"
       ],
@@ -1227,6 +1254,7 @@
       "sourceProduct": "Claude for Android 1.261029.20",
       "availability": "unknown",
       "executionTargets": "Android-клиент ↔ удалённый сервер; в Antigravity не подключено",
+      "importPath": "n/a",
       "componentTypes": [
         "mcp-server"
       ],
@@ -1258,6 +1286,7 @@
       "sourceProduct": "Claude for Android 1.261029.20",
       "availability": "unknown",
       "executionTargets": "неизвестно",
+      "importPath": "n/a",
       "componentTypes": [
         "plugin"
       ],
@@ -1294,6 +1323,7 @@
       "sourceProduct": "Claude for Android 1.261029.20",
       "availability": "unknown",
       "executionTargets": "Android-клиент ↔ сервис Figma",
+      "importPath": "n/a",
       "componentTypes": [
         "connector"
       ],
@@ -1330,6 +1360,7 @@
       "sourceProduct": "Claude for Android 1.261029.20",
       "availability": "unknown",
       "executionTargets": "облако Claude + GitHub; облачные сессии",
+      "importPath": "n/a",
       "componentTypes": [
         "connector"
       ],
@@ -1366,6 +1397,7 @@
       "sourceProduct": "Claude for Android 1.261029.20",
       "availability": "unknown",
       "executionTargets": "Android-клиент (локальные календари)",
+      "importPath": "n/a",
       "componentTypes": [
         "connector"
       ],
@@ -1402,6 +1434,7 @@
       "sourceProduct": "Claude for Android 1.261029.20",
       "availability": "unknown",
       "executionTargets": "не проверено",
+      "importPath": "n/a",
       "componentTypes": [
         "connector"
       ],
@@ -1438,6 +1471,7 @@
       "sourceProduct": "Claude for Android 1.261029.20",
       "availability": "unknown",
       "executionTargets": "Android-клиент",
+      "importPath": "n/a",
       "componentTypes": [
         "settings-facet"
       ],
@@ -1469,6 +1503,7 @@
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "availability": "unknown",
       "executionTargets": "облако OpenAI; в Antigravity не подключено",
+      "importPath": "n/a",
       "componentTypes": [
         "catalog-page"
       ],
@@ -1500,6 +1535,7 @@
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "availability": "unknown",
       "executionTargets": "облако OpenAI",
+      "importPath": "n/a",
       "componentTypes": [
         "catalog-category"
       ],
@@ -1531,6 +1567,7 @@
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "availability": "unknown",
       "executionTargets": "облако OpenAI",
+      "importPath": "n/a",
       "componentTypes": [
         "catalog-category"
       ],
@@ -1562,6 +1599,7 @@
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "availability": "unknown",
       "executionTargets": "облако OpenAI",
+      "importPath": "n/a",
       "componentTypes": [
         "catalog-category"
       ],
@@ -1593,6 +1631,7 @@
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "availability": "unknown",
       "executionTargets": "облако OpenAI",
+      "importPath": "n/a",
       "componentTypes": [
         "catalog-category"
       ],
@@ -1624,6 +1663,7 @@
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "availability": "unknown",
       "executionTargets": "облако OpenAI",
+      "importPath": "n/a",
       "componentTypes": [
         "catalog-category"
       ],
@@ -1655,6 +1695,7 @@
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "availability": "unknown",
       "executionTargets": "облако OpenAI",
+      "importPath": "n/a",
       "componentTypes": [
         "catalog-category"
       ],
@@ -1686,6 +1727,7 @@
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "availability": "unknown",
       "executionTargets": "облако OpenAI",
+      "importPath": "n/a",
       "componentTypes": [
         "catalog-view"
       ],
@@ -1717,6 +1759,7 @@
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "availability": "unknown",
       "executionTargets": "облако OpenAI",
+      "importPath": "n/a",
       "componentTypes": [
         "catalog-detail"
       ],
@@ -1748,6 +1791,7 @@
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "availability": "unknown",
       "executionTargets": "облако OpenAI",
+      "importPath": "n/a",
       "componentTypes": [
         "permission-model"
       ],
@@ -1779,6 +1823,7 @@
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "availability": "unknown",
       "executionTargets": "облако OpenAI",
+      "importPath": "n/a",
       "componentTypes": [
         "management"
       ],
@@ -1810,6 +1855,7 @@
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "availability": "unknown",
       "executionTargets": "облако OpenAI ↔ внешние сервисы",
+      "importPath": "n/a",
       "componentTypes": [
         "app"
       ],
@@ -1846,6 +1892,7 @@
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "availability": "unknown",
       "executionTargets": "облако OpenAI; формат файлов не подтверждён как SKILL.md",
+      "importPath": "n/a",
       "componentTypes": [
         "skill"
       ],
@@ -1877,6 +1924,7 @@
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "availability": "unknown",
       "executionTargets": "облако OpenAI ↔ сервисы поставщиков; в Antigravity не подключено",
+      "importPath": "n/a",
       "componentTypes": [
         "connector"
       ],
@@ -1913,6 +1961,7 @@
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "availability": "unknown",
       "executionTargets": "облако OpenAI ↔ Gmail API; в Antigravity не подключено",
+      "importPath": "n/a",
       "componentTypes": [
         "connector"
       ],
@@ -1949,6 +1998,7 @@
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "availability": "unknown",
       "executionTargets": "облако OpenAI ↔ Calendar; в Antigravity не подключено",
+      "importPath": "n/a",
       "componentTypes": [
         "connector"
       ],
@@ -1985,6 +2035,7 @@
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "availability": "unknown",
       "executionTargets": "облако OpenAI ↔ Outlook; в Antigravity не подключено",
+      "importPath": "n/a",
       "componentTypes": [
         "connector"
       ],
@@ -2021,6 +2072,7 @@
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "availability": "unknown",
       "executionTargets": "облако OpenAI ↔ облачный браузер; в Antigravity не подключено",
+      "importPath": "n/a",
       "componentTypes": [
         "connector"
       ],
@@ -2057,6 +2109,7 @@
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "availability": "unknown",
       "executionTargets": "облако OpenAI ↔ хранилища; в Antigravity не подключено",
+      "importPath": "n/a",
       "componentTypes": [
         "connector"
       ],
@@ -2093,6 +2146,7 @@
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "availability": "unknown",
       "executionTargets": "облако OpenAI; в Antigravity не подключено",
+      "importPath": "n/a",
       "componentTypes": [
         "gpt"
       ],
@@ -2129,6 +2183,7 @@
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "availability": "unknown",
       "executionTargets": "облако OpenAI ↔ поставщик данных; в Antigravity не подключено",
+      "importPath": "n/a",
       "componentTypes": [
         "connector"
       ],
@@ -2165,6 +2220,7 @@
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "availability": "unknown",
       "executionTargets": "облако OpenAI",
+      "importPath": "n/a",
       "componentTypes": [
         "availability-facet"
       ],
@@ -2196,6 +2252,7 @@
       "sourceProduct": "Codex (Remote), в составе APK ChatGPT",
       "availability": "unknown",
       "executionTargets": "удалённая Codex-сессия; в Antigravity не подключено",
+      "importPath": "n/a",
       "componentTypes": [
         "plugin"
       ],
@@ -2232,6 +2289,7 @@
       "sourceProduct": "Codex (bundled plugin), ассеты в проекте",
       "availability": "imported",
       "executionTargets": "Android host грузит файлы и рендерит в opaque iframe (по README)",
+      "importPath": "app/src/main/assets/spaces/{README.md,visualize.html,visualize.css}",
       "componentTypes": [
         "skill-assets"
       ],
@@ -2268,6 +2326,7 @@
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "availability": "installed",
       "executionTargets": "PC (корень ~/.gemini/config/skills читает listSkills); телефонный цикл не подтверждён",
+      "importPath": "C:\\Users\\st811210\\.gemini\\config\\skills\\autonomous-software-engineer",
       "componentTypes": [
         "skill"
       ],
@@ -2299,6 +2358,7 @@
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "availability": "installed",
       "executionTargets": "PC (корень ~/.gemini/config/skills); телефонный цикл не подтверждён",
+      "importPath": "C:\\Users\\st811210\\.gemini\\config\\skills\\reverse-engineer-anything",
       "componentTypes": [
         "skill"
       ],
@@ -2330,6 +2390,7 @@
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "availability": "installed",
       "executionTargets": "PC (корень ~/.gemini/config/skills)",
+      "importPath": "C:\\Users\\st811210\\.gemini\\config\\skills\\rigorous-programming-reasoner",
       "componentTypes": [
         "skill"
       ],
@@ -2361,6 +2422,7 @@
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "availability": "installed",
       "executionTargets": "PC",
+      "importPath": "C:\\Users\\st811210\\.gemini\\config\\skills\\rigorous-programming-reasoner\\SKILL.md.disabled",
       "componentTypes": [
         "skill"
       ],
@@ -2392,6 +2454,7 @@
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "availability": "installed",
       "executionTargets": "PC (сквозной сценарий уже выполнялся: audit_matrix.md, verification.md)",
+      "importPath": "C:\\Users\\st811210\\.gemini\\config\\skills\\workstation-diagnostics",
       "componentTypes": [
         "skill"
       ],
@@ -2423,6 +2486,7 @@
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "availability": "installed",
       "executionTargets": "PC (builtin-корень читает listSkills)",
+      "importPath": "C:\\Users\\st811210\\.gemini\\antigravity\\builtin\\skills\\agy-customizations",
       "componentTypes": [
         "skill"
       ],
@@ -2454,6 +2518,7 @@
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "availability": "installed",
       "executionTargets": "PC",
+      "importPath": "C:\\Users\\st811210\\.gemini\\antigravity\\builtin\\skills\\antigravity_guide",
       "componentTypes": [
         "skill"
       ],
@@ -2485,6 +2550,7 @@
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "availability": "installed",
       "executionTargets": "PC",
+      "importPath": "C:\\Users\\st811210\\.gemini\\antigravity\\builtin\\skills\\automation",
       "componentTypes": [
         "skill"
       ],
@@ -2516,6 +2582,7 @@
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "availability": "installed",
       "executionTargets": "PC",
+      "importPath": "C:\\Users\\st811210\\.gemini\\antigravity\\builtin\\skills\\generative_ui",
       "componentTypes": [
         "skill"
       ],
@@ -2547,6 +2614,7 @@
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "availability": "installed",
       "executionTargets": "PC (модифицирует файлы конфигурации)",
+      "importPath": "C:\\Users\\st811210\\.gemini\\antigravity\\builtin\\skills\\migrate-workflows",
       "componentTypes": [
         "skill"
       ],
@@ -2578,6 +2646,7 @@
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "availability": "installed",
       "executionTargets": "PC",
+      "importPath": "C:\\Users\\st811210\\.gemini\\antigravity\\builtin\\skills\\permissioned-github",
       "componentTypes": [
         "skill"
       ],
@@ -2609,6 +2678,7 @@
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "availability": "installed",
       "executionTargets": "PC",
+      "importPath": "C:\\Users\\st811210\\.gemini\\antigravity\\builtin\\skills\\plugin",
       "componentTypes": [
         "skill"
       ],
@@ -2640,6 +2710,7 @@
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "availability": "installed",
       "executionTargets": "PC",
+      "importPath": "C:\\Users\\st811210\\.gemini\\antigravity\\builtin\\skills\\run-workflow",
       "componentTypes": [
         "skill"
       ],
@@ -2671,6 +2742,7 @@
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "availability": "installed",
       "executionTargets": "PC",
+      "importPath": "C:\\Users\\st811210\\.gemini\\antigravity\\builtin\\skills\\ui-plugin-navigation",
       "componentTypes": [
         "skill"
       ],
@@ -2702,6 +2774,7 @@
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "availability": "imported",
       "executionTargets": "не подключено (файл не читается как навык)",
+      "importPath": "…\\scratch\\antigravity-android\\uploads\\SKILL.md",
       "componentTypes": [
         "skill"
       ],
@@ -2733,6 +2806,7 @@
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "availability": "installed",
       "executionTargets": "PC (agy plugin); телефон получает список через /api/plugins",
+      "importPath": "C:\\Users\\st811210\\.gemini\\config\\plugins\\antigravity-workspace-guard",
       "componentTypes": [
         "plugin"
       ],
@@ -2783,6 +2857,7 @@
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "availability": "installed",
       "executionTargets": "PC (agy plugin)",
+      "importPath": "C:\\Users\\st811210\\.gemini\\config\\plugins\\kotlin-compose-inspector",
       "componentTypes": [
         "plugin"
       ],
@@ -2833,6 +2908,7 @@
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "availability": "imported",
       "executionTargets": "PC (используется действием create как staging-каталог)",
+      "importPath": "…\\uploads\\plugin-staging\\antigravity-workspace-guard",
       "componentTypes": [
         "plugin"
       ],
@@ -2869,6 +2945,7 @@
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "availability": "imported",
       "executionTargets": "PC (staging)",
+      "importPath": "…\\uploads\\plugin-staging\\kotlin-compose-inspector",
       "componentTypes": [
         "plugin"
       ],
@@ -2905,6 +2982,7 @@
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "availability": "installed",
       "executionTargets": "PC (Node stdio); телефон обращается через мост ПК, не локально",
+      "importPath": "C:\\Users\\st811210\\.gemini\\config\\mcp_config.json + C:\\...\\pc-bridge\\mcp_sysinfo_server.js",
       "componentTypes": [
         "mcp-server"
       ],
@@ -2936,6 +3014,7 @@
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "availability": "installed",
       "executionTargets": "PC (Node stdio)",
+      "importPath": "C:\\Users\\st811210\\.gemini\\config\\mcp_config.json",
       "componentTypes": [
         "mcp-server"
       ],
