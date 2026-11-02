@@ -65,6 +65,9 @@ show account, app, connections, data access and version. Technical configuration
 belongs in detail pages. Existing permission and OpenRouter sheets remain owners
 for those features. Connection claims use pcBridgeStatus, never a constant label.
 API keys are masked by default, and key-check feedback belongs to the checked key.
+Root settings search navigates to existing detail pages or the permission sheet;
+it searches labels and parameter keywords, never secret values. The live Claude
+settings evidence is recorded in CLAUDE_SETTINGS_REFERENCE.md.
 
 Canonical owners are `ChatGptMainChatScreen`, `ChatGptExactNavigationDrawer`, and
 the shared sheets in `ui/components/Round5PanelsAndSheets.kt`. Extend those owners

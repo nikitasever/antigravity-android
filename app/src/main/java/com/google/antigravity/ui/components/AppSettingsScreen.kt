@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -48,8 +49,10 @@ fun AppSettingsScreen(
     onOpenPermissions: () -> Unit
 ) {
     var page by rememberSaveable { mutableStateOf("Настройки") }
+    var search by rememberSaveable { mutableStateOf("") }
     val root = page == "Настройки"
     val context = LocalContext.current
+    val focus = LocalFocusManager.current
     val bridge by viewModel.pcBridgeStatus.collectAsState()
     val verifying by viewModel.isVerifyingApiKey.collectAsState()
     val verification by viewModel.apiKeyVerificationMessage.collectAsState()
@@ -82,6 +85,37 @@ fun AppSettingsScreen(
                 .padding(horizontal = 20.dp).padding(top = 16.dp, bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 if (root) {
+                    OutlinedTextField(value = search, onValueChange = { search = it },
+                        label = { Text("Поиск по настройкам") }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
+                        trailingIcon = {
+                            if (search.isNotEmpty()) IconButton(onClick = { search = "" }) {
+                                Icon(Icons.Default.Close, "Очистить поиск")
+                            }
+                        })
+                    if (search.isNotBlank()) {
+                        val entries = listOf(
+                            Triple("Аккаунт", "Google и веб-сессия", "профиль вход почта account google"),
+                            Triple("Голос", "Источник, тембр и микрофон", "voice микрофон звук озвучка речь перебивать live tts"),
+                            Triple("Модели и ключи", "Gemini API и работа через ПК", "gemini api ключ модель argon flash"),
+                            Triple("Подключение к ПК", "Адрес моста и соединение", "bridge мост адрес туннель интернет https компьютер"),
+                            Triple("Помощник Android", "Вызов из других приложений", "android ассистент по умолчанию жест"),
+                            Triple("Разрешения помощника", "Файлы, приложения и инструменты", "доступ данные поиск файлы permissions инструменты")
+                        ).filter { (title, detail, aliases) ->
+                            "$title $detail $aliases".contains(search.trim(), ignoreCase = true)
+                        }
+                        if (entries.isEmpty()) SettingsNote("Ничего не найдено. Попробуйте «голос», «ключ» или «мост».")
+                        else SettingsGroup("Результаты · ${entries.size}") {
+                            entries.forEachIndexed { index, (title, detail, _) ->
+                                if (index > 0) SettingsRule()
+                                SettingsLink(title, detail) {
+                                    focus.clearFocus()
+                                    search = ""
+                                    if (title == "Разрешения помощника") onOpenPermissions() else page = title
+                                }
+                            }
+                        }
+                    } else {
                     SettingsGroup("Аккаунт") {
                         SettingsLink("Google", googleEmail.ifBlank { "Вход не выполнен" }) { page = "Аккаунт" }
                     }
@@ -101,6 +135,7 @@ fun AppSettingsScreen(
                     SettingsNote("Обычные чаты сохраняются на этом телефоне. Временные чаты остаются только до закрытия.")
                     Text("Antigravity · ${BuildConfig.VERSION_NAME}", color = SettingsMuted, fontSize = 12.sp,
                         modifier = Modifier.align(Alignment.CenterHorizontally))
+                    }
                 }
                 if (page == "Голос") {
                     SettingsGroup("Источник голоса") {
