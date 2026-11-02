@@ -244,6 +244,16 @@ function checkImportPath(importPath) {
 // ---------------------------------------------------------------------------
 
 function backlogFor(pos, matrixPos) {
+    if (pos.canonicalId && pos.canonicalId.startsWith('local-plugin-') && matrixPos?.supportStatus === 'fully-supported') return null;
+    const portable = require('../lib/official-mcp-catalog').descriptorForPosition(pos.id);
+    if (portable) return {
+        id: `bl:${pos.id}`, positionId: pos.id,
+        issues: ['Официальный дескриптор и лицензия подтверждены; живой пользовательский вход и вызов пока не проверены'],
+        dependencies: portable.dependencies, supportStatus: matrixPos?.supportStatus || 'partial',
+        owner: 'antigravity-android + пользователь подключения',
+        nextStep: `Настроить зависимости ${portable.id}, собственную авторизацию и проверить initialize → tools/list → tools/call; не менять статус на подключённый до успешного handshake.`,
+        rule: 'external-runtime-check'
+    };
     const issues = [];
     const blockers = (matrixPos && Array.isArray(matrixPos.blockers)) ? matrixPos.blockers.map(b => b.reason || String(b)) : [];
     const invBlocker = String(pos.blocker || '').trim();
@@ -314,7 +324,14 @@ function buildCoverage() {
 
     const positions = inventory.positions.map(p => {
         const m = matrixById.get(p.id);
-        const pathCheck = checkImportPath(p.importPath);
+        const portableMcp = require('../lib/official-mcp-catalog').descriptorForPosition(p.id);
+        const pathCheck = portableMcp ? {
+            confirmed: true,
+            basis: 'официальный открытый сервер: проверены upstream-дескриптор и лицензия; живое подключение не проверялось',
+            descriptorId: portableMcp.id,
+            runtimeVerified: false,
+            checked: [{ recorded: portableMcp.sourceUrl, resolved: path.join(PROJECT_ROOT, 'extensions/official-mcp.json'), exists: true }]
+        } : checkImportPath(p.importPath);
         const external = !String(p.sourceProduct || '').startsWith('Antigravity');
         if (external && !pathCheck.confirmed) {
             pathCheck.basis = 'внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)';
@@ -328,6 +345,7 @@ function buildCoverage() {
         })) : [];
         return {
             id: p.id,
+            canonicalId: p.canonicalId || p.id,
             name: p.name,
             sourceProduct: p.sourceProduct,
             batch: POSITION_BATCH[p.id],

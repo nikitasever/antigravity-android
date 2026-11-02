@@ -463,8 +463,8 @@ test('адаптеры: матрица по РЕАЛЬНОМУ инвентар�
     const ag = byId.get('local-mcp-ag-workstation-info');
     assert.equal(ag.fullSupportAllowed, true, 'собственный код + живой MCP → fully-supported');
     const guard = byId.get('local-plugin-antigravity-workspace-guard');
-    assert.equal(guard.supportStatus, 'blocked');
-    assert.ok(guard.blockers.some(b => /состав пуст/.test(b.reason)), 'defect №1: manifest-only состав');
+    assert.equal(guard.supportStatus, 'fully-supported');
+    assert.equal(guard.blockers.length, 0, 'defect №1 исправлен реальным составом, проверенным extensions-blockers.test.js');
     const viz = byId.get('codex-visualize-plugin-assets');
     const vizRec = viz.records.find(r => r.componentType === 'skill-assets');
     assert.equal(vizRec.status, 'blocked');

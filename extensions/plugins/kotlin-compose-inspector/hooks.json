@@ -1,0 +1,5 @@
+{
+  "compose-inspector": {
+    "PostToolUse": [{ "matcher": "*", "hooks": [{ "type": "command", "command": "node skills/compose-check/scripts/check.js --hook", "timeout": 15 }] }]
+  }
+}

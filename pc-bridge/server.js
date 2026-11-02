@@ -2,6 +2,7 @@ const http = require('http');
 const { readJsonBody } = require('./lib/read-json-body');
 const extensionRegistry = require('./lib/extension-registry');
 const mcpClientLib = require('./lib/mcp-client');
+const { McpOAuth, CredentialVault } = require('./lib/mcp-oauth');
 const extensionRuntime = require('./lib/extension-runtime');
 // Этап 5: собственный исполнитель hooks и адаптеры компонентов плагинов.
 const hookEngine = require('./lib/hook-engine');
@@ -29,6 +30,10 @@ const SCRATCH_DIR = path.join(IDE_BASE_DIR, 'scratch');
 const DEFAULT_WORKSPACE = 'C:\\Users\\st811210\\.gemini\\antigravity\\scratch\\antigravity-android';
 const UPLOADS_DIR = path.join(DEFAULT_WORKSPACE, 'uploads');
 const REGISTRY_INDEX_PATH = path.join(UPLOADS_DIR, 'extensions-registry.json');
+// Этап 8: пользовательское состояние расширений (enabled/разрешения/привязки)
+// хранится отдельно от индекса — переживает перезапуск моста и Android-клиента
+// и пересборку индекса по диске; секретов не содержит.
+const EXT_USER_STATE_PATH = path.join(UPLOADS_DIR, 'extensions-user-state.json');
 
 // QA/Security, Critical #1: пути пакетов (sourcePath/targetRoot/outPath)
 // разрешены ТОЛЬКО внутри разрешённых корней. Всё, что выходит за них
@@ -54,7 +59,11 @@ function resolveInsideAllowedRoots(rawPath, field) {
 // Этап 3: живые MCP-подключения. Статус «connected» и список инструментов
 // берутся ТОЛЬКО из реального рукопожатия initialize → initialized →
 // tools/list; без проверки сервер честно «настроен», без выдуманных имён.
-const mcpClientManager = new mcpClientLib.McpClientManager();
+const mcpOAuth = new McpOAuth({ vault: new CredentialVault(path.join(os.homedir(), '.antigravity-private', 'mcp-oauth')) });
+const mcpClientManager = new mcpClientLib.McpClientManager({ clientOptions: {
+    authorizeDescriptor: d => mcpOAuth.authorize(d),
+    onAuthFailure: d => mcpOAuth.handleAuthFailure(d)
+} });
 const mcpLiveState = new Map();
 const CHAT_FAST_WORKSPACE = path.join(UPLOADS_DIR, 'chat-fast');
 const AGENT_SYSTEM_PROMPT_FILE = path.join(DEFAULT_WORKSPACE, 'pc-bridge', 'agent_system_prompt.md');
@@ -68,6 +77,16 @@ fs.mkdirSync(PLUGINS_DIR, { recursive: true });
 fs.mkdirSync(path.join(CLI_BASE_DIR, 'conversations'), { recursive: true });
 fs.mkdirSync(path.join(CLI_BASE_DIR, 'annotations'), { recursive: true });
 fs.mkdirSync(path.join(CLI_BASE_DIR, 'brain'), { recursive: true });
+
+// Этап 8: самовосстановление реестра при старте моста — повреждение или
+// отсутствие индекса не теряет установленные на диске пакеты (снимок
+// повреждённого файла в *.corrupt-*.backup + пересборка по диску).
+try {
+    extensionRegistry.loadRegistryIndex(REGISTRY_INDEX_PATH, {
+        targetRoots: [PLUGINS_DIR, path.join(UPLOADS_DIR, 'plugin-staging')],
+        userStatePath: EXT_USER_STATE_PATH
+    });
+} catch (_) { /* диагностика восстановления — через GET /api/extensions/registry */ }
 
 function loadAgentSystemPrompt() {
     try {
@@ -2813,6 +2832,8 @@ function findRawMcpEntry(name) {
 // после успешного полного рукопожатия; при отказе — failed с причиной, tools
 // остаются пустыми (ничего не угадывается).
 function mergeMcpLiveState(server) {
+    const raw = typeof findRawMcpEntry === 'function' ? findRawMcpEntry(server.id) : null;
+    server.oauthAuthorized = Boolean(raw?.cfg.url && typeof mcpOAuth !== 'undefined' && mcpOAuth.isAuthorized(server.id, raw.cfg.url));
     const live = (typeof mcpLiveState !== 'undefined' && mcpLiveState && typeof mcpLiveState.get === 'function')
         ? mcpLiveState.get(server.id)
         : null;
@@ -2905,6 +2926,23 @@ async function manageMcpServer(payload) {
         return { ok: false, error: 'Не указано имя MCP-сервера', mcpServers: await listMcpServers() };
     }
 
+    if (['oauth_start', 'oauth_complete', 'oauth_revoke'].includes(action)) {
+        const raw = findRawMcpEntry(name);
+        if (!raw || !raw.cfg.url) return { ok: false, error: 'OAuth доступен только для настроенного HTTP MCP-сервера' };
+        try {
+            if (action === 'oauth_start') return { ok: true, ...await mcpOAuth.start(name, raw.cfg, { redirectUri: payload.redirectUri }) };
+            if (action === 'oauth_revoke') {
+                try { await mcpOAuth.revoke(name, raw.cfg); }
+                finally { await mcpClientManager.disconnect(name); mcpLiveState.delete(name); }
+                return { ok: true, mcpServers: await listMcpServers() };
+            }
+            await mcpOAuth.complete(name, raw.cfg, payload);
+            return manageMcpServer({ action: 'probe', name });
+        } catch (e) {
+            return { ok: false, error: String(e.message).startsWith('OAuth') || String(e.message).startsWith('Поставщик') ? e.message : 'OAuth: авторизация не выполнена. Проверьте настройки поставщика.', errorCode: 'auth_failed' };
+        }
+    }
+
     // --- Этап 3: живое MCP-рукопожатие и вызовы инструментов -----------------
     // probe/check: полный цикл initialize → initialized → tools/list; статус
     // connected выставляется только при его успехе. call: реальный tools/call.
@@ -2952,7 +2990,7 @@ async function manageMcpServer(payload) {
         if (call.ok) {
             const live = mcpClientManager.getLive(name);
             if (live) mcpLiveState.set(name, live);
-        } else if (['process_exit', 'connect_failed', 'closed', 'not_connected'].includes(call.errorCode)) {
+        } else if (['process_exit', 'connect_failed', 'closed', 'not_connected', 'auth_failed'].includes(call.errorCode)) {
             mcpLiveState.set(name, {
                 id: name,
                 status: 'failed',
@@ -5282,6 +5320,12 @@ const server = http.createServer(async (req, res) => {
                 try { inventory = JSON.parse(fs.readFileSync(invPath, 'utf8')); } catch (_) {}
             }
         }
+        // Этап 8: чтение реестра самовосстанавливает индекс по диску при
+        // повреждении/отсутствии и подключает пользовательское состояние.
+        extensionRegistry.loadRegistryIndex(REGISTRY_INDEX_PATH, {
+            targetRoots: [PLUGINS_DIR, path.join(UPLOADS_DIR, 'plugin-staging')],
+            userStatePath: EXT_USER_STATE_PATH
+        });
         const registryData = extensionRegistry.buildRegistry({
             registryIndexPath: REGISTRY_INDEX_PATH,
             skillRoots: [
@@ -5295,7 +5339,8 @@ const server = http.createServer(async (req, res) => {
             settingsPath: GEMINI_SETTINGS_FILE,
             cliPlugins: await listPlugins(),
             cliMcp: await listMcpServers(),
-            inventory
+            inventory,
+            userState: extensionRegistry.loadUserState(EXT_USER_STATE_PATH)
         });
         return sendJson(res, 200, { ok: true, registry: registryData });
     }
@@ -5322,6 +5367,14 @@ const server = http.createServer(async (req, res) => {
         }
         const matrix = componentAdapters.buildAdapterMatrix(inventory, { pluginAnalyses });
         return sendJson(res, 200, { ok: true, matrix });
+    }
+
+    // Этап 8: чтение пользовательского состояния расширений (включённость,
+    // разрешения, привязки). Оно переживает перезапуски pc-bridge и
+    // Android-клиента и не содержит секретов.
+    if (req.method === 'GET' && urlObj.pathname === '/api/extensions/user-state') {
+        const state = extensionRegistry.loadUserState(EXT_USER_STATE_PATH);
+        return sendJson(res, 200, { ok: true, userState: state });
     }
 
     if (req.method === 'GET' && urlObj.pathname === '/api/system-prompt') {
@@ -5407,6 +5460,11 @@ const server = http.createServer(async (req, res) => {
             }
 
             if (urlObj.pathname === '/api/mcp') {
+                // Native app only: disallow cross-site browser requests to the
+                // credential lifecycle even though legacy bridge APIs use CORS.
+                if (String(payload.action || '').startsWith('oauth_') && req.headers.origin) {
+                    return sendJson(res, 403, { ok: false, error: 'OAuth доступен из приложения Android' });
+                }
                 const result = await manageMcpServer(payload);
                 return sendJson(res, result.ok ? 200 : 400, result);
             }
@@ -5458,7 +5516,8 @@ const server = http.createServer(async (req, res) => {
                     configPath: path.join(GEMINI_ROOT_DIR, 'config', 'config.json'),
                     mcpConfigPath: MCP_CONFIG_FILE,
                     settingsPath: GEMINI_SETTINGS_FILE,
-                    cli: true
+                    cli: true,
+                    userStatePath: EXT_USER_STATE_PATH
                 }));
                 // Единый источник состояния: действие реестра продублировано в
                 // agy CLI, чтобы оба источника сходились (тест-сценарий Этапа 2).
@@ -5489,6 +5548,107 @@ const server = http.createServer(async (req, res) => {
                     registryIndexPath: REGISTRY_INDEX_PATH,
                     outPath: checkedOut.resolved,
                     packageIds: Array.isArray(payload.packageIds) ? payload.packageIds : null
+                });
+                return sendJson(res, result.ok ? 200 : 400, result);
+            }
+
+            // Этап 8: обновление пакета с откатом. Прежняя рабочая версия
+            // сохраняется в backup до завершения валидации и замены; провал
+            // проверки манифеста/целостности/схемы/зависимостей → автоматический
+            // откат с сохранением пользовательских настроек.
+            if (urlObj.pathname === '/api/extensions/update') {
+                const packageId = String(payload.id || payload.packageId || '').trim();
+                const sourcePath = String(payload.path || payload.sourcePath || '').trim();
+                if (!packageId || !sourcePath) {
+                    return sendJson(res, 400, { ok: false, error: 'Нужны id пакета и путь к новой версии (path)' });
+                }
+                const checkedSrc = resolveInsideAllowedRoots(sourcePath, 'sourcePath');
+                if (!checkedSrc.ok) return sendJson(res, 400, { ok: false, error: checkedSrc.error });
+                const targetRootRaw = payload.targetRoot ? String(payload.targetRoot) : PLUGINS_DIR;
+                const checkedTarget = resolveInsideAllowedRoots(targetRootRaw, 'targetRoot');
+                if (!checkedTarget.ok) return sendJson(res, 400, { ok: false, error: checkedTarget.error });
+                const result = await extensionRegistry.withRegistryLock(() => extensionRegistry.updatePackage({
+                    packageId,
+                    sourcePath: checkedSrc.resolved,
+                    kind: payload.kind || 'auto',
+                    targetRoot: checkedTarget.resolved,
+                    registryIndexPath: REGISTRY_INDEX_PATH,
+                    userStatePath: EXT_USER_STATE_PATH,
+                    sourceUrl: payload.sourceUrl ? String(payload.sourceUrl) : undefined
+                }));
+                invalidateAllIdleWorkers();
+                return sendJson(res, result.ok ? 200 : 400, result);
+            }
+
+            // Этап 8: откат к предыдущей рабочей версии (точка отката обновления).
+            if (urlObj.pathname === '/api/extensions/rollback') {
+                const packageId = String(payload.id || payload.packageId || '').trim();
+                const result = await extensionRegistry.withRegistryLock(() => extensionRegistry.rollbackPackage({
+                    packageId,
+                    registryIndexPath: REGISTRY_INDEX_PATH,
+                    userStatePath: EXT_USER_STATE_PATH
+                }));
+                invalidateAllIdleWorkers();
+                return sendJson(res, result.ok ? 200 : 400, result);
+            }
+
+            // Этап 8: резервная копия manifests/настроек/состояния БЕЗ токенов.
+            if (urlObj.pathname === '/api/extensions/backup') {
+                const outPathRaw = String(payload.outPath || path.join(UPLOADS_DIR, 'exports', `extensions-backup-${Date.now()}.zip`));
+                const checkedOut = resolveInsideAllowedRoots(outPathRaw, 'outPath');
+                if (!checkedOut.ok) return sendJson(res, 400, { ok: false, error: checkedOut.error });
+                const result = extensionRegistry.createBackup({
+                    registryIndexPath: REGISTRY_INDEX_PATH,
+                    userStatePath: EXT_USER_STATE_PATH,
+                    outPath: checkedOut.resolved,
+                    packageIds: Array.isArray(payload.packageIds) ? payload.packageIds : null,
+                    mcpConfigPath: MCP_CONFIG_FILE
+                });
+                return sendJson(res, result.ok ? 200 : 400, result);
+            }
+
+            // Этап 8: восстановление из резервной копии. Секреты не
+            // восстанавливаются — необходимость повторного входа показывается
+            // явно (requiresReauth).
+            if (urlObj.pathname === '/api/extensions/restore') {
+                const backupPathRaw = String(payload.backupPath || '').trim();
+                if (!backupPathRaw) {
+                    return sendJson(res, 400, { ok: false, error: 'Не указан путь к резервной копии (backupPath)' });
+                }
+                const checkedBackup = resolveInsideAllowedRoots(backupPathRaw, 'backupPath');
+                if (!checkedBackup.ok) return sendJson(res, 400, { ok: false, error: checkedBackup.error });
+                const result = await extensionRegistry.withRegistryLock(() => extensionRegistry.restoreBackup({
+                    backupPath: checkedBackup.resolved,
+                    registryIndexPath: REGISTRY_INDEX_PATH,
+                    userStatePath: EXT_USER_STATE_PATH,
+                    targetRoots: [PLUGINS_DIR, path.join(UPLOADS_DIR, 'plugin-staging'), SKILLS_DIR]
+                }));
+                invalidateAllIdleWorkers();
+                return sendJson(res, result.ok ? 200 : 400, result);
+            }
+
+            // Этап 8: явные действия с пользовательским состоянием (включённость,
+            // разрешения, привязки). Выдача прав — ТОЛЬКО через grant/deny;
+            // обновление и восстановление прав не расширяют.
+            if (urlObj.pathname === '/api/extensions/user-state') {
+                const packageId = String(payload.id || payload.packageId || '').trim();
+                if (!packageId) return sendJson(res, 400, { ok: false, error: 'Не указан id пакета' });
+                const result = await extensionRegistry.withRegistryLock(() => {
+                    if (Array.isArray(payload.grant) || Array.isArray(payload.deny)) {
+                        return extensionRegistry.grantPackagePermissions({
+                            statePath: EXT_USER_STATE_PATH,
+                            packageId,
+                            grant: Array.isArray(payload.grant) ? payload.grant : [],
+                            deny: Array.isArray(payload.deny) ? payload.deny : []
+                        });
+                    }
+                    return extensionRegistry.setUserState({
+                        statePath: EXT_USER_STATE_PATH,
+                        packageId,
+                        enabled: payload.enabled !== undefined ? (payload.enabled === null ? null : Boolean(payload.enabled)) : undefined,
+                        permissions: payload.permissions && typeof payload.permissions === 'object' ? payload.permissions : undefined,
+                        bindings: payload.bindings && typeof payload.bindings === 'object' ? payload.bindings : undefined
+                    });
                 });
                 return sendJson(res, result.ok ? 200 : 400, result);
             }

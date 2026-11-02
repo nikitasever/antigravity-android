@@ -202,7 +202,8 @@ data class PcMcpServerItem(
     /** QA-дефект Medium #2: код ошибки последней операции (errorCode ответа). */
     val errorCode: String? = null,
     /** QA-дефект Medium #2: serverInfo успешного рукопожатия (имя/версия сервера). */
-    val serverInfo: String? = null
+    val serverInfo: String? = null,
+    val oauthAuthorized: Boolean = false
 )
 
 /**

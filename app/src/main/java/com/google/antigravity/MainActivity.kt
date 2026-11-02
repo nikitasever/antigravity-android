@@ -143,6 +143,11 @@ class MainActivity : ComponentActivity() {
 
     private fun handleIncomingIntent(intent: Intent?, @Suppress("UNUSED_PARAMETER") isInitialCreate: Boolean) {
         if (intent == null) return
+        if (intent.action == Intent.ACTION_VIEW && intent.data?.scheme == "com.google.antigravity") {
+            intent.data?.let { viewModel.completeMcpOAuth(it) }
+            intent.data = null
+            return
+        }
         when (intent.action) {
             ACTION_SHORTCUT_NEW_CHAT -> {
                 intent.action = Intent.ACTION_MAIN

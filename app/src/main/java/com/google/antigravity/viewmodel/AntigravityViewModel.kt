@@ -484,7 +484,11 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     val extensionCatalog: StateFlow<List<ExtensionCatalogItem>> = _extensionCatalog.asStateFlow()
 
     // Этап 6: выбор подключений MCP в разговоре (пусто — все включённые).
-    private val _selectedMcpConnections = MutableStateFlow<Set<String>>(emptySet())
+    // Этап 8: выбор переживает перезапуск Android-клиента (SharedPreferences;
+    // на ПК то же состояние в extensions-user-state.json реестра).
+    private val _selectedMcpConnections = MutableStateFlow(
+        com.google.antigravity.model.ExtensionBindings.decode(prefs.getString("mcp_connection_bindings", "[]"))
+    )
     val selectedMcpConnections: StateFlow<Set<String>> = _selectedMcpConnections.asStateFlow()
 
     private val _extensionsError = MutableStateFlow<String?>(null)
@@ -1596,10 +1600,17 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
         _selectedMcpConnections.update { current ->
             if (current.contains(id)) current - id else current + id
         }
+        // Этап 8: выбор сохраняется сразу — переживает перезапуск клиента.
+        prefs.edit()
+            .putString("mcp_connection_bindings", com.google.antigravity.model.ExtensionBindings.encode(_selectedMcpConnections.value))
+            .apply()
     }
 
     fun clearMcpConnectionSelection() {
         _selectedMcpConnections.value = emptySet()
+        prefs.edit()
+            .putString("mcp_connection_bindings", com.google.antigravity.model.ExtensionBindings.encode(emptySet()))
+            .apply()
     }
 
     /**
@@ -1794,6 +1805,78 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
 
     // Этап 3: реальная проверка MCP-сервера (initialize → initialized →
     // tools/list). connected и список инструментов — только из живого ответа.
+    private var mcpOAuthLoopback: com.google.antigravity.network.McpOAuthLoopback? = null
+    private var mcpOAuthStarting = false
+
+    fun loginMcpServer(id: String) {
+        viewModelScope.launch {
+            if (mcpOAuthStarting) return@launch
+            mcpOAuthStarting = true
+            _isExtensionsLoading.value = true
+            try {
+            _extensionsError.value = null
+            val bridge = _settings.value.pcBridgeUrl
+            if (_mcpServers.value.firstOrNull { it.id == id }?.oauthAuthorized == true) {
+                val (_, error) = backendClient.mcpOAuthRequest(bridge,
+                    JSONObject().put("action", "oauth_revoke").put("name", id))
+                refreshExtensionsFromPc()
+                _extensionsError.value = error
+                return@launch
+            }
+            mcpOAuthLoopback?.close()
+            val loopback = runCatching { com.google.antigravity.network.McpOAuthLoopback() }.getOrElse {
+                _extensionsError.value = "Не удалось открыть локальный адрес для входа MCP"; return@launch
+            }
+            mcpOAuthLoopback = loopback
+            val (result, error) = backendClient.mcpOAuthRequest(bridge,
+                JSONObject().put("action", "oauth_start").put("name", id).put("redirectUri", loopback.redirectUri))
+            if (result == null) { loopback.close(); _extensionsError.value = error; return@launch }
+            try {
+                val authorizationUri = Uri.parse(result.getString("authorizationUrl"))
+                require(authorizationUri.scheme == "https")
+                val pending = JSONObject().put("id", id).put("bridge", bridge)
+                    .put("state", result.getString("state"))
+                    .put("completionToken", result.getString("completionToken"))
+                    .put("expires", System.currentTimeMillis() + 600_000)
+                // Survives process death; Android backup never contains an active flow.
+                java.io.File(getApplication<Application>().noBackupFilesDir, "mcp-oauth-pending.json")
+                    .writeText(pending.toString())
+                viewModelScope.launch(Dispatchers.IO) {
+                    try { loopback.awaitBrowserReturn(result.getString("state")) }
+                    catch (_: Exception) { /* superseded login or closed screen owner */ }
+                    finally { loopback.close() }
+                }
+                getApplication<Application>().startActivity(Intent(Intent.ACTION_VIEW, authorizationUri)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            } catch (_: Exception) { loopback.close(); _extensionsError.value = "Не удалось открыть браузер для входа MCP" }
+            } finally {
+                mcpOAuthStarting = false
+                _isExtensionsLoading.value = false
+            }
+        }
+    }
+
+    fun completeMcpOAuth(uri: Uri) {
+        if (uri.scheme != "com.google.antigravity" || uri.authority != null || uri.path != "/mcp-oauth/callback") return
+        val file = java.io.File(getApplication<Application>().noBackupFilesDir, "mcp-oauth-pending.json")
+        val pending = runCatching { JSONObject(file.readText()) }.getOrNull() ?: return
+        val callback = com.google.antigravity.network.parseMcpOAuthCallback(uri.toString(),
+            pending.optString("state"), pending.optLong("expires"), System.currentTimeMillis())
+        if (callback == null) {
+            _extensionsError.value = "Вход MCP: неверный или истёкший ответ авторизации"
+            return
+        }
+        file.delete() // Single use; never forward unsolicited deep links to the bridge.
+        viewModelScope.launch {
+            val (result, error) = backendClient.mcpOAuthRequest(pending.getString("bridge"),
+                JSONObject().put("action", "oauth_complete").put("name", pending.getString("id"))
+                    .put("state", callback.state).put("code", callback.code).put("error", callback.error)
+                    .put("completionToken", pending.getString("completionToken")))
+            _extensionsError.value = error
+            if (result != null) refreshExtensionsFromPc()
+        }
+    }
+
     fun checkMcpServer(id: String) {
         val seq = extLoadSeq.next()
         viewModelScope.launch {
@@ -3418,6 +3501,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     override fun onCleared() {
+        mcpOAuthLoopback?.close()
         super.onCleared()
         stopActiveGeneration()
         cacheCurrentSession()

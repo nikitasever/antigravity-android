@@ -1,0 +1,8 @@
+{
+  "name": "kotlin-compose-inspector",
+  "version": "2.1.0",
+  "description": "Статическая проверка Kotlin: конфликты слияния и маркеры незавершённого кода. Не заменяет lint и компилятор.",
+  "license": "MIT",
+  "skills": ["skills/compose-check"],
+  "hooks": ["hooks.json"]
+}

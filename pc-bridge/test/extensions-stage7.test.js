@@ -307,9 +307,10 @@ test('проход инвентаря: backlog с владельцем и сле
         assert.equal(coverage.summary.overallMigrationStatus, 'не завершено',
             'при заблокированных обязательных позициях статус «не завершено»');
     }
-    assert.ok(coverage.summary.mandatoryBlocked.length > 0,
-        'в текущем срезе обязательные позиции действительно заблокированы (defect №1 и др.)');
-    assert.equal(coverage.summary.overallMigrationStatus, 'не завершено');
+    assert.equal(coverage.summary.mandatoryBlocked.length, 0,
+        'пустой состав четырёх локальных записей исправлен; staging ссылается на канонический пакет');
+    assert.notEqual(coverage.summary.overallMigrationStatus, 'завершено',
+        'дескриптор не доказывает живую работу всего внешнего каталога');
 
     // Контрольные пакеты присутствуют как реальные файлы (5 штук).
     assert.equal(coverage.controlPackages.length, 5);

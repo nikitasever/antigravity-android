@@ -1,0 +1,5 @@
+{
+  "workspace-guard": {
+    "PreToolUse": [{ "matcher": "*", "hooks": [{ "type": "command", "command": "node skills/workspace-check/scripts/check.js --hook", "timeout": 10 }] }]
+  }
+}

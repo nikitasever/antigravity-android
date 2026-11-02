@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "title": "Этап 7 — перенос всех позиций по матрице: полный проход инвентаря",
-  "generatedAt": "2026-11-02T16:17:48.870Z",
+  "generatedAt": "2026-11-02T20:46:36.362Z",
   "generatedBy": "pc-bridge/scripts/build-migration-coverage.js",
   "sources": {
     "inventory": "extensions-inventory.json",
@@ -197,6 +197,7 @@
   "positions": [
     {
       "id": "claude-web-catalog-connectors",
+      "canonicalId": "claude-web-catalog-connectors",
       "name": "Каталог Claude: вкладка Connectors",
       "sourceProduct": "claude.ai (web)",
       "batch": "other-catalogs",
@@ -225,6 +226,7 @@
     },
     {
       "id": "claude-web-catalog-skills",
+      "canonicalId": "claude-web-catalog-skills",
       "name": "Каталог Claude: вкладка Skills",
       "sourceProduct": "claude.ai (web)",
       "batch": "other-catalogs",
@@ -253,6 +255,7 @@
     },
     {
       "id": "claude-web-catalog-plugins",
+      "canonicalId": "claude-web-catalog-plugins",
       "name": "Каталог Claude: вкладка Plugins",
       "sourceProduct": "claude.ai (web)",
       "batch": "other-catalogs",
@@ -281,6 +284,7 @@
     },
     {
       "id": "claude-web-card-figma",
+      "canonicalId": "claude-web-card-figma",
       "name": "Figma",
       "sourceProduct": "claude.ai (web)",
       "batch": "design-media",
@@ -309,34 +313,44 @@
     },
     {
       "id": "claude-web-card-desktop-commander",
+      "canonicalId": "claude-web-card-desktop-commander",
       "name": "Desktop Commander",
       "sourceProduct": "claude.ai (web)",
       "batch": "documents-pdf",
       "availability": "visible",
       "adaptation": {
-        "supportStatus": "observation",
+        "supportStatus": "blocked",
         "fullSupportAllowed": false,
         "licenseRight": "unknown",
         "records": [
           {
-            "componentType": "catalog-card",
-            "strategy": "preserve",
-            "status": "not-applicable",
-            "executor": null,
-            "blocker": null
+            "componentType": "mcp-server",
+            "strategy": "own-executor",
+            "status": "requires-check",
+            "executor": "pc-bridge",
+            "blocker": "Нужны зависимости, собственная авторизация и живой initialize → tools/list → tools/call"
           }
         ]
       },
       "verificationScenario": "Проверить состав (scripts/references) и определить исполнителя: телефон или ПК, до установки",
       "path": {
-        "confirmed": false,
-        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
-        "checked": []
+        "confirmed": true,
+        "basis": "официальный открытый сервер: проверены upstream-дескриптор и лицензия; живое подключение не проверялось",
+        "descriptorId": "desktop-commander",
+        "runtimeVerified": false,
+        "checked": [
+          {
+            "recorded": "https://github.com/wonderwhy-er/DesktopCommanderMCP",
+            "resolved": "C:\\Users\\st811210\\.gemini\\antigravity\\scratch\\antigravity-android\\extensions\\official-mcp.json",
+            "exists": true
+          }
+        ]
       },
       "mandatory": false
     },
     {
       "id": "claude-web-card-searchfit-seo",
+      "canonicalId": "claude-web-card-searchfit-seo",
       "name": "SearchFit SEO",
       "sourceProduct": "claude.ai (web)",
       "batch": "search-browser",
@@ -365,34 +379,44 @@
     },
     {
       "id": "claude-web-card-bright-data",
+      "canonicalId": "claude-web-card-bright-data",
       "name": "Bright Data",
       "sourceProduct": "claude.ai (web)",
       "batch": "search-browser",
       "availability": "visible",
       "adaptation": {
-        "supportStatus": "observation",
+        "supportStatus": "blocked",
         "fullSupportAllowed": false,
         "licenseRight": "unknown",
         "records": [
           {
-            "componentType": "catalog-card",
-            "strategy": "preserve",
-            "status": "not-applicable",
-            "executor": null,
-            "blocker": null
+            "componentType": "mcp-server",
+            "strategy": "own-executor",
+            "status": "requires-check",
+            "executor": "pc-bridge",
+            "blocker": "Нужны зависимости, собственная авторизация и живой initialize → tools/list → tools/call"
           }
         ]
       },
       "verificationScenario": "Проверить публичный endpoint и свой вход Antigravity, не перенося ключи поставщика",
       "path": {
-        "confirmed": false,
-        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
-        "checked": []
+        "confirmed": true,
+        "basis": "официальный открытый сервер: проверены upstream-дескриптор и лицензия; живое подключение не проверялось",
+        "descriptorId": "bright-data",
+        "runtimeVerified": false,
+        "checked": [
+          {
+            "recorded": "https://github.com/brightdata/brightdata-mcp",
+            "resolved": "C:\\Users\\st811210\\.gemini\\antigravity\\scratch\\antigravity-android\\extensions\\official-mcp.json",
+            "exists": true
+          }
+        ]
       },
       "mandatory": false
     },
     {
       "id": "claude-web-card-zoom",
+      "canonicalId": "claude-web-card-zoom",
       "name": "Zoom",
       "sourceProduct": "claude.ai (web)",
       "batch": "mail-calendar-drive",
@@ -421,6 +445,7 @@
     },
     {
       "id": "claude-web-card-product-tracking",
+      "canonicalId": "claude-web-card-product-tracking",
       "name": "Product Tracking",
       "sourceProduct": "claude.ai (web)",
       "batch": "search-browser",
@@ -449,6 +474,7 @@
     },
     {
       "id": "claude-web-card-learn",
+      "canonicalId": "claude-web-card-learn",
       "name": "learn",
       "sourceProduct": "claude.ai (web)",
       "batch": "tasks-knowledge",
@@ -477,6 +503,7 @@
     },
     {
       "id": "claude-web-card-doc-coauthoring",
+      "canonicalId": "claude-web-card-doc-coauthoring",
       "name": "doc-coauthoring",
       "sourceProduct": "claude.ai (web)",
       "batch": "documents-pdf",
@@ -505,6 +532,7 @@
     },
     {
       "id": "claude-web-card-web-artifacts-builder",
+      "canonicalId": "claude-web-card-web-artifacts-builder",
       "name": "web-artifacts-builder",
       "sourceProduct": "claude.ai (web)",
       "batch": "design-media",
@@ -533,6 +561,7 @@
     },
     {
       "id": "claude-web-card-productivity",
+      "canonicalId": "claude-web-card-productivity",
       "name": "Productivity",
       "sourceProduct": "claude.ai (web)",
       "batch": "tasks-knowledge",
@@ -561,6 +590,7 @@
     },
     {
       "id": "claude-web-card-marketing",
+      "canonicalId": "claude-web-card-marketing",
       "name": "Marketing",
       "sourceProduct": "claude.ai (web)",
       "batch": "other-catalogs",
@@ -589,6 +619,7 @@
     },
     {
       "id": "claude-web-card-finance",
+      "canonicalId": "claude-web-card-finance",
       "name": "Finance",
       "sourceProduct": "claude.ai (web)",
       "batch": "other-catalogs",
@@ -617,6 +648,7 @@
     },
     {
       "id": "claude-web-entry-skills",
+      "canonicalId": "claude-web-entry-skills",
       "name": "Меню плюса: Skills",
       "sourceProduct": "claude.ai (web)",
       "batch": "other-catalogs",
@@ -645,6 +677,7 @@
     },
     {
       "id": "claude-web-entry-add-connector",
+      "canonicalId": "claude-web-entry-add-connector",
       "name": "Меню плюса: Add connector",
       "sourceProduct": "claude.ai (web)",
       "batch": "other-catalogs",
@@ -673,6 +706,7 @@
     },
     {
       "id": "claude-web-entry-add-plugins",
+      "canonicalId": "claude-web-entry-add-plugins",
       "name": "Меню плюса: Add plugins",
       "sourceProduct": "claude.ai (web)",
       "batch": "other-catalogs",
@@ -701,6 +735,7 @@
     },
     {
       "id": "claude-web-entry-design-system",
+      "canonicalId": "claude-web-entry-design-system",
       "name": "Меню плюса: Design system",
       "sourceProduct": "claude.ai (web)",
       "batch": "design-media",
@@ -729,6 +764,7 @@
     },
     {
       "id": "claude-web-entry-get-apps-extensions",
+      "canonicalId": "claude-web-entry-get-apps-extensions",
       "name": "Боковая навигация: Get apps and extensions",
       "sourceProduct": "claude.ai (web)",
       "batch": "other-catalogs",
@@ -757,6 +793,7 @@
     },
     {
       "id": "claude-web-toggle-web-search",
+      "canonicalId": "claude-web-toggle-web-search",
       "name": "Web search (переключатель)",
       "sourceProduct": "claude.ai (web)",
       "batch": "search-browser",
@@ -785,6 +822,7 @@
     },
     {
       "id": "claude-web-toggle-memory",
+      "canonicalId": "claude-web-toggle-memory",
       "name": "Memory (переключатель)",
       "sourceProduct": "claude.ai (web)",
       "batch": "tasks-knowledge",
@@ -813,6 +851,7 @@
     },
     {
       "id": "claude-web-surface-cowork",
+      "canonicalId": "claude-web-surface-cowork",
       "name": "Поверхность Cowork (переключатель Chat/Cowork)",
       "sourceProduct": "claude.ai (web)",
       "batch": "other-catalogs",
@@ -841,6 +880,7 @@
     },
     {
       "id": "claude-web-code-upgrade",
+      "canonicalId": "claude-web-code-upgrade",
       "name": "Code (Code Upgrade)",
       "sourceProduct": "claude.ai (web)",
       "batch": "code-git",
@@ -869,6 +909,7 @@
     },
     {
       "id": "claude-android-connector-custom",
+      "canonicalId": "claude-android-connector-custom",
       "name": "Add custom connector (MCP URL)",
       "sourceProduct": "Claude for Android 1.261029.20",
       "batch": "other-catalogs",
@@ -883,7 +924,7 @@
             "strategy": "convert",
             "status": "blocked",
             "executor": "cloud",
-            "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+            "blocker": "MCP-подключение требует подтверждённого дескриптора и собственного входа пользователя; наличие сервиса в каталоге не подтверждает рабочее подключение"
           }
         ]
       },
@@ -897,6 +938,7 @@
     },
     {
       "id": "claude-android-connector-catalog",
+      "canonicalId": "claude-android-connector-catalog",
       "name": "Каталог коннекторов Android (Browse/Search/Discovery)",
       "sourceProduct": "Claude for Android 1.261029.20",
       "batch": "other-catalogs",
@@ -925,6 +967,7 @@
     },
     {
       "id": "claude-android-skills",
+      "canonicalId": "claude-android-skills",
       "name": "Навыки Claude (Android)",
       "sourceProduct": "Claude for Android 1.261029.20",
       "batch": "other-catalogs",
@@ -953,6 +996,7 @@
     },
     {
       "id": "claude-android-mcp-servers",
+      "canonicalId": "claude-android-mcp-servers",
       "name": "MCP-серверы и MCP tools (Android)",
       "sourceProduct": "Claude for Android 1.261029.20",
       "batch": "other-catalogs",
@@ -981,6 +1025,7 @@
     },
     {
       "id": "claude-android-plugin-label",
+      "canonicalId": "claude-android-plugin-label",
       "name": "Plugin (единственная метка в Android-клиенте)",
       "sourceProduct": "Claude for Android 1.261029.20",
       "batch": "other-catalogs",
@@ -1009,6 +1054,7 @@
     },
     {
       "id": "claude-android-connector-figma",
+      "canonicalId": "claude-android-connector-figma",
       "name": "Figma-коннектор (упоминание в Android)",
       "sourceProduct": "Claude for Android 1.261029.20",
       "batch": "design-media",
@@ -1023,7 +1069,7 @@
             "strategy": "convert",
             "status": "blocked",
             "executor": "cloud",
-            "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+            "blocker": "MCP-подключение требует подтверждённого дескриптора и собственного входа пользователя; наличие сервиса в каталоге не подтверждает рабочее подключение"
           }
         ]
       },
@@ -1037,6 +1083,7 @@
     },
     {
       "id": "claude-android-github-app",
+      "canonicalId": "claude-android-github-app",
       "name": "Claude GitHub App (интеграция)",
       "sourceProduct": "Claude for Android 1.261029.20",
       "batch": "code-git",
@@ -1047,24 +1094,33 @@
         "licenseRight": "unknown",
         "records": [
           {
-            "componentType": "connector",
-            "strategy": "convert",
-            "status": "blocked",
-            "executor": "cloud",
-            "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+            "componentType": "mcp-server",
+            "strategy": "own-executor",
+            "status": "requires-check",
+            "executor": "remote-via-pc-bridge",
+            "blocker": "Нужны зависимости, собственная авторизация и живой initialize → tools/list → tools/call"
           }
         ]
       },
       "verificationScenario": "Установить GitHub App на тестовый репозиторий и проверить запуск сессии; отдельно зафиксировать, где это живёт в UI",
       "path": {
-        "confirmed": false,
-        "basis": "внешний сервис: переносимый сервер не подтверждён (название не гарантирует наличие сервера)",
-        "checked": []
+        "confirmed": true,
+        "basis": "официальный открытый сервер: проверены upstream-дескриптор и лицензия; живое подключение не проверялось",
+        "descriptorId": "github",
+        "runtimeVerified": false,
+        "checked": [
+          {
+            "recorded": "https://github.com/github/github-mcp-server",
+            "resolved": "C:\\Users\\st811210\\.gemini\\antigravity\\scratch\\antigravity-android\\extensions\\official-mcp.json",
+            "exists": true
+          }
+        ]
       },
       "mandatory": false
     },
     {
       "id": "claude-android-connector-calendar",
+      "canonicalId": "claude-android-connector-calendar",
       "name": "Calendar (доступ к календарю)",
       "sourceProduct": "Claude for Android 1.261029.20",
       "batch": "mail-calendar-drive",
@@ -1079,7 +1135,7 @@
             "strategy": "convert",
             "status": "blocked",
             "executor": "cloud",
-            "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+            "blocker": "MCP-подключение требует подтверждённого дескриптора и собственного входа пользователя; наличие сервиса в каталоге не подтверждает рабочее подключение"
           }
         ]
       },
@@ -1093,6 +1149,7 @@
     },
     {
       "id": "claude-android-connector-google-drive",
+      "canonicalId": "claude-android-connector-google-drive",
       "name": "Google Drive (упоминание в Android)",
       "sourceProduct": "Claude for Android 1.261029.20",
       "batch": "mail-calendar-drive",
@@ -1107,7 +1164,7 @@
             "strategy": "convert",
             "status": "blocked",
             "executor": "cloud",
-            "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+            "blocker": "MCP-подключение требует подтверждённого дескриптора и собственного входа пользователя; наличие сервиса в каталоге не подтверждает рабочее подключение"
           }
         ]
       },
@@ -1121,6 +1178,7 @@
     },
     {
       "id": "claude-android-settings-integrations",
+      "canonicalId": "claude-android-settings-integrations",
       "name": "Раздел настроек: integrations / mcp / tools / google drive / gmail / calendar",
       "sourceProduct": "Claude for Android 1.261029.20",
       "batch": "mail-calendar-drive",
@@ -1149,6 +1207,7 @@
     },
     {
       "id": "chatgpt-plugin-directory",
+      "canonicalId": "chatgpt-plugin-directory",
       "name": "Каталог плагинов ChatGPT (Directory)",
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "batch": "other-catalogs",
@@ -1177,6 +1236,7 @@
     },
     {
       "id": "chatgpt-cat-business-analytics",
+      "canonicalId": "chatgpt-cat-business-analytics",
       "name": "Категория: Business and Analytics",
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "batch": "other-catalogs",
@@ -1205,6 +1265,7 @@
     },
     {
       "id": "chatgpt-cat-creativity-design",
+      "canonicalId": "chatgpt-cat-creativity-design",
       "name": "Категория: Creativity and Design",
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "batch": "design-media",
@@ -1233,6 +1294,7 @@
     },
     {
       "id": "chatgpt-cat-developer-tools",
+      "canonicalId": "chatgpt-cat-developer-tools",
       "name": "Категория: Developer Tools",
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "batch": "code-git",
@@ -1261,6 +1323,7 @@
     },
     {
       "id": "chatgpt-cat-messaging-social",
+      "canonicalId": "chatgpt-cat-messaging-social",
       "name": "Категория: Messaging and Social",
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "batch": "other-catalogs",
@@ -1289,6 +1352,7 @@
     },
     {
       "id": "chatgpt-cat-productivity",
+      "canonicalId": "chatgpt-cat-productivity",
       "name": "Категория: Productivity",
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "batch": "tasks-knowledge",
@@ -1317,6 +1381,7 @@
     },
     {
       "id": "chatgpt-cat-research-knowledge",
+      "canonicalId": "chatgpt-cat-research-knowledge",
       "name": "Категория: Research and Knowledge",
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "batch": "tasks-knowledge",
@@ -1345,6 +1410,7 @@
     },
     {
       "id": "chatgpt-plugin-directory-views",
+      "canonicalId": "chatgpt-plugin-directory-views",
       "name": "Разделы каталога: Installed / Created by me / Shared / Workspace / Popular",
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "batch": "other-catalogs",
@@ -1373,6 +1439,7 @@
     },
     {
       "id": "chatgpt-plugin-detail",
+      "canonicalId": "chatgpt-plugin-detail",
       "name": "Карточка плагина: Version / Developer / Capabilities / Privacy Policy",
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "batch": "other-catalogs",
@@ -1401,6 +1468,7 @@
     },
     {
       "id": "chatgpt-plugin-permissions",
+      "canonicalId": "chatgpt-plugin-permissions",
       "name": "Разрешения плагинов (Always ask → Allow all, Read/Write actions)",
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "batch": "other-catalogs",
@@ -1429,6 +1497,7 @@
     },
     {
       "id": "chatgpt-plugin-management",
+      "canonicalId": "chatgpt-plugin-management",
       "name": "Управление плагинами: установка/удаление/счётчики",
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "batch": "other-catalogs",
@@ -1457,6 +1526,7 @@
     },
     {
       "id": "chatgpt-component-app",
+      "canonicalId": "chatgpt-component-app",
       "name": "Компонент App (приложения внутри плагина)",
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "batch": "other-catalogs",
@@ -1485,6 +1555,7 @@
     },
     {
       "id": "chatgpt-component-skill",
+      "canonicalId": "chatgpt-component-skill",
       "name": "Компонент Skill (навыки ChatGPT)",
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "batch": "other-catalogs",
@@ -1513,6 +1584,7 @@
     },
     {
       "id": "chatgpt-connectors",
+      "canonicalId": "chatgpt-connectors",
       "name": "Connectors (подключённые аккаунты)",
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "batch": "other-catalogs",
@@ -1527,7 +1599,7 @@
             "strategy": "convert",
             "status": "blocked",
             "executor": "cloud",
-            "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+            "blocker": "MCP-подключение требует подтверждённого дескриптора и собственного входа пользователя; наличие сервиса в каталоге не подтверждает рабочее подключение"
           }
         ]
       },
@@ -1541,6 +1613,7 @@
     },
     {
       "id": "chatgpt-connector-gmail",
+      "canonicalId": "chatgpt-connector-gmail",
       "name": "Gmail (коннектор)",
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "batch": "mail-calendar-drive",
@@ -1555,7 +1628,7 @@
             "strategy": "convert",
             "status": "blocked",
             "executor": "cloud",
-            "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+            "blocker": "MCP-подключение требует подтверждённого дескриптора и собственного входа пользователя; наличие сервиса в каталоге не подтверждает рабочее подключение"
           }
         ]
       },
@@ -1569,6 +1642,7 @@
     },
     {
       "id": "chatgpt-connector-google-calendar",
+      "canonicalId": "chatgpt-connector-google-calendar",
       "name": "Google Calendar (коннектор)",
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "batch": "mail-calendar-drive",
@@ -1583,7 +1657,7 @@
             "strategy": "convert",
             "status": "blocked",
             "executor": "cloud",
-            "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+            "blocker": "MCP-подключение требует подтверждённого дескриптора и собственного входа пользователя; наличие сервиса в каталоге не подтверждает рабочее подключение"
           }
         ]
       },
@@ -1597,6 +1671,7 @@
     },
     {
       "id": "chatgpt-connector-outlook",
+      "canonicalId": "chatgpt-connector-outlook",
       "name": "Outlook (коннектор)",
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "batch": "mail-calendar-drive",
@@ -1611,7 +1686,7 @@
             "strategy": "convert",
             "status": "blocked",
             "executor": "cloud",
-            "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+            "blocker": "MCP-подключение требует подтверждённого дескриптора и собственного входа пользователя; наличие сервиса в каталоге не подтверждает рабочее подключение"
           }
         ]
       },
@@ -1625,6 +1700,7 @@
     },
     {
       "id": "chatgpt-connector-1password",
+      "canonicalId": "chatgpt-connector-1password",
       "name": "1Password (подключение для входа на сайты)",
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "batch": "other-catalogs",
@@ -1639,7 +1715,7 @@
             "strategy": "convert",
             "status": "blocked",
             "executor": "cloud",
-            "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+            "blocker": "MCP-подключение требует подтверждённого дескриптора и собственного входа пользователя; наличие сервиса в каталоге не подтверждает рабочее подключение"
           }
         ]
       },
@@ -1653,6 +1729,7 @@
     },
     {
       "id": "chatgpt-file-sources",
+      "canonicalId": "chatgpt-file-sources",
       "name": "Источники файлов: Box / Dropbox / Google Drive / SharePoint",
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "batch": "mail-calendar-drive",
@@ -1667,7 +1744,7 @@
             "strategy": "convert",
             "status": "blocked",
             "executor": "cloud",
-            "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+            "blocker": "MCP-подключение требует подтверждённого дескриптора и собственного входа пользователя; наличие сервиса в каталоге не подтверждает рабочее подключение"
           }
         ]
       },
@@ -1681,6 +1758,7 @@
     },
     {
       "id": "chatgpt-gpts",
+      "canonicalId": "chatgpt-gpts",
       "name": "GPTs (My GPTs / Public GPTs)",
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "batch": "other-catalogs",
@@ -1709,6 +1787,7 @@
     },
     {
       "id": "chatgpt-finance-connections",
+      "canonicalId": "chatgpt-finance-connections",
       "name": "Финансовые подключения (connect accounts)",
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "batch": "other-catalogs",
@@ -1723,7 +1802,7 @@
             "strategy": "convert",
             "status": "blocked",
             "executor": "cloud",
-            "blocker": "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)"
+            "blocker": "MCP-подключение требует подтверждённого дескриптора и собственного входа пользователя; наличие сервиса в каталоге не подтверждает рабочее подключение"
           }
         ]
       },
@@ -1737,6 +1816,7 @@
     },
     {
       "id": "chatgpt-availability-gates",
+      "canonicalId": "chatgpt-availability-gates",
       "name": "Гейты доступа каталога: план, админ, офлайн",
       "sourceProduct": "ChatGPT for Android 1.2026.293",
       "batch": "other-catalogs",
@@ -1765,6 +1845,7 @@
     },
     {
       "id": "codex-remote-composer-extensions",
+      "canonicalId": "codex-remote-composer-extensions",
       "name": "Remote-композер: skills / MCP servers / plugins ($ и @)",
       "sourceProduct": "Codex (Remote), в составе APK ChatGPT",
       "batch": "code-git",
@@ -1793,6 +1874,7 @@
     },
     {
       "id": "codex-visualize-plugin-assets",
+      "canonicalId": "codex-visualize-plugin-assets",
       "name": "Ассеты bundled-plugin Codex «visualize» в проекте",
       "sourceProduct": "Codex (bundled plugin), ассеты в проекте",
       "batch": "design-media",
@@ -1837,6 +1919,7 @@
     },
     {
       "id": "local-skill-autonomous-software-engineer",
+      "canonicalId": "local-skill-autonomous-software-engineer",
       "name": "autonomous-software-engineer (навык)",
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "batch": "code-git",
@@ -1871,6 +1954,7 @@
     },
     {
       "id": "local-skill-reverse-engineer-anything",
+      "canonicalId": "local-skill-reverse-engineer-anything",
       "name": "reverse-engineer-anything (навык)",
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "batch": "code-git",
@@ -1905,6 +1989,7 @@
     },
     {
       "id": "local-skill-rigorous-programming-reasoner",
+      "canonicalId": "local-skill-rigorous-programming-reasoner",
       "name": "rigorous-programming-reasoner (навык, активный)",
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "batch": "code-git",
@@ -1939,6 +2024,7 @@
     },
     {
       "id": "local-skill-rigorous-programming-reasoner-disabled",
+      "canonicalId": "local-skill-rigorous-programming-reasoner-disabled",
       "name": "rigorous-programming-reasoner (отключённая копия)",
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "batch": "code-git",
@@ -1973,6 +2059,7 @@
     },
     {
       "id": "local-skill-workstation-diagnostics",
+      "canonicalId": "local-skill-workstation-diagnostics",
       "name": "workstation-diagnostics (навык)",
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "batch": "code-git",
@@ -2007,6 +2094,7 @@
     },
     {
       "id": "local-skill-builtin-agy-customizations",
+      "canonicalId": "local-skill-builtin-agy-customizations",
       "name": "agy-customizations (встроенный)",
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "batch": "tasks-knowledge",
@@ -2041,6 +2129,7 @@
     },
     {
       "id": "local-skill-builtin-antigravity-guide",
+      "canonicalId": "local-skill-builtin-antigravity-guide",
       "name": "antigravity-guide (встроенный)",
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "batch": "tasks-knowledge",
@@ -2075,6 +2164,7 @@
     },
     {
       "id": "local-skill-builtin-automation",
+      "canonicalId": "local-skill-builtin-automation",
       "name": "automation (встроенный)",
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "batch": "tasks-knowledge",
@@ -2109,6 +2199,7 @@
     },
     {
       "id": "local-skill-builtin-generative-ui",
+      "canonicalId": "local-skill-builtin-generative-ui",
       "name": "generative_ui (встроенный)",
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "batch": "design-media",
@@ -2143,6 +2234,7 @@
     },
     {
       "id": "local-skill-builtin-migrate-workflows",
+      "canonicalId": "local-skill-builtin-migrate-workflows",
       "name": "migrate-workflows (встроенный)",
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "batch": "tasks-knowledge",
@@ -2177,6 +2269,7 @@
     },
     {
       "id": "local-skill-builtin-permissioned-github",
+      "canonicalId": "local-skill-builtin-permissioned-github",
       "name": "permissioned-github (встроенный)",
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "batch": "code-git",
@@ -2211,6 +2304,7 @@
     },
     {
       "id": "local-skill-builtin-plugin",
+      "canonicalId": "local-skill-builtin-plugin",
       "name": "plugin (встроенный справочник по плагинам)",
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "batch": "tasks-knowledge",
@@ -2245,6 +2339,7 @@
     },
     {
       "id": "local-skill-builtin-run-workflow",
+      "canonicalId": "local-skill-builtin-run-workflow",
       "name": "run-workflow (встроенный)",
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "batch": "tasks-knowledge",
@@ -2279,6 +2374,7 @@
     },
     {
       "id": "local-skill-builtin-ui-plugin-navigation",
+      "canonicalId": "local-skill-builtin-ui-plugin-navigation",
       "name": "ui-plugin-navigation (встроенный)",
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "batch": "other-catalogs",
@@ -2313,6 +2409,7 @@
     },
     {
       "id": "local-import-uploads-skill-md",
+      "canonicalId": "local-import-uploads-skill-md",
       "name": "uploads/SKILL.md (пользовательский импорт)",
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "batch": "code-git",
@@ -2347,39 +2444,54 @@
     },
     {
       "id": "local-plugin-antigravity-workspace-guard",
+      "canonicalId": "local-plugin-antigravity-workspace-guard",
       "name": "antigravity-workspace-guard (плагин)",
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "batch": "code-git",
       "availability": "installed",
       "adaptation": {
-        "supportStatus": "blocked",
-        "fullSupportAllowed": false,
-        "licenseRight": "unknown",
+        "supportStatus": "fully-supported",
+        "fullSupportAllowed": true,
+        "licenseRight": "granted",
         "records": [
           {
             "componentType": "plugin",
             "strategy": "own-executor",
-            "status": "blocked",
+            "status": "verified",
             "executor": "pc-bridge",
-            "blocker": "состав пуст: только manifest (plugin.json); заявленные возможности не обеспечены компонентами (skills/agents/rules/hooks/mcp) — пути исполнения нет"
+            "blocker": null
           },
           {
-            "componentType": "plugin",
+            "componentType": "asset",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          },
+          {
+            "componentType": "hook",
             "strategy": "own-executor",
-            "status": "blocked",
+            "status": "verified",
             "executor": "pc-bridge",
-            "blocker": "состав пуст: только manifest (plugin.json); заявленные возможности не обеспечены компонентами (skills/agents/rules/hooks/mcp) — пути исполнения нет"
+            "blocker": null
+          },
+          {
+            "componentType": "skill",
+            "strategy": "preserve",
+            "status": "verified",
+            "executor": "pc-bridge",
+            "blocker": null
           }
         ]
       },
-      "verificationScenario": "Проверить, делает ли плагин что-либо при включении (лог/действие), иначе карточка обязана показывать «требует проверки»",
+      "verificationScenario": "Реальный запуск скрипта и hook через hook-engine; проверка dirty Git / конфликтного Kotlin; алиасы дают одну карточку",
       "path": {
         "confirmed": true,
         "basis": "локальный путь подтверждён проверкой на диске (fs.existsSync)",
         "checked": [
           {
-            "recorded": "C:\\Users\\st811210\\.gemini\\config\\plugins\\antigravity-workspace-guard",
-            "resolved": "C:\\Users\\st811210\\.gemini\\config\\plugins\\antigravity-workspace-guard",
+            "recorded": "extensions/plugins/antigravity-workspace-guard",
+            "resolved": "C:\\Users\\st811210\\.gemini\\antigravity\\scratch\\antigravity-android\\extensions\\plugins\\antigravity-workspace-guard",
             "exists": true
           }
         ]
@@ -2388,39 +2500,54 @@
     },
     {
       "id": "local-plugin-kotlin-compose-inspector",
+      "canonicalId": "local-plugin-kotlin-compose-inspector",
       "name": "kotlin-compose-inspector (плагин)",
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "batch": "code-git",
       "availability": "installed",
       "adaptation": {
-        "supportStatus": "blocked",
-        "fullSupportAllowed": false,
-        "licenseRight": "unknown",
+        "supportStatus": "fully-supported",
+        "fullSupportAllowed": true,
+        "licenseRight": "granted",
         "records": [
           {
             "componentType": "plugin",
             "strategy": "own-executor",
-            "status": "blocked",
+            "status": "verified",
             "executor": "pc-bridge",
-            "blocker": "состав пуст: только manifest (plugin.json); заявленные возможности не обеспечены компонентами (skills/agents/rules/hooks/mcp) — пути исполнения нет"
+            "blocker": null
           },
           {
-            "componentType": "plugin",
+            "componentType": "asset",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          },
+          {
+            "componentType": "hook",
             "strategy": "own-executor",
-            "status": "blocked",
+            "status": "verified",
             "executor": "pc-bridge",
-            "blocker": "состав пуст: только manifest (plugin.json); заявленные возможности не обеспечены компонентами (skills/agents/rules/hooks/mcp) — пути исполнения нет"
+            "blocker": null
+          },
+          {
+            "componentType": "skill",
+            "strategy": "preserve",
+            "status": "verified",
+            "executor": "pc-bridge",
+            "blocker": null
           }
         ]
       },
-      "verificationScenario": "Отключить через agy и убедиться, что оба источника состояния сходятся, а карточка не показывает ложное «включено»",
+      "verificationScenario": "Реальный запуск скрипта и hook через hook-engine; проверка dirty Git / конфликтного Kotlin; алиасы дают одну карточку",
       "path": {
         "confirmed": true,
         "basis": "локальный путь подтверждён проверкой на диске (fs.existsSync)",
         "checked": [
           {
-            "recorded": "C:\\Users\\st811210\\.gemini\\config\\plugins\\kotlin-compose-inspector",
-            "resolved": "C:\\Users\\st811210\\.gemini\\config\\plugins\\kotlin-compose-inspector",
+            "recorded": "extensions/plugins/kotlin-compose-inspector",
+            "resolved": "C:\\Users\\st811210\\.gemini\\antigravity\\scratch\\antigravity-android\\extensions\\plugins\\kotlin-compose-inspector",
             "exists": true
           }
         ]
@@ -2429,32 +2556,54 @@
     },
     {
       "id": "local-plugin-staging-antigravity-workspace-guard",
+      "canonicalId": "local-plugin-antigravity-workspace-guard",
       "name": "staging-копия antigravity-workspace-guard",
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "batch": "code-git",
       "availability": "imported",
       "adaptation": {
-        "supportStatus": "blocked",
-        "fullSupportAllowed": false,
-        "licenseRight": "unknown",
+        "supportStatus": "fully-supported",
+        "fullSupportAllowed": true,
+        "licenseRight": "granted",
         "records": [
           {
             "componentType": "plugin",
             "strategy": "own-executor",
-            "status": "requires-check",
+            "status": "verified",
             "executor": "pc-bridge",
-            "blocker": "байт-в-байт совпадает с установленным manifest — считать одним пакетом с двумя путями, а не двумя"
+            "blocker": null
+          },
+          {
+            "componentType": "asset",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          },
+          {
+            "componentType": "hook",
+            "strategy": "own-executor",
+            "status": "verified",
+            "executor": "pc-bridge",
+            "blocker": null
+          },
+          {
+            "componentType": "skill",
+            "strategy": "preserve",
+            "status": "verified",
+            "executor": "pc-bridge",
+            "blocker": null
           }
         ]
       },
-      "verificationScenario": "При установке из staging проверить, что реестр не создаёт вторую карточку с тем же именем",
+      "verificationScenario": "Реальный запуск скрипта и hook через hook-engine; проверка dirty Git / конфликтного Kotlin; алиасы дают одну карточку",
       "path": {
         "confirmed": true,
         "basis": "локальный путь подтверждён проверкой на диске (fs.existsSync)",
         "checked": [
           {
-            "recorded": "…\\uploads\\plugin-staging\\antigravity-workspace-guard",
-            "resolved": "C:\\Users\\st811210\\.gemini\\antigravity\\scratch\\antigravity-android\\uploads\\plugin-staging\\antigravity-workspace-guard",
+            "recorded": "extensions/plugins/antigravity-workspace-guard",
+            "resolved": "C:\\Users\\st811210\\.gemini\\antigravity\\scratch\\antigravity-android\\extensions\\plugins\\antigravity-workspace-guard",
             "exists": true
           }
         ]
@@ -2463,32 +2612,54 @@
     },
     {
       "id": "local-plugin-staging-kotlin-compose-inspector",
+      "canonicalId": "local-plugin-kotlin-compose-inspector",
       "name": "staging-копия kotlin-compose-inspector",
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "batch": "code-git",
       "availability": "imported",
       "adaptation": {
-        "supportStatus": "blocked",
-        "fullSupportAllowed": false,
-        "licenseRight": "unknown",
+        "supportStatus": "fully-supported",
+        "fullSupportAllowed": true,
+        "licenseRight": "granted",
         "records": [
           {
             "componentType": "plugin",
             "strategy": "own-executor",
-            "status": "requires-check",
+            "status": "verified",
             "executor": "pc-bridge",
-            "blocker": "байт-в-байт совпадает с установленным manifest — один пакет, два пути"
+            "blocker": null
+          },
+          {
+            "componentType": "asset",
+            "strategy": "preserve",
+            "status": "not-applicable",
+            "executor": null,
+            "blocker": null
+          },
+          {
+            "componentType": "hook",
+            "strategy": "own-executor",
+            "status": "verified",
+            "executor": "pc-bridge",
+            "blocker": null
+          },
+          {
+            "componentType": "skill",
+            "strategy": "preserve",
+            "status": "verified",
+            "executor": "pc-bridge",
+            "blocker": null
           }
         ]
       },
-      "verificationScenario": "Проверить коллизию имён при установке из staging (Этап 2)",
+      "verificationScenario": "Реальный запуск скрипта и hook через hook-engine; проверка dirty Git / конфликтного Kotlin; алиасы дают одну карточку",
       "path": {
         "confirmed": true,
         "basis": "локальный путь подтверждён проверкой на диске (fs.existsSync)",
         "checked": [
           {
-            "recorded": "…\\uploads\\plugin-staging\\kotlin-compose-inspector",
-            "resolved": "C:\\Users\\st811210\\.gemini\\antigravity\\scratch\\antigravity-android\\uploads\\plugin-staging\\kotlin-compose-inspector",
+            "recorded": "extensions/plugins/kotlin-compose-inspector",
+            "resolved": "C:\\Users\\st811210\\.gemini\\antigravity\\scratch\\antigravity-android\\extensions\\plugins\\kotlin-compose-inspector",
             "exists": true
           }
         ]
@@ -2497,6 +2668,7 @@
     },
     {
       "id": "local-mcp-ag-workstation-info",
+      "canonicalId": "local-mcp-ag-workstation-info",
       "name": "ag-workstation-info (MCP, stdio)",
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "batch": "code-git",
@@ -2536,6 +2708,7 @@
     },
     {
       "id": "local-mcp-rea",
+      "canonicalId": "local-mcp-rea",
       "name": "rea (MCP, stdio)",
       "sourceProduct": "Antigravity / Gemini CLI (локальная установка)",
       "batch": "code-git",
@@ -2628,13 +2801,17 @@
       "id": "bl:claude-web-card-desktop-commander",
       "positionId": "claude-web-card-desktop-commander",
       "issues": [
-        "вкладка/состав не зафиксированы; наверняка скриптовый пакет — Android-исполнитель не проверен"
+        "Официальный дескриптор и лицензия подтверждены; живой пользовательский вход и вызов пока не проверены"
       ],
-      "dependencies": [],
-      "supportStatus": "observation",
-      "owner": "внешний поставщик (claude.ai (web))",
-      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
-      "rule": "external-unconfirmed-path"
+      "dependencies": [
+        "Node.js >= 22.12.0 (published npm engines)",
+        "npm/npx",
+        "network on first install"
+      ],
+      "supportStatus": "blocked",
+      "owner": "antigravity-android + пользователь подключения",
+      "nextStep": "Настроить зависимости desktop-commander, собственную авторизацию и проверить initialize → tools/list → tools/call; не менять статус на подключённый до успешного handshake.",
+      "rule": "external-runtime-check"
     },
     {
       "id": "bl:claude-web-card-searchfit-seo",
@@ -2652,13 +2829,17 @@
       "id": "bl:claude-web-card-bright-data",
       "positionId": "claude-web-card-bright-data",
       "issues": [
-        "внешний сервис с собственной авторизацией — подключение не проверялось"
+        "Официальный дескриптор и лицензия подтверждены; живой пользовательский вход и вызов пока не проверены"
       ],
-      "dependencies": [],
-      "supportStatus": "observation",
-      "owner": "внешний поставщик (claude.ai (web))",
-      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
-      "rule": "external-unconfirmed-path"
+      "dependencies": [
+        "Node.js (published npm engines not declared)",
+        "npm/npx",
+        "Bright Data account and API_TOKEN"
+      ],
+      "supportStatus": "blocked",
+      "owner": "antigravity-android + пользователь подключения",
+      "nextStep": "Настроить зависимости bright-data, собственную авторизацию и проверить initialize → tools/list → tools/call; не менять статус на подключённый до успешного handshake.",
+      "rule": "external-runtime-check"
     },
     {
       "id": "bl:claude-web-card-zoom",
@@ -2886,7 +3067,7 @@
       "id": "bl:claude-android-connector-custom",
       "positionId": "claude-android-connector-custom",
       "issues": [
-        "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+        "MCP-подключение требует подтверждённого дескриптора и собственного входа пользователя; наличие сервиса в каталоге не подтверждает рабочее подключение",
         "строка 0x7f14003b: «Adding custom connectors isn't available for your account» — ограничение аккаунта; без входа форма не проверена"
       ],
       "dependencies": [
@@ -2958,7 +3139,7 @@
       "id": "bl:claude-android-connector-figma",
       "positionId": "claude-android-connector-figma",
       "issues": [
-        "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+        "MCP-подключение требует подтверждённого дескриптора и собственного входа пользователя; наличие сервиса в каталоге не подтверждает рабочее подключение",
         "строка говорит об отказе Figma, а не о готовности; связь с веб-карточкой Figma — только по имени"
       ],
       "dependencies": [
@@ -2973,23 +3154,21 @@
       "id": "bl:claude-android-github-app",
       "positionId": "claude-android-github-app",
       "issues": [
-        "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
-        "интеграция привязана к облачным сессиям и репозиториям; в каталоге Connectors не наблюдалась — не считать карточкой каталога"
+        "Официальный дескриптор и лицензия подтверждены; живой пользовательский вход и вызов пока не проверены"
       ],
       "dependencies": [
-        "установка Claude GitHub App в репозитории",
-        "доступ к репозиториям/веткам"
+        "GitHub account and own authorization token or registered OAuth client"
       ],
       "supportStatus": "blocked",
-      "owner": "внешний поставщик (Claude for Android 1.261029.20)",
-      "nextStep": "Подтвердить у поставщика наличие официального переносимого сервера (MCP/API) и право переиспользования; результат зафиксировать в extensions-inventory.json (поля importPath/license) и перегенерировать матрицу. Название сервиса само по себе путь не подтверждает.",
-      "rule": "external-unconfirmed-path"
+      "owner": "antigravity-android + пользователь подключения",
+      "nextStep": "Настроить зависимости github, собственную авторизацию и проверить initialize → tools/list → tools/call; не менять статус на подключённый до успешного handshake.",
+      "rule": "external-runtime-check"
     },
     {
       "id": "bl:claude-android-connector-calendar",
       "positionId": "claude-android-connector-calendar",
       "issues": [
-        "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+        "MCP-подключение требует подтверждённого дескриптора и собственного входа пользователя; наличие сервиса в каталоге не подтверждает рабочее подключение",
         "поставщик календаря в строках не назван; работа на телефоне именно этой позиции не проверялась"
       ],
       "dependencies": [
@@ -3005,7 +3184,7 @@
       "id": "bl:claude-android-connector-google-drive",
       "positionId": "claude-android-connector-google-drive",
       "issues": [
-        "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+        "MCP-подключение требует подтверждённого дескриптора и собственного входа пользователя; наличие сервиса в каталоге не подтверждает рабочее подключение",
         "подтверждение косвенное (строка ошибки конвертации файла); подключение не проверялось"
       ],
       "dependencies": [
@@ -3218,7 +3397,7 @@
       "id": "bl:chatgpt-connectors",
       "positionId": "chatgpt-connectors",
       "issues": [
-        "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+        "MCP-подключение требует подтверждённого дескриптора и собственного входа пользователя; наличие сервиса в каталоге не подтверждает рабочее подключение",
         "список доступных коннекторов в дампе не выведен; есть только отдельные строки «Connect … account»"
       ],
       "dependencies": [
@@ -3235,7 +3414,7 @@
       "id": "bl:chatgpt-connector-gmail",
       "positionId": "chatgpt-connector-gmail",
       "issues": [
-        "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+        "MCP-подключение требует подтверждённого дескриптора и собственного входа пользователя; наличие сервиса в каталоге не подтверждает рабочее подключение",
         "публичного MCP/API-конца в дампе нет; перенос возможен только через официальный доступ, свой вход Antigravity"
       ],
       "dependencies": [
@@ -3251,7 +3430,7 @@
       "id": "bl:chatgpt-connector-google-calendar",
       "positionId": "chatgpt-connector-google-calendar",
       "issues": [
-        "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+        "MCP-подключение требует подтверждённого дескриптора и собственного входа пользователя; наличие сервиса в каталоге не подтверждает рабочее подключение",
         "переиспользование чужого OAuth-флоу невозможно — нужен собственный вход Antigravity (план §2)"
       ],
       "dependencies": [
@@ -3267,7 +3446,7 @@
       "id": "bl:chatgpt-connector-outlook",
       "positionId": "chatgpt-connector-outlook",
       "issues": [
-        "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+        "MCP-подключение требует подтверждённого дескриптора и собственного входа пользователя; наличие сервиса в каталоге не подтверждает рабочее подключение",
         "публичный endpoint не зафиксирован; карточка с версией/издателем недоступна без живого прохода"
       ],
       "dependencies": [
@@ -3282,7 +3461,7 @@
       "id": "bl:chatgpt-connector-1password",
       "positionId": "chatgpt-connector-1password",
       "issues": [
-        "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+        "MCP-подключение требует подтверждённого дескриптора и собственного входа пользователя; наличие сервиса в каталоге не подтверждает рабочее подключение",
         "привязано к облачному браузеру продукта — переносим только вместе с этой функцией, иначе честная зависимость"
       ],
       "dependencies": [
@@ -3298,7 +3477,7 @@
       "id": "bl:chatgpt-file-sources",
       "positionId": "chatgpt-file-sources",
       "issues": [
-        "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+        "MCP-подключение требует подтверждённого дескриптора и собственного входа пользователя; наличие сервиса в каталоге не подтверждает рабочее подключение",
         "строки подтверждают только действия «Open in …» и скрытие результатов — не карточки каталога"
       ],
       "dependencies": [
@@ -3330,7 +3509,7 @@
       "id": "bl:chatgpt-finance-connections",
       "positionId": "chatgpt-finance-connections",
       "issues": [
-        "внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)",
+        "MCP-подключение требует подтверждённого дескриптора и собственного входа пользователя; наличие сервиса в каталоге не подтверждает рабочее подключение",
         "поставщик и метод подключения в дампе не названы; чувствительные данные — секреты в инвентарь не входят (требование плана)"
       ],
       "dependencies": [
@@ -3603,68 +3782,6 @@
       "rule": "license-unconfirmed"
     },
     {
-      "id": "bl:local-plugin-antigravity-workspace-guard",
-      "positionId": "local-plugin-antigravity-workspace-guard",
-      "issues": [
-        "состав пуст: только manifest (plugin.json); заявленные возможности не обеспечены компонентами (skills/agents/rules/hooks/mcp) — пути исполнения нет",
-        "состав пуст: только manifest (plugin.json); заявленные возможности не обеспечены компонентами (skills/agents/rules/hooks/mcp) — пути исполнения нет",
-        "manifest без verifiedTools: наличие файла не подтверждает обещанные проверки сборки/защиты Git (дефект №1 и Этап 0 плана); включён и по agy CLI, и по config.json"
-      ],
-      "dependencies": [
-        "проявленные в manifest компоненты отсутствуют (только name/version/description)"
-      ],
-      "supportStatus": "blocked",
-      "owner": "antigravity-android (репозиторий)",
-      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
-      "rule": "license-unconfirmed"
-    },
-    {
-      "id": "bl:local-plugin-kotlin-compose-inspector",
-      "positionId": "local-plugin-kotlin-compose-inspector",
-      "issues": [
-        "состав пуст: только manifest (plugin.json); заявленные возможности не обеспечены компонентами (skills/agents/rules/hooks/mcp) — пути исполнения нет",
-        "состав пуст: только manifest (plugin.json); заявленные возможности не обеспечены компонентами (skills/agents/rules/hooks/mcp) — пути исполнения нет",
-        "enabled=true по agy CLI, но в config.json запись отсутствует — два источника состояния расходятся (нужен единый реестр, Этап 2)"
-      ],
-      "dependencies": [
-        "компоненты в manifest не перечислены"
-      ],
-      "supportStatus": "blocked",
-      "owner": "antigravity-android (репозиторий)",
-      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
-      "rule": "license-unconfirmed"
-    },
-    {
-      "id": "bl:local-plugin-staging-antigravity-workspace-guard",
-      "positionId": "local-plugin-staging-antigravity-workspace-guard",
-      "issues": [
-        "байт-в-байт совпадает с установленным manifest — считать одним пакетом с двумя путями, а не двумя",
-        "байт-в-байт совпадает с установленным manifest — считать одним пакетом с двумя путями, а не двумя"
-      ],
-      "dependencies": [
-        "дубль установленного пакета"
-      ],
-      "supportStatus": "blocked",
-      "owner": "antigravity-android (репозиторий)",
-      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
-      "rule": "license-unconfirmed"
-    },
-    {
-      "id": "bl:local-plugin-staging-kotlin-compose-inspector",
-      "positionId": "local-plugin-staging-kotlin-compose-inspector",
-      "issues": [
-        "байт-в-байт совпадает с установленным manifest — один пакет, два пути",
-        "байт-в-байт совпадает с установленным manifest — один пакет, два пути"
-      ],
-      "dependencies": [
-        "дубль установленного пакета"
-      ],
-      "supportStatus": "blocked",
-      "owner": "antigravity-android (репозиторий)",
-      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
-      "rule": "license-unconfirmed"
-    },
-    {
       "id": "bl:local-mcp-ag-workstation-info",
       "positionId": "local-mcp-ag-workstation-info",
       "issues": [
@@ -3709,17 +3826,12 @@
       "tasks-knowledge": 11,
       "other-catalogs": 30
     },
-    "pathConfirmed": 21,
-    "pathUnconfirmed": 58,
+    "pathConfirmed": 24,
+    "pathUnconfirmed": 55,
     "mandatoryTotal": 21,
-    "mandatoryBlocked": [
-      "local-plugin-antigravity-workspace-guard",
-      "local-plugin-kotlin-compose-inspector",
-      "local-plugin-staging-antigravity-workspace-guard",
-      "local-plugin-staging-kotlin-compose-inspector"
-    ],
-    "backlogCount": 79,
-    "overallMigrationStatus": "не завершено",
-    "overallMigrationReason": "Общий перенос нельзя объявить завершённым: обязательные позиции заблокированы (local-plugin-antigravity-workspace-guard, local-plugin-kotlin-compose-inspector, local-plugin-staging-antigravity-workspace-guard, local-plugin-staging-kotlin-compose-inspector)"
+    "mandatoryBlocked": [],
+    "backlogCount": 75,
+    "overallMigrationStatus": "требует проверки",
+    "overallMigrationReason": "Обязательные позиции не заблокированы; статус остаётся «требует проверки» до сквозных прогонов"
   }
 }

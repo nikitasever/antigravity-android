@@ -458,3 +458,79 @@ MCP-серверы, инъекции схем нет (и не выдумывае
   BUILD SUCCESSFUL. Границы: перенос внешних сервисов остаётся в backlog до
   подтверждения переносимого сервера каждой позиции; платные прогони модели
   не выполнялись.
+
+## 15. Этап 8 — сохранение, обновления и восстановление (2 ноября 2026)
+
+- Пользовательское состояние расширений (включённость, разрешения, привязки
+  разговоров) — `uploads/extensions-user-state.json`: атомарная запись (tmp +
+  rename), отдельно от индекса реестра (переживает его пересборку), без
+  секретов. Перезапуск pc-bridge проверен настоящим дочерним процессом;
+  перезапуск Android-клиента — выбор подключений хранится в SharedPreferences
+  (`ExtensionBindings`), включённость приходит с моста.
+- Сбой индекса (повреждение/отсутствие) не теряет установленные пакеты: снимок
+  повреждённого файла — в `extensions-registry.json.corrupt-*.backup`, индекс
+  пересобирается по диску (`rebuildIndexFromDisk`), отключения применяются из
+  пользовательского состояния; событие — в `recoveryLog` и в
+  `GET /api/extensions/registry` (indexRecovery).
+- Обновление (`updatePackage`, `POST /api/extensions/update`): прежняя версия —
+  в backup до полного завершения валидации и замены; манифест/целостность/схема/
+  зависимости проверяются после замены (`validateInstalledUpdate`), провал →
+  автоматический откат с сохранением настроек; backup — точка отката
+  (`rollbackPackage`, `POST /api/extensions/rollback`). Новые права только
+  «запрошено» — выдача лишь явным действием (grant,
+  `POST /api/extensions/user-state`).
+- Резервная копия (`createBackup`, `POST /api/extensions/backup`) —
+  manifests/настройки/состояние без токенов (env/заголовки MCP и значения
+  userConfig не сохраняются никогда); восстановление (`restoreBackup`,
+  `POST /api/extensions/restore`) проверяет файлы по хэшам, показывает
+  requiresReauth явно, не расширяет права; отсутствующие файлы — честное
+  «требуется переустановка».
+- Проверено: 16 тестов `extensions-stage8.test.js`; коллекция Node-тестов
+  170/170; Android (testDebugUnitTest lintDebug assembleDebug) — BUILD
+  SUCCESSFUL, 25 наборов / 103 теста / 0 падений, включая `ExtensionBindingsTest`.
+
+
+## Уточнение после закрытия блокеров (2 ноября 2026)
+
+Исходные таблицы выше — исторический срез наблюдений этапа 1. Текущее состояние
+задаётся `extensions-adapter-matrix.json` и `extensions-migration-coverage.json`.
+
+- Четыре локальные записи теперь ссылаются на два канонических MIT-пакета в
+  `extensions/plugins/`. В составе каждого есть SKILL.md, Node-проверка и hook
+  по реальному stdin JSON → stdout JSON контракту проекта. Staging сохраняется
+  как происхождение/алиас, повторная карточка в Android не показывается.
+- Проверки предназначены для ПК с Node.js (guard также требует Git). Работа
+  этих скриптов непосредственно на Android не заявляется. Исправление файлов
+  не включает отключённые пользователем плагины и не выдаёт новых прав.
+- `extensions/official-mcp.json` связывает Desktop Commander, Bright Data и
+  GitHub с официальными открытыми реализациями и дескрипторами. Это адаптеры
+  Antigravity, не перенос учётной записи Claude/ChatGPT. Для npm-команд версии
+  закреплены; GitHub использует официальный удалённый endpoint.
+- Источники: [Desktop Commander](https://github.com/wonderwhy-er/DesktopCommanderMCP),
+  [Bright Data](https://github.com/brightdata/brightdata-mcp),
+  [GitHub MCP](https://github.com/github/github-mcp-server). Лицензии реализации
+  не означают бесплатное использование облачного сервиса.
+- У Figma и Zoom подтверждены официальные hosted endpoints, но в этой проверке
+  не установлена открытая переносимая реализация; сторонние аналоги не подставлялись.
+- HTTP MCP OAuth реализован по [спецификации MCP](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization):
+  RFC 9728 discovery, метаданные issuer, public client (заданный clientId либо
+  dynamic registration), Authorization Code + S256, state, одноразовый callback,
+  resource binding, refresh и revocation. В Android — системный браузер и возврат
+  через HTTP loopback `http://127.0.0.1:<port>/mcp-oauth/callback` телефона
+  (RFC 8252), затем явная ссылка `com.google.antigravity:/mcp-oauth/callback`
+  возвращает в приложение; «Выйти» очищает вход отдельно от
+  включения подключения. Stdio использует конфигурацию окружения, не OAuth.
+- Токены хранятся в отдельном зашифрованном vault профиля ПК
+  `~/.antigravity-private/mcp-oauth`, вне Git/APK/экспорта пакетов. Ключ vault
+  хранится отдельно от ciphertext в том же защищённом профиле: это не системный
+  аппаратный keystore; доступ к профилю ОС должен быть ограничен владельцем.
+- Поставщики без dynamic registration требуют `oauth.clientId` в приватной
+  записи MCP, зарегистрированный для native loopback redirect URI. Если поставщик
+  не допускает этот public client/redirect, вход честно недоступен до регистрации.
+- Автотест использует настоящий локальный HTTP OAuth/MCP-сервер; localhost
+  разрешён только явной тестовой опцией. В production discovery/обмен требуют
+  HTTPS, публичного адреса и DNS pinning, HTTP redirects запрещены.
+
+Дескриптор подтверждает путь подключения, не успешный вход конкретного аккаунта.
+Реальный вход и tools/call к трём внешним поставщикам требуют пользовательских
+учётных данных; без них позиции остаются «требует проверки».

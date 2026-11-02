@@ -20,18 +20,31 @@
 // инструмента), cancelled (Stop), not_connected, closed, invalid_descriptor.
 
 const { spawn } = require('node:child_process');
+const fs = require('node:fs');
+const path = require('node:path');
 const { killProcessTree } = require('./subagent-cli');
 const { parseMcpServerEntry } = require('./extension-formats');
 
 // Версии протокола, которые клиент реально поддерживает. Клиент запрашивает
 // предпочтительную, сервер отвечает своей; незнакомая версия — честный отказ.
-const SUPPORTED_PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
+const SUPPORTED_PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 const PREFERRED_PROTOCOL_VERSION = '2025-06-18';
 const CLIENT_INFO = { name: 'antigravity-pc-bridge', version: '1.0.0' };
 const DEFAULT_HANDSHAKE_TIMEOUT_MS = 10000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 30000;
 const MAX_LIST_PAGES = 50;
 const KNOWN_TRANSPORTS = ['stdio', 'streamable-http', 'sse'];
+
+function resolveStdioLaunch(command, args, { platform = process.platform, nodeExecutable = process.execPath } = {}) {
+    if (platform === 'win32' && /^(npx|npm)(\.cmd)?$/i.test(command)) {
+        const cli = path.join(path.dirname(nodeExecutable), 'node_modules', 'npm', 'bin', command.toLowerCase().startsWith('npx') ? 'npx-cli.js' : 'npm-cli.js');
+        if (!fs.existsSync(cli)) throw new McpClientError('connect_failed', 'Для MCP требуется npm рядом с Node.js; пакет не запускался');
+        // .cmd cannot be spawned directly on Windows. Use the bundled JS CLI,
+        // preserving arguments without a shell or command string interpolation.
+        return { command: nodeExecutable, args: [cli, ...args] };
+    }
+    return { command, args };
+}
 
 class McpClientError extends Error {
     constructor(code, message, details = {}) {
@@ -246,7 +259,8 @@ class StdioTransport {
         return new Promise((resolve, reject) => {
             let settled = false;
             try {
-                this.child = spawn(this.command, this.args, {
+                const launch = resolveStdioLaunch(this.command, this.args);
+                this.child = spawn(launch.command, launch.args, {
                     env: { ...process.env, ...this.env },
                     cwd: this.cwd,
                     windowsHide: true,
@@ -447,6 +461,7 @@ class SseTransport {
             resp = await fetch(this.url, {
                 method: 'GET',
                 headers: { accept: 'text/event-stream', ...this.authHeaders },
+                redirect: 'error',
                 signal: this.abort.signal
             });
         } catch (err) {
@@ -498,9 +513,14 @@ class SseTransport {
         const acc = createSseAccumulator(({ event, data }) => {
             if (event === 'endpoint') {
                 try {
-                    this.endpointUrl = new URL(data.trim(), this.url).toString();
+                    const endpoint = new URL(data.trim(), this.url);
+                    if (endpoint.origin !== new URL(this.url).origin || endpoint.username || endpoint.password || endpoint.hash) throw new Error('cross-origin endpoint');
+                    this.endpointUrl = endpoint.toString();
                 } catch (_) {
-                    this.endpointUrl = data.trim();
+                    const err = new McpClientError('protocol_error', 'SSE: endpoint должен принадлежать исходному серверу');
+                    if (this.onStreamErrorBeforeEndpoint) this.onStreamErrorBeforeEndpoint(err);
+                    else this.hooks.onError(err);
+                    return;
                 }
                 if (this.onEndpointReady) this.onEndpointReady();
                 return;
@@ -548,7 +568,8 @@ class SseTransport {
                 method: 'POST',
                 headers: { 'content-type': 'application/json', ...this.authHeaders },
                 body: JSON.stringify(msg),
-                signal: combined.signal
+                signal: combined.signal,
+                redirect: 'error'
             });
         } catch (err) {
             if (err && (err.name === 'AbortError' || err.code === 'ABORT_ERR')) {
@@ -1057,6 +1078,10 @@ class McpClientManager {
         this.sessions.delete(id);
         this.live.delete(id);
         if (prev) await prev.close().catch(() => {});
+        if (this.clientOptions.authorizeDescriptor) {
+            try { descriptor = await this.clientOptions.authorizeDescriptor(descriptor); }
+            catch { return { ok: false, id, status: 'failed', tools: [], errorCode: 'auth_failed', error: 'OAuth: обновление входа не удалось. Войдите повторно.' }; }
+        }
         this.descriptors.set(id, descriptor);
         const client = new McpClient(descriptor, { ...this.clientOptions, ...options });
         const probedAt = new Date().toISOString();
@@ -1083,6 +1108,15 @@ class McpClientManager {
             return { ok: true, ...record };
         } catch (err) {
             const safe = safeError(err, client.secrets);
+            if (safe.code === 'auth_failed' && err.details?.status === 401 &&
+                !options.oauthRetried && this.clientOptions.onAuthFailure) {
+                try {
+                    if (await this.clientOptions.onAuthFailure(descriptor)) {
+                        await client.close().catch(() => {});
+                        return this.#runProbe(id, descriptor, { ...options, oauthRetried: true });
+                    }
+                } catch { /* fall through to the visible auth failure */ }
+            }
             const record = {
                 id,
                 status: 'failed',
@@ -1115,6 +1149,22 @@ class McpClientManager {
     // повторный probe (Critical #2).
     async callTool(id, name, args = {}, options = {}) {
         const key = this.#key(id);
+        if (this.clientOptions.authorizeDescriptor) {
+            try {
+                const raw = options.descriptor || this.descriptors.get(key);
+                if (raw) {
+                    const fresh = await this.clientOptions.authorizeDescriptor(raw);
+                    options = { ...options, descriptor: fresh };
+                    if (this.sessions.has(key) && this.descriptors.get(key)?.authToken !== fresh.authToken) {
+                        const probe = await this.probe(fresh, options);
+                        if (!probe.ok) return probe;
+                    }
+                }
+            } catch {
+                await this.disconnect(key);
+                return { ok: false, errorCode: 'auth_failed', error: 'OAuth: обновление входа не удалось. Войдите повторно.' };
+            }
+        }
         let client = this.sessions.get(key);
         if (!client || client.state === 'connecting') {
             // Идёт (или вот-вот начнётся) probe — дожидаемся его результата.
@@ -1148,6 +1198,11 @@ class McpClientManager {
             };
         } catch (err) {
             const safe = safeError(err, client.secrets);
+            if (safe.code === 'auth_failed' && err.details?.status === 401 && this.clientOptions.onAuthFailure) {
+                // Mark credentials for refresh, but never replay tools/call:
+                // the tool could have performed a side effect before failing.
+                try { await this.clientOptions.onAuthFailure(this.descriptors.get(key)); } catch {}
+            }
             return { ok: false, error: safe.message, errorCode: safe.code, details: err.details || null };
         }
     }
@@ -1206,6 +1261,7 @@ function buildMcpDescriptor(name, cfg) {
 
 module.exports = {
     McpClientError,
+    resolveStdioLaunch,
     McpClient,
     McpClientManager,
     buildMcpDescriptor,

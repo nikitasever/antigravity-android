@@ -32,7 +32,9 @@ test('code tasks run in distinct copies and return review through runtime withou
         } });
     const runtime = new SubagentRuntime({ run: runner });
     runtime.dispatch({ task: 'prepare a change', model: 'test', mode: 'code' });
-    const deadline = Date.now() + 10000;
+    // Two real Git worktrees and process startups can exceed 10 s on Windows
+    // while Gradle/AV scan the workspace. Keep assertions, allow a bounded wait.
+    let deadline = Date.now() + 60000;
     while (runtime.active && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 20));
     const agents = runtime.snapshot().agents;
     assert.deepEqual(agents.map(a => a.status), ['completed', 'completed']);
@@ -41,6 +43,7 @@ test('code tasks run in distinct copies and return review through runtime withou
     assert.equal(await fs.readFile(path.join(repository, 'code.txt'), 'utf8'), 'original\n');
     await fs.writeFile(path.join(repository, 'code.txt'), 'user changes\n');
     runtime.dispatch({ task: 'must reject dirty source', model: 'test', mode: 'code' });
+    deadline = Date.now() + 60000;
     while (runtime.active && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 20));
     assert.ok(runtime.snapshot().agents.every(a => a.status === 'failed' && a.error.includes('preserve project changes')));
     assert.equal(copies.length, 2);

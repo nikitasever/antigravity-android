@@ -805,6 +805,20 @@ class AntigravityBackendClient(
     // Этап 3: живое MCP-рукопожатие (initialize → initialized → tools/list).
     // Статус connected приходит только после успешной проверки; секреты
     // (env/headers/токены) редактируются на стороне моста и сюда не попадают.
+    suspend fun mcpOAuthRequest(pcBridgeUrl: String, payload: JSONObject): Pair<JSONObject?, String?> = withContext(Dispatchers.IO) {
+        val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext null to "Мост ПК недоступен"
+        try {
+            val request = Request.Builder().url("$base/api/mcp")
+                .post(payload.toString().toRequestBody("application/json".toMediaType())).build()
+            httpClient.newCall(request).execute().use { response ->
+                val json = JSONObject(response.body?.string().orEmpty())
+                if (!response.isSuccessful || !json.optBoolean("ok", false)) {
+                    null to json.optString("error", "Не удалось выполнить вход MCP")
+                } else json to null
+            }
+        } catch (_: Exception) { null to "Не удалось связаться с мостом для входа MCP" }
+    }
+
     suspend fun probeMcpServer(
         pcBridgeUrl: String,
         name: String,
@@ -3098,6 +3112,7 @@ internal fun parseExtensionCatalog(json: JSONObject): List<ExtensionCatalogItem>
     val out = mutableListOf<ExtensionCatalogItem>()
     for (i in 0 until positions.length()) {
         val p = positions.optJSONObject(i) ?: continue
+        if (p.optString("canonicalId", p.optString("id")) != p.optString("id")) continue
         val types = p.optJSONArray("componentTypes")
         val category = if (types != null && types.length() > 0) types.getString(0) else "прочее"
         val blockersArr = p.optJSONArray("blockers")
@@ -3183,7 +3198,9 @@ internal fun parseMcpServerList(json: JSONObject): List<PcMcpServerItem> {
                 error = obj.optString("error", ""),
                 probedAt = obj.optString("probedAt", ""),
                 errorCode = obj.optString("errorCode", "").takeIf { it.isNotBlank() },
-                serverInfo = serverInfoText
+                serverInfo = serverInfoText,
+                commandOrUrl = obj.optString("commandOrUrl", obj.optString("command", "")),
+                oauthAuthorized = obj.optBoolean("oauthAuthorized", false)
             )
         )
     }

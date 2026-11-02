@@ -675,7 +675,7 @@ function classifyLayoutPath(relPath) {
     if (top === 'monitors') return 'monitor';
     if (top === 'bin') return 'executable';
     if (top === 'assets') return 'asset';
-    if (relPath === 'README.md') return 'asset';
+    if (relPath === 'README.md' || /^(LICENSE|NOTICE)(\.txt|\.md)?$/i.test(relPath)) return 'asset';
     if (top === 'scripts') return 'executable';
     return 'unknown';
 }

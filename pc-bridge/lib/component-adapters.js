@@ -150,7 +150,7 @@ const KIND_ADAPTERS = {
     },
     connector: {
         strategy: STRATEGIES.CONVERT, executor: 'cloud', status: STATUSES.BLOCKED,
-        blocker: 'внешний сервис; полный OAuth-цикл (discovery/PKCE/refresh/revoke) вне объёма Этапов 3–5; путь — MCP-подключение при подтверждённом переносимом сервере (название сервиса не гарантирует его наличие)',
+        blocker: 'MCP-подключение требует подтверждённого дескриптора и собственного входа пользователя; наличие сервиса в каталоге не подтверждает рабочее подключение',
         note: 'коннектор источника'
     },
     gpt: {
@@ -421,14 +421,16 @@ function buildAdapterMatrix(inventory, { pluginAnalyses = [] } = {}) {
     }
 
     const outPositions = positions.map(p => {
+        const portableMcp = require('./official-mcp-catalog').descriptorForPosition(p.id);
         const componentTypes = Array.isArray(p.componentTypes) ? p.componentTypes : [];
         let records = componentTypes.map(t => adaptComponentType(t));
         const licenseCheck = checkRedistributionRight(p.license);
 
         // Плагины с реальным путём на диске: состав проверяется по файлам.
         let live = null;
-        if (componentTypes.includes('plugin') && p.importPath && /^([A-Za-z]:|\/|\\\\)/.test(p.importPath) && fs.existsSync(p.importPath)) {
-            live = analyzedByPath.get(path.resolve(p.importPath)) || analyzePluginAdapters(p.importPath, {
+        const pluginPath = p.importPath ? path.resolve(__dirname, '..', '..', p.importPath) : null;
+        if (componentTypes.includes('plugin') && pluginPath && fs.existsSync(pluginPath)) {
+            live = analyzedByPath.get(pluginPath) || analyzePluginAdapters(pluginPath, {
                 name: (p.id || '').replace(/^local-plugin-(staging-)?/, '') || null,
                 enabled: true,
                 licenseRaw: p.license
@@ -460,6 +462,15 @@ function buildAdapterMatrix(inventory, { pluginAnalyses = [] } = {}) {
                 : r);
         }
 
+        if (portableMcp) {
+            // Evidence confirms the descriptor, not login or a live tools/call.
+            records = [adaptComponentType('mcp-server', {
+                status: STATUSES.REQUIRES_CHECK,
+                verification: `официальный дескриптор ${portableMcp.id}; ${portableMcp.sourceUrl}`,
+                blocker: 'Нужны зависимости, собственная авторизация и живой initialize → tools/list → tools/call',
+                executor: portableMcp.executionTarget
+            })];
+        }
         // Состав подтверждён для локально проверенных наблюдений (файлы/CLI/код
         // с availability installed/builtin); облачные каталоги и APK-строки —
         // состав не проверялся, «полностью» не выдаётся.
@@ -470,6 +481,8 @@ function buildAdapterMatrix(inventory, { pluginAnalyses = [] } = {}) {
         const support = evaluatePluginSupport({ records, licenseCheck, compositionVerified });
         return {
             id: p.id,
+            canonicalId: p.canonicalId || p.id,
+            portableMcp,
             name: p.name,
             sourceProduct: p.sourceProduct,
             availability: p.availability,

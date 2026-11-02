@@ -646,7 +646,7 @@ fun MainScreen(
                             onAddMcp = { name, cmd, args -> viewModel.addMcpServerOnPc(name, cmd, args) },
                             onDeleteMcp = { id -> viewModel.deleteMcpServerOnPc(id) },
                             onCheckMcp = { id -> viewModel.checkMcpServer(id) },
-                            onLoginMcp = { id -> viewModel.checkMcpServer(id) },
+                            onLoginMcp = { id -> viewModel.loginMcpServer(id) },
                             onCallMcpTool = { id, tool -> viewModel.callMcpTool(id, tool) },
                             mcpToolResult = mcpToolResult,
                             isMcpToolCallRunning = isMcpToolCallRunning,

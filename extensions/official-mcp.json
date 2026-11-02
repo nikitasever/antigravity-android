@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-11-02",
+  "servers": [
+    {
+      "id": "desktop-commander",
+      "positionIds": ["claude-web-card-desktop-commander"],
+      "publisher": "wonderwhy-er / Eduards Ruzga",
+      "sourceUrl": "https://github.com/wonderwhy-er/DesktopCommanderMCP",
+      "evidence": ["https://registry.npmjs.org/@wonderwhy-er%2fdesktop-commander/0.3.1", "https://raw.githubusercontent.com/wonderwhy-er/DesktopCommanderMCP/main/package.json", "https://github.com/wonderwhy-er/DesktopCommanderMCP#install-in-other-clients"],
+      "license": "MIT",
+      "version": "0.3.1",
+      "executionTarget": "pc-bridge",
+      "requiredEnv": [],
+      "dependencies": ["Node.js >= 22.12.0 (published npm engines)", "npm/npx", "network on first install"],
+      "descriptor": { "command": "npx", "args": ["-y", "@wonderwhy-er/desktop-commander@0.3.1"] },
+      "runtimeVerification": "not-run",
+      "note": "Official open source stdio server. Shell/file access requires explicit tool permissions; no automatic install or launch."
+    },
+    {
+      "id": "bright-data",
+      "positionIds": ["claude-web-card-bright-data"],
+      "publisher": "Bright Data",
+      "sourceUrl": "https://github.com/brightdata/brightdata-mcp",
+      "evidence": ["https://registry.npmjs.org/@brightdata%2fmcp/4.1.1", "https://raw.githubusercontent.com/brightdata/brightdata-mcp/main/package.json", "https://github.com/brightdata/brightdata-mcp#other-clients-local-npx"],
+      "license": "MIT",
+      "version": "4.1.1",
+      "executionTarget": "pc-bridge",
+      "requiredEnv": ["API_TOKEN"],
+      "dependencies": ["Node.js (published npm engines not declared)", "npm/npx", "Bright Data account and API_TOKEN"],
+      "descriptor": { "command": "npx", "args": ["-y", "@brightdata/mcp@4.1.1"] },
+      "runtimeVerification": "not-run",
+      "note": "Official MIT stdio server. User supplies API_TOKEN in private MCP env, never in this catalog. Provider usage may be billed."
+    },
+    {
+      "id": "github",
+      "positionIds": ["claude-android-github-app"],
+      "publisher": "GitHub",
+      "sourceUrl": "https://github.com/github/github-mcp-server",
+      "evidence": ["https://raw.githubusercontent.com/github/github-mcp-server/main/README.md", "https://github.com/github/github-mcp-server/blob/main/LICENSE"],
+      "license": "MIT",
+      "version": "provider-managed",
+      "executionTarget": "remote-via-pc-bridge",
+      "requiredEnv": [],
+      "dependencies": ["GitHub account and own authorization token or registered OAuth client"],
+      "descriptor": { "url": "https://api.githubcopilot.com/mcp/" },
+      "runtimeVerification": "not-run",
+      "note": "Official remote endpoint of the open source GitHub server; not an export of the Claude account connector. Own authentication required."
+    }
+  ],
+  "reviewedWithoutPortableOpenSource": [
+    { "positionIds": ["claude-web-card-figma", "claude-android-connector-figma"], "sourceUrl": "https://developers.figma.com/docs/figma-mcp-server/remote-server-installation/", "reason": "Official hosted endpoint documented; official portable open source implementation not established. Do not substitute community implementations." },
+    { "positionIds": ["claude-web-card-zoom"], "sourceUrl": "https://developers.zoom.us/docs/mcp/servers/", "reason": "Official hosted endpoints and plugin guidance exist; portable open source server implementation not established." },
+    { "positionIds": ["claude-android-connector-calendar", "claude-android-connector-google-drive", "chatgpt-connector-gmail", "chatgpt-connector-google-calendar"], "sourceUrl": "https://github.com/googleworkspace/cli", "reason": "Reviewed upstream CLI, which exposes Workspace APIs but does not declare an MCP mode. Do not present a CLI or a hosted connector as an open MCP server." },
+    { "positionIds": ["chatgpt-connector-1password"], "sourceUrl": "https://support.1password.com/saas-manager-mcp-server/", "reason": "Official SaaS Manager MCP is a different product context from an unverified 1Password APK connector. Open portable source and product identity are not established." }
+  ]
+}

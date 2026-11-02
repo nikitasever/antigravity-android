@@ -2118,6 +2118,7 @@ private fun McpDetailSheetContent(
             }
             Button(
                 onClick = onLogin,
+                enabled = server.commandOrUrl.startsWith("https://"),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = ActivePillBg,
                     contentColor = TextPrimary
@@ -2125,7 +2126,7 @@ private fun McpDetailSheetContent(
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.weight(1f)
             ) {
-                Text("Войти", fontSize = 12.5.sp, fontWeight = FontWeight.Medium)
+                Text(if (server.oauthAuthorized) "Выйти" else "Войти", fontSize = 12.5.sp, fontWeight = FontWeight.Medium)
             }
             Button(
                 onClick = onOpenToolsDialog,

@@ -91,6 +91,12 @@ implementation stores local workspace files and is not a Google Drive connection
 
 ## Verification
 
+MCP sign-in uses the external system browser and a validated return to Android.
+The existing connection sheet owns sign-in/sign-out; OAuth authorization and a
+successful MCP handshake are separate states. Tokens remain in a private bridge
+vault, never in Android UI, manifests, catalog exports or prompts. Stdio entries
+do not show an enabled OAuth action.
+
 Run Android unit tests and assembleDebug with `scripts/build.ps1`, and check the
 Node bridge syntax. Device verification is required for visual fidelity,
 streaming scroll, keyboard, accessibility, and session switching.
