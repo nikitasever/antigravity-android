@@ -97,6 +97,7 @@ import com.google.antigravity.model.OpenRouterCategory
 import com.google.antigravity.model.OpenRouterModelItem
 import com.google.antigravity.model.SlashMentionSuggestionItem
 import com.google.antigravity.model.SwarmAgentNode
+import com.google.antigravity.model.SubagentPanelState
 import com.google.antigravity.model.VirtualSandboxProject
 import java.io.File
 import java.util.Locale
@@ -1515,6 +1516,7 @@ fun PhaseStatusPixelGrid(
 @Composable
 fun CodeBackgroundTasksEntryPoint(
     agents: List<SwarmAgentNode>,
+    panelState: SubagentPanelState? = null,
     onOpenFullSheet: () -> Unit,
     onDispatchSwarmTask: (String) -> Unit,
     onCancelTask: () -> Unit = {},
@@ -1527,6 +1529,9 @@ fun CodeBackgroundTasksEntryPoint(
     forceExpandedInline: Boolean = false
 ) {
     var expandedInline by remember { mutableStateOf(forceExpandedInline) }
+    // Состояние панели «как у них»: из снимка роя; при его отсутствии — честные
+    // производные значения из статусов агентов (без выдуманных счётчиков).
+    val panelUiState = panelState ?: SubagentPanelState(agents = agents)
     LaunchedEffect(forceExpandedInline) {
         expandedInline = forceExpandedInline
     }
@@ -1569,6 +1574,7 @@ fun CodeBackgroundTasksEntryPoint(
             ) {
                 BackgroundTasksDetailContent(
                     agents = agents,
+                    panelState = panelUiState,
                     isStreaming = isStreaming,
                     activeSessionTitle = activeSessionTitle,
                     onClose = { expandedInline = false },
@@ -1580,7 +1586,8 @@ fun CodeBackgroundTasksEntryPoint(
                     onCancelTask = onCancelTask,
                     onDispatchCodeTask = onDispatchCodeTask,
                     onInsertMention = onInsertMention,
-                    isCompactInline = true
+                    isCompactInline = true,
+                    isOwnTaskActive = isSwarmTaskActive
                 )
             }
         }
@@ -1607,7 +1614,7 @@ fun CodeBackgroundTasksEntryPoint(
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = if (activeCount > 0) {
-                        "$activeCount задача выполняется • ${agents.size} агентов"
+                        "${panelUiState.pillLabel(activeCount)} • ${agents.size} агентов"
                     } else {
                         "Фоновые задачи • ${agents.size} агентов"
                     },
@@ -1632,6 +1639,7 @@ fun CodeBackgroundTasksEntryPoint(
 @Composable
 private fun BackgroundTasksDetailContent(
     agents: List<SwarmAgentNode>,
+    panelState: SubagentPanelState? = null,
     isStreaming: Boolean = false,
     activeSessionTitle: String = "",
     onClose: () -> Unit,
@@ -1640,17 +1648,88 @@ private fun BackgroundTasksDetailContent(
     onCancelTask: () -> Unit = {},
     onDispatchCodeTask: (String) -> Unit = {},
     onInsertMention: (String) -> Unit,
-    isCompactInline: Boolean = false
+    isCompactInline: Boolean = false,
+    isOwnTaskActive: Boolean = false
 ) {
     val running = agents.any { it.isInProgress }
+    val state = panelState ?: SubagentPanelState(agents = agents)
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Фоновые задачи", color = Color.White, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Фоновые задачи", color = Color.White, fontWeight = FontWeight.SemiBold)
+                // Счётчик «как у них» («%1$d running task(s)») с русскими формами;
+                // при отсутствии полей снимка — прежний вид без счётчика.
+                state.counterLabel?.let { counterText ->
+                    Text(counterText, color = Color(0xFF9E9E9E), fontSize = 11.sp)
+                }
+            }
             TextButton(onClick = onClose) { Text("Закрыть") }
         }
         Text("Задачи текущего разговора. Исполнитель получает отдельное задание от ведущей модели; результаты возвращаются в переписку.",
             color = Color(0xFF9E9E9E), fontSize = 13.sp)
-        if (agents.isEmpty()) Text("Задачи ещё не запускались", color = Color.Gray)
+        // Ввод задания для пачки субагентов — сразу под описанием, чтобы не
+        // уезжал за пределы видимости при длинном списке агентов (находка
+        // приёмки 3 ноября). Колбэки onDispatch* ранее были разведены по UI,
+        // но не вызывались ни одним композаблом — запуск из приложения был
+        // недостижим. Ручной запуск — наша честная модель (у них делегирование
+        // идёт из чата/Dispatch); состав исполнителей — фиксированная пара
+        // «исполнитель + рецензент».
+        var taskDraft by remember { mutableStateOf("") }
+        val dispatchLocked = running || isOwnTaskActive
+        OutlinedTextField(
+            value = taskDraft,
+            onValueChange = { taskDraft = it },
+            label = { Text("Задание для субагентов (исполнитель + рецензент)") },
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Color(0xFF60A5FA),
+                unfocusedBorderColor = Color(0xFF2A2A2A),
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White,
+                focusedLabelColor = Color(0xFF60A5FA),
+                unfocusedLabelColor = Color(0xFF8A8A8A)
+            )
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(
+                enabled = !dispatchLocked && taskDraft.isNotBlank(),
+                onClick = {
+                    val t = taskDraft.trim()
+                    taskDraft = ""
+                    onDispatchSwarmTask(t)
+                }
+            ) { Text("Запустить анализ") }
+            TextButton(
+                enabled = !dispatchLocked && taskDraft.isNotBlank(),
+                onClick = {
+                    val t = taskDraft.trim()
+                    taskDraft = ""
+                    onDispatchCodeTask(t)
+                }
+            ) { Text("Запустить код-задачу") }
+        }
+        if (dispatchLocked) {
+            Text(
+                "Предыдущая задача ещё выполняется — следующая пачка стартует после завершения.",
+                color = Color(0xFF8A8A8A), fontSize = 11.sp
+            )
+        }
+        // Занятость «как у них» («Your computer is busy with other sessions…»):
+        // статус тоном, не ошибка приложения. Показываем только когда занята
+        // чужая сессия/клиент: своя активная пачка видна по счётчику, а строка
+        // «другими сессиями» для неё была бы неверной.
+        if (!isOwnTaskActive) {
+            state.effectiveBusyMessage?.let { busyText ->
+                Text("⚠ $busyText", color = Color(0xFFD6B25E), fontSize = 12.sp)
+            }
+        }
+        // Пустое состояние «как у них» («No background tasks»).
+        if (agents.isEmpty()) Text("Нет фоновых задач", color = Color.Gray)
+        if (agents.isNotEmpty()) {
+            // Честный заголовок исполнителей: категорий Teammates/Other sessions
+            // у нас нет (сессионной модели нет) — ничего не выдумываем.
+            Text("Субагенты", color = Color(0xFFB0B0B0), fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+        }
         agents.forEach { agent ->
             var expanded by remember(agent.id) { mutableStateOf(false) }
             Surface(color = Color(0xFF222222), shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
@@ -1661,6 +1740,11 @@ private fun BackgroundTasksDetailContent(
                         "queued" -> "В очереди"; "running" -> "Выполняется"; "completed" -> "Завершено"
                         "failed" -> "Ошибка"; "cancelled" -> "Отменено"; else -> agent.status
                     } + " • " + agent.model, color = Color(0xFF9E9E9E), fontSize = 12.sp)
+                    // Режим рабочего каталога «как у них» («Running in the shared
+                    // directory… consider worktree mode to isolate changes»).
+                    state.hintFor(agent)?.let { hint ->
+                        Text(hint, color = Color(0xFF8A8A8A), fontSize = 10.sp)
+                    }
                     Text(agent.currentTask, color = Color(0xFFD0D0D0), maxLines = 3, overflow = TextOverflow.Ellipsis)
                     if (agent.changeReview.isNotBlank()) {
                         var showChanges by remember(agent.id) { mutableStateOf(false) }
@@ -1687,11 +1771,13 @@ private fun BackgroundTasksDetailContent(
 @Composable
 fun MultiAgentSwarmSheet(
     agents: List<SwarmAgentNode>,
+    panelState: SubagentPanelState? = null,
     onDismiss: () -> Unit,
     onDispatchSwarmTask: (String) -> Unit,
     onCancelTask: () -> Unit = {},
     onDispatchCodeTask: (String) -> Unit = {},
-    onInsertMention: (String) -> Unit
+    onInsertMention: (String) -> Unit,
+    isOwnTaskActive: Boolean = false
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
@@ -1709,13 +1795,15 @@ fun MultiAgentSwarmSheet(
         ) {
             BackgroundTasksDetailContent(
                 agents = agents,
+                panelState = panelState,
                 onClose = onDismiss,
                 onExpandModal = null,
                 onDispatchSwarmTask = onDispatchSwarmTask,
                 onCancelTask = onCancelTask,
                     onDispatchCodeTask = onDispatchCodeTask,
                 onInsertMention = onInsertMention,
-                isCompactInline = false
+                isCompactInline = false,
+                isOwnTaskActive = isOwnTaskActive
             )
         }
     }

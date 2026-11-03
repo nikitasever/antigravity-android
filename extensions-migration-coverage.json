@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "title": "Этап 7 — перенос всех позиций по матрице: полный проход инвентаря",
-  "generatedAt": "2026-11-03T08:42:12.642Z",
+  "generatedAt": "2026-11-03T09:49:46.745Z",
   "generatedBy": "pc-bridge/scripts/build-migration-coverage.js",
   "sources": {
     "inventory": "extensions-inventory.json",

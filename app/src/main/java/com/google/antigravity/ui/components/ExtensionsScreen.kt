@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -46,8 +47,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -77,10 +80,13 @@ import androidx.compose.ui.window.Dialog
 import com.google.antigravity.model.ComponentAdapterRecord
 import com.google.antigravity.model.ExtensionCatalogItem
 import com.google.antigravity.model.InstalledPluginItem
+import com.google.antigravity.model.McpToolPermissionsState
 import com.google.antigravity.model.PcMcpServerItem
 import com.google.antigravity.model.PcSkillItem
+import com.google.antigravity.model.SkillDetailState
 import com.google.antigravity.model.describeMcpAuthStatus
 import com.google.antigravity.model.describeMcpStatus
+import com.google.antigravity.model.describeToolPermission
 import com.google.antigravity.ui.TwoLineMenuCircleButton
 
 // ---------------------------------------------------------------------------
@@ -140,6 +146,12 @@ private sealed interface ExtensionDetailTarget {
     data class Catalog(val itemId: String) : ExtensionDetailTarget
 }
 
+/** Цель выбора права инструмента: одна строка или «все инструменты» сервера. */
+private sealed interface PermissionPickerTarget {
+    data class Tool(val tool: String) : PermissionPickerTarget
+    object AllTools : PermissionPickerTarget
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExtensionsScreen(
@@ -169,7 +181,13 @@ fun ExtensionsScreen(
     mcpToolResult: String?,
     isMcpToolCallRunning: Boolean,
     onDismissToolResult: () -> Unit,
-    onInstallCatalogItem: (ExtensionCatalogItem) -> Unit
+    onInstallCatalogItem: (ExtensionCatalogItem) -> Unit,
+    mcpToolPermissions: Map<String, McpToolPermissionsState>,
+    onLoadMcpToolPermissions: (String) -> Unit,
+    onSetMcpToolPermission: (String, String, String) -> Unit,
+    onSetAllMcpToolPermissions: (String, String) -> Unit,
+    skillDetailStates: Map<String, SkillDetailState>,
+    onLoadSkillDetail: (String) -> Unit
 ) {
     var activeTab by remember { mutableIntStateOf(0) } // 0=Подключения, 1=Навыки, 2=Плагины
     var scopeMine by remember { mutableStateOf(true) } // true=Мои, false=Каталог
@@ -532,6 +550,14 @@ fun ExtensionsScreen(
                     if (server != null) {
                         McpDetailSheetContent(
                             server = server,
+                            permissions = mcpToolPermissions[server.id],
+                            onLoadPermissions = { onLoadMcpToolPermissions(server.id) },
+                            onSetToolPermission = { tool, permission ->
+                                onSetMcpToolPermission(server.id, tool, permission)
+                            },
+                            onSetAllToolPermissions = { permission ->
+                                onSetAllMcpToolPermissions(server.id, permission)
+                            },
                             onCheck = { onCheckMcp(server.id) },
                             onLogin = { onLoginMcp(server.id) },
                             onOpenToolsDialog = {
@@ -555,6 +581,8 @@ fun ExtensionsScreen(
                     if (skill != null) {
                         SkillDetailSheetContent(
                             skill = skill,
+                            detailState = skillDetailStates[skill.id],
+                            onLoadDetail = { onLoadSkillDetail(skill.id) },
                             onInsertIntoChat = {
                                 detailTarget = null
                                 onInsertSkillIntoChat(skill.id.removePrefix("/"))
@@ -1926,6 +1954,10 @@ private fun EmptyExtensionsCard(title: String, subtitle: String) {
 @Composable
 private fun McpDetailSheetContent(
     server: PcMcpServerItem,
+    permissions: McpToolPermissionsState?,
+    onLoadPermissions: () -> Unit,
+    onSetToolPermission: (String, String) -> Unit,
+    onSetAllToolPermissions: (String) -> Unit,
     onCheck: () -> Unit,
     onLogin: () -> Unit,
     onOpenToolsDialog: () -> Unit,
@@ -1935,6 +1967,10 @@ private fun McpDetailSheetContent(
 ) {
     val isConnected = effectiveMcpStatus(server.status, server.error, server.errorCode).equals("connected", ignoreCase = true)
     val isFailed = server.status.equals("failed", ignoreCase = true) || server.error.isNotBlank()
+
+    // Права инструментов («как у них») загружаются при открытии деталей.
+    LaunchedEffect(server.id) { onLoadPermissions() }
+    var permissionPicker by remember { mutableStateOf<PermissionPickerTarget?>(null) }
 
     Column(
         modifier = Modifier
@@ -2161,6 +2197,114 @@ private fun McpDetailSheetContent(
             }
         }
 
+        // Права инструментов («как у них»): allow/ask/deny на каждый инструмент;
+        // приоритет per-tool > «все инструменты сервера» > глобальная политика.
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(IconBoxBg)
+                .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = "Права инструментов",
+                color = TextPrimary,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            when {
+                permissions == null || (permissions.loading && !permissions.loaded) -> {
+                    Text(
+                        text = "Загрузка прав инструментов…",
+                        color = TextSecondary,
+                        fontSize = 11.5.sp
+                    )
+                }
+                permissions.error.isNotBlank() -> {
+                    // Отказ сервера/связи — видимый текст, успех не выдумывается.
+                    Text(
+                        text = "⚠ ${permissions.error}",
+                        color = DangerRed,
+                        fontSize = 11.5.sp
+                    )
+                }
+                permissions.tools.isEmpty() -> {
+                    // Инструменты появляются только после живого рукопожатия.
+                    Text(
+                        text = "Список инструментов доступен после «Проверить».",
+                        color = TextSecondary,
+                        fontSize = 11.5.sp
+                    )
+                }
+                else -> {
+                    if (permissions.defaultPermission != null) {
+                        Text(
+                            text = "Право сервера по умолчанию: ${describeToolPermission(permissions.defaultPermission)}",
+                            color = SubtleText,
+                            fontSize = 11.sp
+                        )
+                    }
+                    permissions.tools.forEach { entry ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    permissionPicker = PermissionPickerTarget.Tool(entry.tool)
+                                }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = entry.tool.ifBlank { "не записано" },
+                                color = TextSecondary,
+                                fontSize = 11.5.sp,
+                                fontFamily = FontFamily.Monospace,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Text(
+                                text = describeToolPermission(entry.permission) +
+                                    if (entry.source == "policy") " • по политике" else "",
+                                color = when (entry.permission) {
+                                    "allow" -> AccentGreen
+                                    "deny" -> DangerRed
+                                    else -> WarningAmber
+                                },
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable {
+                                permissionPicker = PermissionPickerTarget.AllTools
+                            }
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Изменить права всех инструментов",
+                            color = AccentBlue,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    if (permissions.loading) {
+                        Text(
+                            text = "Обновление прав…",
+                            color = SubtleText,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+            }
+        }
+
         // Кнопки управления подключением.
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -2200,16 +2344,77 @@ private fun McpDetailSheetContent(
             }
         }
     }
+
+    // Селектор права («как у них»): Всегда разрешать / Спрашивать / Запретить.
+    permissionPicker?.let { target ->
+        val currentPermission = when (target) {
+            is PermissionPickerTarget.Tool ->
+                permissions?.tools?.firstOrNull { it.tool == target.tool }?.permission ?: ""
+            PermissionPickerTarget.AllTools -> permissions?.defaultPermission ?: ""
+        }
+        AlertDialog(
+            onDismissRequest = { permissionPicker = null },
+            containerColor = CardBg,
+            title = {
+                Text(
+                    text = when (target) {
+                        is PermissionPickerTarget.Tool -> "Право инструмента ${target.tool}"
+                        PermissionPickerTarget.AllTools -> "Права всех инструментов"
+                    },
+                    color = TextPrimary,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            },
+            text = {
+                Column {
+                    listOf(
+                        "allow" to "Всегда разрешать",
+                        "ask" to "Спрашивать",
+                        "deny" to "Запретить"
+                    ).forEach { (value, label) ->
+                        TextButton(
+                            onClick = {
+                                when (target) {
+                                    is PermissionPickerTarget.Tool ->
+                                        onSetToolPermission(target.tool, value)
+                                    PermissionPickerTarget.AllTools ->
+                                        onSetAllToolPermissions(value)
+                                }
+                                permissionPicker = null
+                            }
+                        ) {
+                            Text(
+                                text = if (currentPermission == value) "$label ✓" else label,
+                                color = if (currentPermission == value) AccentGreen else TextPrimary,
+                                fontSize = 14.sp
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { permissionPicker = null }) {
+                    Text("Отмена", color = TextSecondary)
+                }
+            }
+        )
+    }
 }
 
 @Composable
 private fun SkillDetailSheetContent(
     skill: PcSkillItem,
+    detailState: SkillDetailState?,
+    onLoadDetail: () -> Unit,
     onInsertIntoChat: () -> Unit,
     onToggle: () -> Unit,
     onDelete: () -> Unit,
     onClose: () -> Unit
 ) {
+    // Полный текст SKILL.md (content из skillDetail) загружается при открытии.
+    LaunchedEffect(skill.id) { onLoadDetail() }
+    val detail = detailState?.detail
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -2292,8 +2497,34 @@ private fun SkillDetailSheetContent(
             }
         }
 
-        val instructions = skill.instruction.ifBlank { skill.instructionsPreview }
-        if (instructions.isNotBlank()) {
+        if (detailState?.error?.isNotBlank() == true) {
+            // Ошибка загрузки SKILL.md показывается текстом, без маскировки.
+            Text(
+                text = "⚠ ${detailState.error}",
+                color = DangerRed,
+                fontSize = 11.5.sp
+            )
+        }
+
+        // Полный текст SKILL.md (content); до загрузки — честное превью.
+        val fullContent = detail?.content.orEmpty()
+        val blockTitle: String
+        val blockText: String
+        when {
+            fullContent.isNotBlank() -> {
+                blockTitle = "SKILL.md — полный текст"
+                blockText = fullContent
+            }
+            detailState?.loading == true -> {
+                blockTitle = "SKILL.md"
+                blockText = "Загрузка полного текста SKILL.md…"
+            }
+            else -> {
+                blockTitle = "SKILL.md — превью (полный текст не загружен)"
+                blockText = skill.instruction.ifBlank { skill.instructionsPreview }
+            }
+        }
+        if (blockText.isNotBlank()) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -2303,9 +2534,9 @@ private fun SkillDetailSheetContent(
                     .padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Text("Инструкции SKILL.md", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text(blockTitle, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 Text(
-                    text = instructions,
+                    text = blockText,
                     color = TextSecondary,
                     fontSize = 11.5.sp,
                     fontFamily = FontFamily.Monospace,
@@ -2314,15 +2545,19 @@ private fun SkillDetailSheetContent(
             }
         }
 
-        if (skill.path.isNotBlank()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(IconBoxBg)
-                    .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
-                    .padding(14.dp)
-            ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(IconBoxBg)
+                .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
+                .padding(14.dp)
+        ) {
+            DetailRowMonospace(
+                label = "Источник",
+                value = detail?.source?.ifBlank { "не записано" } ?: "не записано"
+            )
+            if (skill.path.isNotBlank()) {
                 DetailRowMonospace(label = "Путь пакета", value = skill.path)
             }
         }
@@ -2610,6 +2845,8 @@ private fun CatalogDetailSheetContent(
             DetailRowMonospace(label = "ID", value = item.id)
             DetailRowMonospace(label = "Продукт-источник", value = item.sourceProduct)
             DetailRowMonospace(label = "Категория", value = item.category)
+            DetailRowMonospace(label = "Издатель", value = item.publisher.ifBlank { "не записано" })
+            DetailRowMonospace(label = "Источник (URL)", value = item.sourceUrl.ifBlank { "не записано" })
             DetailRowMonospace(label = "Доступность", value = item.availability)
             if (item.installPath.isNotBlank()) {
                 DetailRowMonospace(label = "Путь источника", value = item.installPath)
@@ -2664,6 +2901,30 @@ private fun CatalogDetailSheetContent(
                     lineHeight = 16.sp
                 )
             }
+        }
+
+        // Сценарий проверки при переносе (testScenario); пусто — «не записано».
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(IconBoxBg)
+                .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = "Сценарий проверки",
+                color = TextPrimary,
+                fontSize = 12.5.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = item.testScenario.ifBlank { "не записано" },
+                color = TextSecondary,
+                fontSize = 12.sp,
+                lineHeight = 16.sp
+            )
         }
 
         if (item.installable) {

@@ -32,13 +32,42 @@ class SubagentRuntime {
     }
     changed() { this.onChange(this.snapshot()); }
     snapshot(jobs = this.jobs) {
-        return { batchId: jobs[0]?.batchId || '', swarmActive: jobs.some(j => j.settling || ['queued', 'running'].includes(j.status)),
-            strategy: 'PARALLEL_ANALYSIS', agents: jobs.map(j => ({
+        const counts = { queued: 0, running: 0, completed: 0, failed: 0, cancelled: 0 };
+        for (const j of jobs) {
+            if (j.status === 'queued') counts.queued++;
+            else if (j.status === 'running') counts.running++;
+            else if (j.status === 'completed') counts.completed++;
+            else if (j.status === 'failed') counts.failed++;
+            else if (j.status === 'cancelled') counts.cancelled++;
+        }
+        const active = jobs.some(j => j.settling || ['queued', 'running'].includes(j.status));
+        return {
+            batchId: jobs[0]?.batchId || '',
+            swarmActive: active,
+            strategy: 'PARALLEL_ANALYSIS',
+            // «Как у них» (Claude: «%1$d running task(s)», «No background
+            // tasks», «Your computer is busy with other sessions…»): счётчики
+            // и статус занятости для панели фоновых задач.
+            counts,
+            runningTasks: counts.queued + counts.running,
+            busy: active,
+            busyMessage: active ? 'Компьютер занят другими сессиями — повторите через несколько минут.' : '',
+            agents: jobs.map(j => ({
                 id: j.id, name: j.name, mention: '@' + j.id, role: j.role, model: j.model,
                 isLeader: false, status: j.status, currentStep: j.task,
                 result: j.result, error: j.error, mode: j.mode, review: j.review, settling: Boolean(j.settling),
+                // Код-задачи выполняются в изолированной рабочей копии
+                // (workspaces.create + review, subagent-cli.js); анализ — в
+                // общем каталоге только чтением. Подсказка об общем каталоге —
+                // «как у них» («Running in the shared directory… consider
+                // worktree mode to isolate changes»).
+                workspaceMode: j.mode === 'code' ? 'isolated' : 'shared',
+                sharedDirectoryWarning: j.mode === 'code'
+                    ? ''
+                    : 'Работа в общем каталоге проекта (только чтение). Другие сессии могут конфликтовать при записи — режим кода выполняется в изолированной рабочей копии.',
                 logs: [j.error || j.result || (j.status === 'queued' ? 'В очереди' : j.status === 'cancelled' ? 'Отменено' : 'Анализ задачи')]
-            })) };
+            }))
+        };
     }
     snapshotFor(requestId) { return this.snapshot(this.requestIds.get(requestId) || []); }
     cancel(requestId = '') {

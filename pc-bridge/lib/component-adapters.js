@@ -485,6 +485,11 @@ function buildAdapterMatrix(inventory, { pluginAnalyses = [] } = {}) {
             portableMcp,
             name: p.name,
             sourceProduct: p.sourceProduct,
+            // Паспортные поля инвентаря для детали карточки каталога («как у
+            // них»: ConnectorDirectoryDetail). Отсутствие — null, не выдумка.
+            publisher: p.publisher || null,
+            sourceUrl: p.sourceUrl || null,
+            testScenario: p.testScenario || null,
             availability: p.availability,
             executionTargets: p.executionTargets || null,
             importPath: p.importPath || '',

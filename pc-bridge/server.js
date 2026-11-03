@@ -2736,6 +2736,38 @@ function manageSkill(payload) {
     if (!rawName) {
         return { ok: false, error: 'Не указано имя скилла', skills: listSkills() };
     }
+
+    // Деталь навыка «как у них» (референс Claude: SkillDetail /
+    // ViewSkillInstructions): полное содержимое SKILL.md для экрана просмотра
+    // инструкций; путь резолвится к активному или отключённому файлу.
+    if (action === 'detail' || action === 'skill_detail' || action === 'read') {
+        const all = listSkills();
+        const found = all.find(s => s.id === rawName || s.name === rawName);
+        if (!found) {
+            return { ok: false, error: `Скилл не найден: ${rawName}`, skills: all };
+        }
+        let filePath = found.path || '';
+        if (!fs.existsSync(filePath) && filePath.endsWith('SKILL.md')) {
+            const disabledPath = filePath.replace(/SKILL\.md$/, 'SKILL.md.disabled');
+            if (fs.existsSync(disabledPath)) filePath = disabledPath;
+        }
+        let content = '';
+        try { content = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : ''; } catch (_) {}
+        return {
+            ok: true,
+            skill: {
+                id: found.id,
+                name: found.name,
+                description: found.description,
+                enabled: found.enabled,
+                source: found.source,
+                path: filePath,
+                content
+            },
+            skills: all
+        };
+    }
+
     const slug = rawName.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || `skill-${Date.now()}`;
     const folderPath = path.join(SKILLS_DIR, fs.existsSync(path.join(SKILLS_DIR, rawName)) ? rawName : slug);
     const activeFile = path.join(folderPath, 'SKILL.md');
@@ -2977,6 +3009,8 @@ async function manageMcpServer(payload) {
         const callTimeoutMs = Number(payload.timeoutMs) > 0 ? Number(payload.timeoutMs) : undefined;
         const call = await mcpClientManager.callTool(name, toolName, args, {
             descriptor,
+            // Явное действие пользователя из UI — проходит режим «Спрашивать».
+            userInitiated: true,
             requestTimeoutMs: callTimeoutMs ? Math.min(callTimeoutMs, 300000) : undefined
         });
         // Синхронизация живого статуса: смерть процесса снимает connected.
@@ -3004,6 +3038,60 @@ async function manageMcpServer(payload) {
             result: call.ok ? call.result : null,
             error: call.ok ? '' : call.error,
             errorCode: call.errorCode || null,
+            mcpServers: await listMcpServers()
+        };
+    }
+
+    // Поштучные права инструментов «как у них» (референс Claude:
+    // ChatOptionsBottomSheetDestination$McpToolPermission(server, tool) /
+    // $McpSetAllToolsPermission(server); «Change tool permission» /
+    // «Change permission for all tools»).
+    if (action === 'tool_permissions' || action === 'toolpermissions') {
+        const toolPerm = require('./lib/tool-permissions').createToolPermissions();
+        const live = mcpLiveState.get(name);
+        const toolNames = (live && Array.isArray(live.tools))
+            ? live.tools.map(t => (t && typeof t === 'object' && t.name) ? String(t.name) : String(t))
+            : [];
+        const rows = toolNames.map(t => ({ tool: t, ...toolPerm.getToolPermission(name, t) }));
+        return {
+            ok: true,
+            server: name,
+            defaultPermission: toolPerm.getServerDefault(name),
+            tools: rows,
+            mcpServers: await listMcpServers()
+        };
+    }
+
+    if (action === 'set_tool_permission' || action === 'settoolpermission') {
+        const toolPerm = require('./lib/tool-permissions').createToolPermissions();
+        const tool = String(payload.tool || payload.toolName || '').trim();
+        const permission = String(payload.permission || '').trim();
+        if (!tool || !toolPerm.validPermissions.includes(permission)) {
+            return { ok: false, error: 'Нужны tool и permission: allow|ask|deny', mcpServers: await listMcpServers() };
+        }
+        const saved = toolPerm.setToolPermission(name, tool, permission);
+        return {
+            ok: saved.ok,
+            server: name,
+            tool,
+            permission: saved.permission || permission,
+            error: saved.error || '',
+            mcpServers: await listMcpServers()
+        };
+    }
+
+    if (action === 'set_all_tools_permissions' || action === 'setalltoolspermissions') {
+        const toolPerm = require('./lib/tool-permissions').createToolPermissions();
+        const permission = String(payload.permission || '').trim();
+        if (!toolPerm.validPermissions.includes(permission)) {
+            return { ok: false, error: 'Нужен permission: allow|ask|deny', mcpServers: await listMcpServers() };
+        }
+        const saved = toolPerm.setServerDefault(name, permission);
+        return {
+            ok: saved.ok,
+            server: name,
+            permission: saved.permission || permission,
+            error: saved.error || '',
             mcpServers: await listMcpServers()
         };
     }

@@ -42,6 +42,8 @@ import com.google.antigravity.model.prepareChatBranch
 import com.google.antigravity.model.prepareChatEdit
 import com.google.antigravity.model.prepareChatRetry
 import com.google.antigravity.model.McpAuthState
+import com.google.antigravity.model.McpToolPermissionsState
+import com.google.antigravity.model.SkillDetailState
 import com.google.antigravity.model.MessageRole
 import com.google.antigravity.model.OpenRouterCategory
 import com.google.antigravity.model.OpenRouterModelItem
@@ -64,6 +66,10 @@ import com.google.antigravity.model.VoiceVisualizerStyle
 import com.google.antigravity.network.AntigravityBackendClient
 import com.google.antigravity.network.mergeMcpAuthFields
 import com.google.antigravity.receiver.ToolApprovalActionReceiver
+import com.google.antigravity.receiver.SubagentActionReceiver
+import com.google.antigravity.notifications.SubagentNotifier
+import com.google.antigravity.model.SubagentPanelState
+import com.google.antigravity.model.SwarmSnapshot
 import com.google.antigravity.service.AntigravityAgentSessionService
 import com.google.antigravity.service.AntigravityVoiceForegroundService
 import com.google.antigravity.voice.RealtimeVoiceEngine
@@ -589,6 +595,10 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     val isSwarmTaskActive: StateFlow<Boolean> = _isSwarmTaskActive.asStateFlow()
 
     private val _swarmAgents = MutableStateFlow<List<SwarmAgentNode>>(emptyList())
+    // Панель субагентов «как у них»: счётчики/занятость/режимы каталогов из
+    // снимка роя (в старых ответах моста полей нет — честные производные значения).
+    private val _swarmPanelState = MutableStateFlow(SubagentPanelState.EMPTY)
+    val swarmPanelState: StateFlow<SubagentPanelState> = _swarmPanelState.asStateFlow()
     private var swarmPollingJob: Job? = null
     private var subagentRequestId: String = ""
     private val subagentSourceSession = MutableStateFlow("")
@@ -650,6 +660,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
         }
         syncVoiceConfig()
         observeNotificationApprovalEvents()
+        observeSubagentNotificationActions()
         viewModelScope.launch(Dispatchers.IO) {
             // Section 11.3: Мгновенная загрузка 452 моделей OpenRouter из локального дискового кэша за 0-2 мс при старте
             val cachedModels = loadOpenRouterDiskCache()
@@ -2016,6 +2027,111 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
         _mcpToolResult.value = null
     }
 
+    // «Права инструментов» («как у них»): состояние per-сервер, как у
+    // auth-состояний (загрузка / успех / честная ошибка без выдуманного
+    // успеха). Приоритет прав: per-tool > «все инструменты сервера» > политика.
+    private val _mcpToolPermissions =
+        MutableStateFlow<Map<String, McpToolPermissionsState>>(emptyMap())
+    val mcpToolPermissions: StateFlow<Map<String, McpToolPermissionsState>> =
+        _mcpToolPermissions.asStateFlow()
+
+    /** Загрузка прав инструментов последнего живого probe (tool_permissions). */
+    fun loadMcpToolPermissions(id: String) {
+        viewModelScope.launch {
+            updateToolPermissionsState(id) { it.onLoading() }
+            val (reply, error) = backendClient.mcpToolPermissions(_settings.value.pcBridgeUrl, id)
+            if (reply != null) {
+                updateToolPermissionsState(id) { it.onLoaded(reply.defaultPermission, reply.tools) }
+            } else {
+                updateToolPermissionsState(id) {
+                    it.onError(error ?: "Права инструментов не получены")
+                }
+            }
+        }
+    }
+
+    /**
+     * Смена права одного инструмента (allow/ask/deny). Отказ сервера
+     * показывается текстом как ошибка; после успеха — перезагрузка прав
+     * (свежий ответ tool_permissions) и списка подключений.
+     */
+    fun setMcpToolPermission(id: String, tool: String, permission: String) {
+        viewModelScope.launch {
+            updateToolPermissionsState(id) { it.onLoading() }
+            val (reply, error) = backendClient.setMcpToolPermission(
+                _settings.value.pcBridgeUrl, id, tool, permission
+            )
+            if (reply != null) {
+                updateToolPermissionsState(id) {
+                    it.onToolPermissionChanged(tool, reply.permission.ifBlank { permission })
+                }
+                loadMcpToolPermissions(id)
+                refreshExtensionsFromPc()
+            } else {
+                updateToolPermissionsState(id) {
+                    it.onError(error ?: "Не удалось изменить право инструмента")
+                }
+            }
+        }
+    }
+
+    /** Смена прав всех инструментов сервера (уровень «все инструменты сервера»). */
+    fun setAllMcpToolPermissions(id: String, permission: String) {
+        viewModelScope.launch {
+            updateToolPermissionsState(id) { it.onLoading() }
+            val (reply, error) = backendClient.setAllMcpToolPermissions(
+                _settings.value.pcBridgeUrl, id, permission
+            )
+            if (reply != null) {
+                updateToolPermissionsState(id) {
+                    it.onAllToolsPermissionChanged(reply.permission.ifBlank { permission })
+                }
+                loadMcpToolPermissions(id)
+                refreshExtensionsFromPc()
+            } else {
+                updateToolPermissionsState(id) {
+                    it.onError(error ?: "Не удалось изменить права всех инструментов")
+                }
+            }
+        }
+    }
+
+    private fun updateToolPermissionsState(
+        id: String,
+        transform: (McpToolPermissionsState) -> McpToolPermissionsState
+    ) {
+        _mcpToolPermissions.value = _mcpToolPermissions.value.toMutableMap().apply {
+            put(id, transform(getOrPut(id) { McpToolPermissionsState(serverId = id) }))
+        }
+    }
+
+    // Деталь навыка: полный текст SKILL.md (действие detail /api/skills).
+    private val _skillDetailStates = MutableStateFlow<Map<String, SkillDetailState>>(emptyMap())
+    val skillDetailStates: StateFlow<Map<String, SkillDetailState>> =
+        _skillDetailStates.asStateFlow()
+
+    /** Загрузка полного текста SKILL.md навыка; ошибки показываются текстом. */
+    fun loadSkillDetail(name: String) {
+        viewModelScope.launch {
+            updateSkillDetailState(name) { it.onLoading() }
+            val (detail, error) = backendClient.skillDetail(_settings.value.pcBridgeUrl, name)
+            if (detail != null) {
+                updateSkillDetailState(name) { it.onLoaded(detail) }
+            } else {
+                updateSkillDetailState(name) { it.onError(error ?: "SKILL.md не получен") }
+            }
+        }
+    }
+
+    private fun updateSkillDetailState(
+        id: String,
+        transform: (SkillDetailState) -> SkillDetailState
+    ) {
+        _skillDetailStates.value = _skillDetailStates.value.toMutableMap().apply {
+            put(id, transform(getOrPut(id) { SkillDetailState(skillId = id) }))
+        }
+    }
+
     fun addMcpServerOnPc(name: String, command: String, argsRaw: String) {
         if (name.isBlank() || command.isBlank()) return
         val argsList = argsRaw.trim()
@@ -2485,13 +2601,30 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    // --- Панель субагентов «как у них» и уведомления о пачках ----------------
+
+    private fun applySwarmSnapshot(snapshot: SwarmSnapshot) {
+        // Пустой ответ моста не перетирает известное состояние (прежнее поведение).
+        if (snapshot.agents.isEmpty()) return
+        _swarmAgents.value = snapshot.agents
+        _swarmPanelState.value = SubagentPanelState.from(snapshot)
+    }
+
+    private fun observeSubagentNotificationActions() {
+        viewModelScope.launch {
+            SubagentActionReceiver.events.collect {
+                // «Отменить» из шторки — честный аналог их notification-действий
+                // (SessionAnswer/Reply); переписки с сессиями у нас нет.
+                cancelSubagentAnalysis()
+            }
+        }
+    }
+
     fun refreshSwarmAgents() {
         if (_settings.value.executionTarget == AgentExecutionTarget.PHONE_LOCAL_RESOURCES || subagentRequestId.isBlank()) return
         viewModelScope.launch {
-            val remote = backendClient.fetchMultiAgentSwarm(_settings.value.pcBridgeUrl, subagentRequestId)
-            if (remote.isNotEmpty()) {
-                _swarmAgents.value = remote
-            }
+            val remote = backendClient.fetchMultiAgentSwarmSnapshot(_settings.value.pcBridgeUrl, subagentRequestId)
+            if (remote.agents.isNotEmpty()) applySwarmSnapshot(remote)
         }
     }
 
@@ -2512,24 +2645,34 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
         _isSwarmTaskActive.value = true
         swarmPollingJob = viewModelScope.launch {
             try {
-                val accepted = backendClient.manageMultiAgentSwarm(
+                val acceptedSnap = backendClient.manageMultiAgentSwarmSnapshot(
                     pcBridgeUrl = _settings.value.pcBridgeUrl, action = if (prepareChanges) "dispatch_code_task" else "dispatch_task", task = clean,
                     model = _settings.value.selectedModelId, requestId = requestId
                 )
+                val accepted = acceptedSnap.agents
                 if (accepted.isEmpty()) {
                     android.widget.Toast.makeText(getApplication(), "Не удалось запустить субагентов. Проверьте мост и выбранную модель CLI.", android.widget.Toast.LENGTH_LONG).show()
                     return@launch
                 }
-                _swarmAgents.value = accepted
+                applySwarmSnapshot(acceptedSnap)
+                // Уведомление «как у них»: «Выполняется N задач…», действие «Отменить».
+                SubagentNotifier.notifyStarted(
+                    getApplication(),
+                    acceptedSnap.runningTasks ?: accepted.count { it.isInProgress },
+                    requestId
+                )
                 val pollingStarted = android.os.SystemClock.elapsedRealtime()
                 while (_swarmAgents.value.any { it.isInProgress }) {
                     if (android.os.SystemClock.elapsedRealtime() - pollingStarted > 360000L) {
+                        // Статус задач неизвестен — ongoing-уведомление честно
+                        // убираем (без выдуманного «завершено»), факт — в Toast.
+                        SubagentNotifier.cancel(getApplication())
                         android.widget.Toast.makeText(getApplication(), "Нет связи с исполнителем. Результаты можно обновить в панели субагентов.", android.widget.Toast.LENGTH_LONG).show()
                         return@launch
                     }
                     delay(1500)
-                    val fresh = backendClient.fetchMultiAgentSwarm(_settings.value.pcBridgeUrl, subagentRequestId)
-                    if (fresh.isNotEmpty()) _swarmAgents.value = fresh
+                    val fresh = backendClient.fetchMultiAgentSwarmSnapshot(_settings.value.pcBridgeUrl, subagentRequestId)
+                    if (fresh.agents.isNotEmpty()) applySwarmSnapshot(fresh)
                 }
                 val report = _swarmAgents.value.joinToString("\n\n") { agent ->
                     "## ${agent.name} (${agent.status})\n" + agent.stepLogs.joinToString("\n") + if (agent.changeReview.isNotBlank()) "\n\n${agent.changeReview}" else ""
@@ -2539,6 +2682,14 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                 val terminalAgents = _swarmAgents.value
                 val cancelledRun = terminalAgents.isNotEmpty() && terminalAgents.all { it.status == "cancelled" }
                 val hasTerminalResult = terminalAgents.any { it.status == "completed" || it.status == "failed" }
+                // Уведомления о завершении «как у них» — только по фактическим
+                // итогам (счётчики из снимка, без выдуманных результатов).
+                val terminalCounts = _swarmPanelState.value.effectiveCounts
+                if (cancelledRun) {
+                    SubagentNotifier.notifyCancelled(getApplication(), terminalCounts)
+                } else if (hasTerminalResult) {
+                    SubagentNotifier.notifyFinished(getApplication(), terminalCounts, hasFailures = terminalCounts.failed > 0)
+                }
                 if (!cancelledRun && hasTerminalResult && report.isNotBlank()) {
                     val resultMessage = ChatMessage(role = MessageRole.AGENT, content = report, timestamp = currentTimeFormatted())
                     if (_settings.value.activeConversationId == sourceSession) {
@@ -2564,8 +2715,8 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
             return
         }
         viewModelScope.launch {
-            val state = backendClient.manageMultiAgentSwarm(_settings.value.pcBridgeUrl, "cancel_task", requestId = subagentRequestId)
-            if (state.isNotEmpty()) _swarmAgents.value = state
+            val state = backendClient.manageMultiAgentSwarmSnapshot(_settings.value.pcBridgeUrl, "cancel_task", requestId = subagentRequestId)
+            if (state.agents.isNotEmpty()) applySwarmSnapshot(state)
         }
     }
 
@@ -2857,7 +3008,10 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                 SlashMentionSuggestionItem("cmd_schedule", "/schedule", "/schedule ", "Запланировать фоновую задачу по расписанию", "Автоматизация", "⏰"),
                 SlashMentionSuggestionItem("cmd_grill", "/grill-me", "/grill-me ", "Критическая проверка решения на краевые случаи", "Скилл", "🔥"),
                 SlashMentionSuggestionItem("cmd_learn", "/learn", "/learn ", "Извлечь паттерны и сохранить знания в скилл", "Скилл", "🧠"),
-                SlashMentionSuggestionItem("cmd_plugin", "/plugin", "/plugin ", "Управление плагинами, скиллами и MCP-серверами", "Расширения", "🧩")
+                SlashMentionSuggestionItem("cmd_plugin", "/plugin", "/plugin ", "Управление плагинами, скиллами и MCP-серверами", "Расширения", "🧩"),
+                // Находка приёмки 3 ноября: /swarm поддерживался send-handler'ом,
+                // но отсутствовал в палитре подсказок.
+                SlashMentionSuggestionItem("cmd_swarm", "/swarm", "/swarm", "Открыть панель фоновых задач и субагентов", "Субагенты", "🤖")
             )
             val skillItems = _installedSkills.value.map { sk ->
                 val cleanSlug = sk.id.removePrefix("/")

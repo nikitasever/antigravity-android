@@ -24,6 +24,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { killProcessTree } = require('./subagent-cli');
 const { parseMcpServerEntry } = require('./extension-formats');
+const { createToolPermissions } = require('./tool-permissions');
 
 // Версии протокола, которые клиент реально поддерживает. Клиент запрашивает
 // предпочтительную, сервер отвечает своей; незнакомая версия — честный отказ.
@@ -1150,6 +1151,19 @@ class McpClientManager {
     // повторный probe (Critical #2).
     async callTool(id, name, args = {}, options = {}) {
         const key = this.#key(id);
+        // Поштучные права инструментов («как у них»: Claude McpToolPermission).
+        // Проверка ДО соединения и авторизации: запрещённый инструмент не
+        // выполняется вовсе; режим «Спрашивать» блокирует вызовы модели,
+        // явные действия пользователя (userInitiated) проходят.
+        if (!this.toolPermissions) {
+            this.toolPermissions = this.clientOptions.toolPermissions || createToolPermissions();
+        }
+        const permCheck = this.toolPermissions.checkToolCall(String(id), String(name), {
+            userInitiated: options.userInitiated === true
+        });
+        if (!permCheck.allow) {
+            return { ok: false, error: permCheck.error, errorCode: permCheck.errorCode };
+        }
         if (this.clientOptions.authorizeDescriptor) {
             try {
                 const raw = options.descriptor || this.descriptors.get(key);

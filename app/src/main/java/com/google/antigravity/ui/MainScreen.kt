@@ -223,6 +223,8 @@ fun MainScreen(
     val extensionsError by viewModel.extensionsError.collectAsState()
     val isExtensionsLoading by viewModel.isExtensionsLoading.collectAsState()
     val extensionCatalog by viewModel.extensionCatalog.collectAsState()
+    val mcpToolPermissions by viewModel.mcpToolPermissions.collectAsState()
+    val skillDetailStates by viewModel.skillDetailStates.collectAsState()
     val pendingAttachments by viewModel.pendingAttachments.collectAsState()
     val pcBridgeStatus by viewModel.pcBridgeStatus.collectAsState()
     val drawerSection by viewModel.drawerSection.collectAsState()
@@ -651,7 +653,17 @@ fun MainScreen(
                             mcpToolResult = mcpToolResult,
                             isMcpToolCallRunning = isMcpToolCallRunning,
                             onDismissToolResult = { viewModel.dismissMcpToolResult() },
-                            onInstallCatalogItem = { item -> viewModel.installCatalogExtension(item) }
+                            onInstallCatalogItem = { item -> viewModel.installCatalogExtension(item) },
+                            mcpToolPermissions = mcpToolPermissions,
+                            onLoadMcpToolPermissions = { id -> viewModel.loadMcpToolPermissions(id) },
+                            onSetMcpToolPermission = { id, tool, permission ->
+                                viewModel.setMcpToolPermission(id, tool, permission)
+                            },
+                            onSetAllMcpToolPermissions = { id, permission ->
+                                viewModel.setAllMcpToolPermissions(id, permission)
+                            },
+                            skillDetailStates = skillDetailStates,
+                            onLoadSkillDetail = { name -> viewModel.loadSkillDetail(name) }
                         )
                     }
 
@@ -876,8 +888,11 @@ fun MainScreen(
         }
 
         if (showSwarmSheet) {
+            val swarmPanelState by viewModel.swarmPanelState.collectAsState()
+            val swarmOwnTaskActive by viewModel.isSwarmTaskActive.collectAsState()
             MultiAgentSwarmSheet(
                 agents = swarmAgents,
+                panelState = swarmPanelState,
                 onDismiss = { showSwarmSheet = false },
                 onCancelTask = viewModel::cancelSubagentAnalysis,
                 onDispatchCodeTask = { viewModel.dispatchSwarmTask(it, prepareChanges = true) },
@@ -886,7 +901,8 @@ fun MainScreen(
                 },
                 onInsertMention = { mentionText ->
                     viewModel.sendUserPrompt("${mentionText.trim()} Доложи текущий статус", viaVoice = false)
-                }
+                },
+                isOwnTaskActive = swarmOwnTaskActive
             )
         }
 
@@ -1323,11 +1339,13 @@ private fun ChatGptMainChatScreen(
         }
 
         val isSwarmTaskActive by viewModel.isSwarmTaskActive.collectAsState()
+        val swarmPanelState by viewModel.swarmPanelState.collectAsState()
 
         // Компактная плашка фоновых задач появляется только при реально запущенной фоновой/мультиагентной задаче
         if (forceExpandBgTasks || isSwarmTaskActive) {
             CodeBackgroundTasksEntryPoint(
                 agents = swarmAgents,
+                panelState = swarmPanelState,
                 isStreaming = isAnyMessageStreaming,
                 isSwarmTaskActive = isSwarmTaskActive,
                 activeSessionTitle = activeSessionTitle,

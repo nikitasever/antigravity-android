@@ -154,6 +154,12 @@ data class ExtensionCatalogItem(
     val compatibility: String = "requires-check",
     val blocker: String = "",
     val licenseNote: String = "",
+    /** Издатель позиции; пусто — «не записано» (мост может не отдавать поле). */
+    val publisher: String = "",
+    /** URL официального источника; пусто — «не записано». */
+    val sourceUrl: String = "",
+    /** Сценарий проверки при переносе; пусто — «не записано». */
+    val testScenario: String = "",
     /** Устанавливается только из локального проверенного источника. */
     val installable: Boolean = false,
     val installPath: String = ""
@@ -168,6 +174,101 @@ data class PcSkillItem(
     val enabled: Boolean = true,
     val path: String = ""
 )
+
+/**
+ * Запись права инструмента MCP (ответ tool_permissions моста, «как у них»):
+ * permission — allow/ask/deny; source — уровень правила (tool/server/policy).
+ */
+data class McpToolPermissionEntry(
+    val tool: String = "",
+    val permission: String = "",
+    val source: String = ""
+)
+
+/**
+ * Состояние прав инструментов одного MCP-сервера (секция «Права инструментов»).
+ * Приоритет прав (как у них): per-tool > «все инструменты сервера» > глобальная
+ * политика (source показывает уровень). defaultPermission = null — мост не
+ * прислал уровень сервера (не записано, ничего не выдумывается).
+ */
+data class McpToolPermissionsState(
+    val serverId: String = "",
+    val defaultPermission: String? = null,
+    val tools: List<McpToolPermissionEntry> = emptyList(),
+    val loaded: Boolean = false,
+    val loading: Boolean = false,
+    val error: String = ""
+) {
+    /** Запрос к мосту отправлен (честное состояние загрузки). */
+    fun onLoading(): McpToolPermissionsState = copy(loading = true, error = "")
+
+    /** Успешный ответ tool_permissions — список только из живого ответа. */
+    fun onLoaded(
+        defaultPermission: String?,
+        tools: List<McpToolPermissionEntry>
+    ): McpToolPermissionsState = copy(
+        defaultPermission = defaultPermission,
+        tools = tools,
+        loaded = true,
+        loading = false,
+        error = ""
+    )
+
+    /** Отказ сервера/связи: ошибка видима текстом, успех не выдумывается. */
+    fun onError(message: String): McpToolPermissionsState =
+        copy(loading = false, error = message)
+
+    /** Успешная смена права одного инструмента (set_tool_permission). */
+    fun onToolPermissionChanged(tool: String, permission: String): McpToolPermissionsState =
+        copy(
+            tools = tools.map {
+                if (it.tool == tool) it.copy(permission = permission, source = "tool") else it
+            },
+            error = ""
+        )
+
+    /**
+     * Успешная смена прав всех инструментов (set_all_tools_permissions) —
+     * уровень «все инструменты сервера». Инструменты с собственным правом
+     * (source = tool) сохраняют его: приоритет per-tool выше.
+     */
+    fun onAllToolsPermissionChanged(permission: String): McpToolPermissionsState =
+        copy(
+            defaultPermission = permission,
+            tools = tools.map {
+                if (it.source == "tool") it else it.copy(permission = permission, source = "server")
+            },
+            error = ""
+        )
+}
+
+/**
+ * Деталь навыка (ответ skills detail моста): полный текст SKILL.md (content).
+ * enabled = null — мост не прислал признак (не записано).
+ */
+data class SkillDetailInfo(
+    val id: String = "",
+    val name: String = "",
+    val description: String = "",
+    val enabled: Boolean? = null,
+    val source: String = "",
+    val path: String = "",
+    val content: String = ""
+)
+
+/** Состояние загрузки детали навыка (загрузка / успех / честная ошибка). */
+data class SkillDetailState(
+    val skillId: String = "",
+    val detail: SkillDetailInfo? = null,
+    val loading: Boolean = false,
+    val error: String = ""
+) {
+    fun onLoading(): SkillDetailState = copy(loading = true, error = "")
+    fun onLoaded(detail: SkillDetailInfo): SkillDetailState =
+        copy(detail = detail, loading = false, error = "")
+
+    fun onError(message: String): SkillDetailState = copy(loading = false, error = message)
+}
 
 /**
  * QA-дефект Medium #1: счётчик поколений запросов расширений. Каждая операция
@@ -225,6 +326,19 @@ fun describeMcpStatus(status: String): String = when (status.trim().lowercase())
     "failed" -> "проверка не пройдена"
     "disabled" -> "отключён"
     else -> status
+}
+
+/**
+ * Человекочитаемая метка права инструмента (как у них): allow — «Всегда
+ * разрешать», ask — «Спрашивать», deny — «Запретить». Пустое значение —
+ * «не записано»; неизвестные значения показываются как есть, без выдумывания.
+ */
+fun describeToolPermission(permission: String): String = when (permission.trim().lowercase()) {
+    "allow" -> "Всегда разрешать"
+    "ask" -> "Спрашивать"
+    "deny" -> "Запретить"
+    "" -> "не записано"
+    else -> permission
 }
 
 enum class AgentExecutionTarget(val shortLabel: String, val titleRu: String, val subtitleRu: String) {
@@ -536,12 +650,40 @@ data class SwarmAgentNode(
     val stepLogs: List<String> = emptyList(),
     val logs: List<String> = stepLogs,
     val changeReview: String = "",
-    val isSettling: Boolean = false
+    val isSettling: Boolean = false,
+    // «Как у них» (Claude: «Running in the shared directory… consider worktree
+    // mode to isolate changes»): режим рабочего каталога задачи —
+    // "isolated" (изолированная рабочая копия) или "shared" (общий каталог).
+    // В старых ответах моста полей нет — null, прежний вид панели.
+    val workspaceMode: String? = null,
+    val sharedDirectoryWarning: String? = null
 ) {
     val isInProgress: Boolean get() = isSettling || status in setOf("queued", "running")
 }
 
 typealias SwarmSubAgentItem = SwarmAgentNode
+
+// Снимок роя «как у них» (Claude: «%1$d running task(s)», «No background
+// tasks», «Your computer is busy with other sessions…»). Все новые поля
+// отсутствуют в старых ответах моста — тогда null и прежнее поведение.
+data class SwarmCounts(
+    val queued: Int = 0,
+    val running: Int = 0,
+    val completed: Int = 0,
+    val failed: Int = 0,
+    val cancelled: Int = 0
+)
+
+data class SwarmSnapshot(
+    val agents: List<SwarmAgentNode> = emptyList(),
+    val counts: SwarmCounts? = null,
+    val runningTasks: Int? = null,
+    val busy: Boolean? = null,
+    val busyMessage: String? = null,
+    val batchId: String = "",
+    val swarmActive: Boolean = false,
+    val strategy: String = ""
+)
 
 data class AndroidCliCommandResult(
     val id: String = UUID.randomUUID().toString(),

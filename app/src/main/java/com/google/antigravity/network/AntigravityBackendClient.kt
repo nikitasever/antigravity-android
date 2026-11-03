@@ -21,6 +21,7 @@ import com.google.antigravity.model.GeneratedMediaAttachment
 import com.google.antigravity.model.GoogleDriveFileItem
 import com.google.antigravity.model.GoogleDriveStatus
 import com.google.antigravity.model.InstalledPluginItem
+import com.google.antigravity.model.McpToolPermissionEntry
 import com.google.antigravity.model.MessageRole
 import com.google.antigravity.model.OpenRouterCategory
 import com.google.antigravity.model.OpenRouterModelItem
@@ -29,7 +30,10 @@ import com.google.antigravity.model.PcSkillItem
 import com.google.antigravity.model.ProjectWorkspace
 import com.google.antigravity.model.ProjectWorkspaces
 import com.google.antigravity.model.RemoteSessionItem
+import com.google.antigravity.model.SkillDetailInfo
 import com.google.antigravity.model.SwarmAgentNode
+import com.google.antigravity.model.SwarmCounts
+import com.google.antigravity.model.SwarmSnapshot
 import com.google.antigravity.model.ToolCallEvent
 import com.google.antigravity.model.ToolCallStatus
 import com.google.antigravity.model.mapToDirectGeminiModelId
@@ -845,6 +849,103 @@ class AntigravityBackendClient(
         return if (json == null) null to error else parseMcpOAuthReply(json) to null
     }
 
+    // Права инструментов MCP («как у них»: allow/ask/deny на каждый инструмент;
+    // приоритет per-tool > «все инструменты сервера» > глобальная политика) и
+    // деталь навыка (полный текст SKILL.md). Секреты мост редактирует на своей
+    // стороне; сюда попадают только публичные поля.
+
+    /**
+     * Общий POST-запрос к API моста (JSON → JSON): тело ответа при ok:true,
+     * иначе текст ошибки без маскировки (не выдумывается успех).
+     */
+    private suspend fun postBridgeJson(
+        pcBridgeUrl: String,
+        apiPath: String,
+        payload: JSONObject,
+        errorHint: String
+    ): Pair<JSONObject?, String?> = withContext(Dispatchers.IO) {
+        val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext null to "Мост ПК недоступен"
+        try {
+            val request = Request.Builder().url("$base$apiPath")
+                .post(payload.toString().toRequestBody("application/json".toMediaType())).build()
+            httpClient.newCall(request).execute().use { response ->
+                val bodyText = runCatching { response.body?.string() }.getOrNull().orEmpty()
+                if (!response.isSuccessful) {
+                    return@withContext null to "Мост ПК вернул HTTP ${response.code}: ${safeBridgeErrorText(bodyText)}"
+                }
+                val json = JSONObject(bodyText.ifBlank { "{}" })
+                if (!json.optBoolean("ok", false)) {
+                    return@withContext null to json.optString("error", errorHint).ifBlank { errorHint }
+                }
+                return@withContext json to null
+            }
+        } catch (e: Throwable) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            null to (e.localizedMessage ?: errorHint)
+        }
+    }
+
+    /**
+     * Права инструментов последнего живого probe (tool_permissions). Список
+     * может быть пустым — это честно: инструменты появляются только после
+     * реального рукопожатия «Проверить».
+     */
+    internal suspend fun mcpToolPermissions(
+        pcBridgeUrl: String,
+        name: String
+    ): Pair<McpToolPermissionsReply?, String?> {
+        val (json, error) = postBridgeJson(
+            pcBridgeUrl, "/api/mcp",
+            JSONObject().put("action", "tool_permissions").put("name", name),
+            "Не удалось получить права инструментов"
+        )
+        return if (json == null) null to error else parseMcpToolPermissions(json) to null
+    }
+
+    /** Смена права одного инструмента (allow/ask/deny). */
+    internal suspend fun setMcpToolPermission(
+        pcBridgeUrl: String,
+        name: String,
+        tool: String,
+        permission: String
+    ): Pair<McpPermissionUpdateReply?, String?> {
+        val (json, error) = postBridgeJson(
+            pcBridgeUrl, "/api/mcp",
+            JSONObject().put("action", "set_tool_permission").put("name", name)
+                .put("tool", tool).put("permission", permission),
+            "Не удалось изменить право инструмента"
+        )
+        return if (json == null) null to error else parseMcpPermissionUpdate(json) to null
+    }
+
+    /** Смена прав всех инструментов сервера (уровень «все инструменты сервера»). */
+    internal suspend fun setAllMcpToolPermissions(
+        pcBridgeUrl: String,
+        name: String,
+        permission: String
+    ): Pair<McpPermissionUpdateReply?, String?> {
+        val (json, error) = postBridgeJson(
+            pcBridgeUrl, "/api/mcp",
+            JSONObject().put("action", "set_all_tools_permissions").put("name", name)
+                .put("permission", permission),
+            "Не удалось изменить права всех инструментов"
+        )
+        return if (json == null) null to error else parseMcpPermissionUpdate(json) to null
+    }
+
+    /** Полный текст SKILL.md навыка (действие detail /api/skills). */
+    internal suspend fun skillDetail(
+        pcBridgeUrl: String,
+        name: String
+    ): Pair<SkillDetailInfo?, String?> {
+        val (json, error) = postBridgeJson(
+            pcBridgeUrl, "/api/skills",
+            JSONObject().put("action", "detail").put("name", name),
+            "Не удалось получить SKILL.md навыка"
+        )
+        return if (json == null) null to error else parseSkillDetail(json) to null
+    }
+
     suspend fun probeMcpServer(
         pcBridgeUrl: String,
         name: String,
@@ -1373,62 +1474,24 @@ class AntigravityBackendClient(
     // Round 5: Multi-Agent Swarm Window (Section 3)
     // ---------------------------------------------------------------------------
 
-    private fun parseSwarmAgentsJson(json: JSONObject): List<SwarmAgentNode> {
-        val root = json.optJSONObject("swarm") ?: json
-        if (root.optString("strategy") != "PARALLEL_ANALYSIS") return emptyList()
-        val arr = root.optJSONArray("agents") ?: return emptyList()
-        val out = mutableListOf<SwarmAgentNode>()
-        for (i in 0 until arr.length()) {
-            val obj = arr.optJSONObject(i) ?: continue
-            val logsArr = obj.optJSONArray("stepLogs") ?: obj.optJSONArray("logs")
-            val logs = mutableListOf<String>()
-            if (logsArr != null) {
-                for (lIdx in 0 until logsArr.length()) {
-                    logs.add(logsArr.optString(lIdx, ""))
-                }
-            }
-            out.add(
-                SwarmAgentNode(
-                    id = obj.optString("id", "agent_$i"),
-                    handle = obj.optString("handle", obj.optString("mention", "@agent")),
-                    name = obj.optString("name", "Агент"),
-                    roleBadge = obj.optString("roleBadge", obj.optString("role", "Субагент анализа")),
-                    isLeader = obj.optBoolean("isLeader", false),
-                    model = obj.optString("model", "gemini-4-argon-high"),
-                    status = obj.optString("status", "ready").lowercase(),
-                    currentTask = obj.optString("currentTask", obj.optString("currentStep", "")),
-                    stepLogs = logs,
-                    isSettling = obj.optBoolean("settling", false),
-                    changeReview = obj.optJSONObject("review")?.let { review -> buildString {
-                        append("Копия: ").append(review.optString("workspaceId")).append("\n")
-                        append("Базовая версия: ").append(review.optString("base")).append("\n")
-                        if (review.optBoolean("sourceChanged")) append("Исходный проект изменился. Требуется повторная проверка.\n")
-                        append("\n").append(review.optString("diff").ifBlank { "Нет изменений отслеживаемых файлов." })
-                        val files = review.optJSONArray("newFiles")
-                        if (files != null) for (index in 0 until files.length()) {
-                            val file = files.optJSONObject(index) ?: continue
-                            append("\n\nНовый файл: ").append(file.optString("name")).append("\n")
-                            append(file.optString("content", file.optString("omitted")))
-                        }
-                    } }.orEmpty()
-                )
-            )
-        }
-        return out
-    }
+    private fun parseSwarmAgentsJson(json: JSONObject): List<SwarmAgentNode> =
+        parseSwarmSnapshot(json).agents
 
-    suspend fun fetchMultiAgentSwarm(pcBridgeUrl: String, requestId: String = ""): List<SwarmAgentNode> = withContext(Dispatchers.IO) {
-        val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext emptyList()
+    suspend fun fetchMultiAgentSwarm(pcBridgeUrl: String, requestId: String = ""): List<SwarmAgentNode> =
+        fetchMultiAgentSwarmSnapshot(pcBridgeUrl, requestId).agents
+
+    suspend fun fetchMultiAgentSwarmSnapshot(pcBridgeUrl: String, requestId: String = ""): SwarmSnapshot = withContext(Dispatchers.IO) {
+        val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext SwarmSnapshot()
         try {
             val req = Request.Builder().url("$base/api/agents/swarm?requestId=${java.net.URLEncoder.encode(requestId, "UTF-8")}").get().build()
             clientForUrl(base).newCall(req).useCancellable { resp ->
-                if (!resp.isSuccessful) return@withContext emptyList()
+                if (!resp.isSuccessful) return@withContext SwarmSnapshot()
                 val json = JSONObject(resp.body?.string() ?: "{}")
-                parseSwarmAgentsJson(json)
+                parseSwarmSnapshot(json)
             }
         } catch (failure: Throwable) {
             if (failure is kotlinx.coroutines.CancellationException) throw failure;
-            emptyList()
+            SwarmSnapshot()
         }
     }
 
@@ -1439,8 +1502,17 @@ class AntigravityBackendClient(
         task: String = "",
         model: String = "",
         requestId: String = ""
-    ): List<SwarmAgentNode> = withContext(Dispatchers.IO) {
-        val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext emptyList()
+    ): List<SwarmAgentNode> = manageMultiAgentSwarmSnapshot(pcBridgeUrl, action, agentId, task, model, requestId).agents
+
+    suspend fun manageMultiAgentSwarmSnapshot(
+        pcBridgeUrl: String,
+        action: String,
+        agentId: String = "",
+        task: String = "",
+        model: String = "",
+        requestId: String = ""
+    ): SwarmSnapshot = withContext(Dispatchers.IO) {
+        val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext SwarmSnapshot()
         try {
             val payload = JSONObject().apply {
                 put("action", action)
@@ -1451,13 +1523,13 @@ class AntigravityBackendClient(
             }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
             val req = Request.Builder().url("$base/api/agents/swarm").post(payload).build()
             clientForUrl(base).newCall(req).useCancellable { resp ->
-                if (!resp.isSuccessful) return@withContext emptyList()
+                if (!resp.isSuccessful) return@withContext SwarmSnapshot()
                 val json = JSONObject(resp.body?.string() ?: "{}")
-                parseSwarmAgentsJson(json)
+                parseSwarmSnapshot(json)
             }
         } catch (failure: Throwable) {
             if (failure is kotlinx.coroutines.CancellationException) throw failure;
-            emptyList()
+            SwarmSnapshot()
         }
     }
 
@@ -3170,6 +3242,11 @@ internal fun parseExtensionCatalog(json: JSONObject): List<ExtensionCatalogItem>
                 compatibility = p.optString("supportStatus", "requires-check"),
                 blocker = blockerText,
                 licenseNote = license?.optString("note", "") ?: "",
+                // Издатель/источник/сценарий: берутся только из ответа моста;
+                // пусто = «не записано» (поля может не быть в матрице).
+                publisher = p.optString("publisher", ""),
+                sourceUrl = p.optString("sourceUrl", ""),
+                testScenario = p.optString("testScenario", ""),
                 installable = localSource && (availability == "installed" || availability == "imported") && importPath.isNotBlank(),
                 installPath = importPath
             )
@@ -3328,5 +3405,165 @@ internal fun mergeMcpAuthFields(
             oauthAuthorized = old.oauthAuthorized
         )
     } ?: item
+}
+
+// ---------------------------------------------------------------------------
+// Права инструментов MCP и деталь навыка («как у них»). Top-level internal —
+// тестируются без запуска сети. Поля с честными фолбэками: нет поля —
+// «не записано», ничего не выдумывается.
+// ---------------------------------------------------------------------------
+
+/** Разобранный ответ tool_permissions: уровень сервера и права инструментов. */
+internal data class McpToolPermissionsReply(
+    val server: String = "",
+    /** null — мост не прислал defaultPermission (глобальная политика). */
+    val defaultPermission: String? = null,
+    val tools: List<McpToolPermissionEntry> = emptyList()
+)
+
+/**
+ * Разбор ответа tool_permissions: tools[] — только из живого ответа моста
+ * (может быть пустым, если probe не выполнялся).
+ */
+internal fun parseMcpToolPermissions(json: JSONObject): McpToolPermissionsReply {
+    val defaultPermission =
+        if (json.has("defaultPermission") && !json.isNull("defaultPermission")) {
+            json.optString("defaultPermission", "")
+        } else {
+            null
+        }
+    val arr = json.optJSONArray("tools")
+    val tools = mutableListOf<McpToolPermissionEntry>()
+    if (arr != null) {
+        for (i in 0 until arr.length()) {
+            val obj = arr.optJSONObject(i) ?: continue
+            tools.add(
+                McpToolPermissionEntry(
+                    tool = obj.optString("tool", ""),
+                    permission = obj.optString("permission", ""),
+                    source = obj.optString("source", "")
+                )
+            )
+        }
+    }
+    return McpToolPermissionsReply(
+        server = json.optString("server", "").ifBlank { json.optString("name", "") },
+        defaultPermission = defaultPermission,
+        tools = tools
+    )
+}
+
+/** Разобранный ответ set_tool_permission / set_all_tools_permissions. */
+internal data class McpPermissionUpdateReply(
+    val server: String = "",
+    val tool: String = "",
+    val permission: String = ""
+)
+
+internal fun parseMcpPermissionUpdate(json: JSONObject): McpPermissionUpdateReply =
+    McpPermissionUpdateReply(
+        server = json.optString("server", "").ifBlank { json.optString("name", "") },
+        tool = json.optString("tool", ""),
+        permission = json.optString("permission", "")
+    )
+
+/**
+ * Разбор ответа skills detail: полный текст SKILL.md (content). enabled = null,
+ * если мост не прислал логическое поле («не записано», не выдумывается).
+ */
+internal fun parseSkillDetail(json: JSONObject): SkillDetailInfo {
+    val obj = json.optJSONObject("skill") ?: JSONObject()
+    return SkillDetailInfo(
+        id = obj.optString("id", "").ifBlank { obj.optString("name", "") },
+        name = obj.optString("name", ""),
+        description = obj.optString("description", ""),
+        // Тип значения проверяем через opt(): не-логическое или отсутствующее
+        // поле — null («не записано», true не выдумывается).
+        enabled = obj.opt("enabled") as? Boolean,
+        source = obj.optString("source", ""),
+        path = obj.optString("path", ""),
+        content = obj.optString("content", "")
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Снимок роя «как у них» (Claude: «%1$d running task(s)», «No background
+// tasks», «Your computer is busy with other sessions…», «Running in the shared
+// directory… consider worktree mode»). Поля counts / runningTasks / busy /
+// busyMessage и workspaceMode / sharedDirectoryWarning отсутствуют в старых
+// ответах моста — тогда null («не записано»), значения не выдумываются.
+// ---------------------------------------------------------------------------
+
+internal fun parseSwarmAgentNode(obj: JSONObject, index: Int): SwarmAgentNode {
+    val logsArr = obj.optJSONArray("stepLogs") ?: obj.optJSONArray("logs")
+    val logs = mutableListOf<String>()
+    if (logsArr != null) {
+        for (lIdx in 0 until logsArr.length()) {
+            logs.add(logsArr.optString(lIdx, ""))
+        }
+    }
+    return SwarmAgentNode(
+        id = obj.optString("id", "agent_$index"),
+        handle = obj.optString("handle", obj.optString("mention", "@agent")),
+        name = obj.optString("name", "Агент"),
+        roleBadge = obj.optString("roleBadge", obj.optString("role", "Субагент анализа")),
+        isLeader = obj.optBoolean("isLeader", false),
+        model = obj.optString("model", "gemini-4-argon-high"),
+        status = obj.optString("status", "ready").lowercase(),
+        currentTask = obj.optString("currentTask", obj.optString("currentStep", "")),
+        stepLogs = logs,
+        isSettling = obj.optBoolean("settling", false),
+        workspaceMode = obj.optString("workspaceMode", "").ifBlank { null },
+        sharedDirectoryWarning = obj.optString("sharedDirectoryWarning", "").ifBlank { null },
+        changeReview = obj.optJSONObject("review")?.let { review -> buildString {
+            append("Копия: ").append(review.optString("workspaceId")).append("\n")
+            append("Базовая версия: ").append(review.optString("base")).append("\n")
+            if (review.optBoolean("sourceChanged")) append("Исходный проект изменился. Требуется повторная проверка.\n")
+            append("\n").append(review.optString("diff").ifBlank { "Нет изменений отслеживаемых файлов." })
+            val files = review.optJSONArray("newFiles")
+            if (files != null) for (fIdx in 0 until files.length()) {
+                val file = files.optJSONObject(fIdx) ?: continue
+                append("\n\nНовый файл: ").append(file.optString("name")).append("\n")
+                append(file.optString("content", file.optString("omitted")))
+            }
+        } }.orEmpty()
+    )
+}
+
+internal fun parseSwarmSnapshot(json: JSONObject): SwarmSnapshot {
+    val root = json.optJSONObject("swarm") ?: json
+    val strategy = root.optString("strategy", "")
+    // Стратегический шлюз прежний: неизвестная стратегия — агентов не заявляем.
+    val agents = if (strategy == "PARALLEL_ANALYSIS") {
+        val arr = root.optJSONArray("agents")
+        if (arr != null) {
+            val out = mutableListOf<SwarmAgentNode>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.optJSONObject(i) ?: continue
+                out.add(parseSwarmAgentNode(obj, i))
+            }
+            out
+        } else emptyList()
+    } else emptyList()
+    val countsObj = root.optJSONObject("counts")
+    val counts = countsObj?.let { c ->
+        SwarmCounts(
+            queued = c.optInt("queued", 0),
+            running = c.optInt("running", 0),
+            completed = c.optInt("completed", 0),
+            failed = c.optInt("failed", 0),
+            cancelled = c.optInt("cancelled", 0)
+        )
+    }
+    return SwarmSnapshot(
+        agents = agents,
+        counts = counts,
+        runningTasks = if (root.has("runningTasks")) root.optInt("runningTasks", 0) else null,
+        busy = if (root.has("busy")) root.optBoolean("busy", false) else null,
+        busyMessage = root.optString("busyMessage", "").ifBlank { null },
+        batchId = root.optString("batchId", ""),
+        swarmActive = root.optBoolean("swarmActive", false),
+        strategy = strategy
+    )
 }
 
