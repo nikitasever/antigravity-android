@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "title": "Этап 7 — перенос всех позиций по матрице: полный проход инвентаря",
-  "generatedAt": "2026-11-03T06:48:31.610Z",
+  "generatedAt": "2026-11-03T08:42:12.642Z",
   "generatedBy": "pc-bridge/scripts/build-migration-coverage.js",
   "sources": {
     "inventory": "extensions-inventory.json",
@@ -1973,7 +1973,7 @@
           }
         ]
       },
-      "verificationScenario": "Включить rea, выбрать навык, выполнить один инструмент REA и проверить, что ссылки references/* разрешаются",
+      "verificationScenario": "Включить rea, выбрать навык, выполнить один инструмент REA и проверить, что ссылки references/* разрешаются — ВЫПОЛНЕНО 2026-11-03 (probe+call rea, прогон с навыком; телефонный цикл не подтверждён)",
       "path": {
         "confirmed": true,
         "basis": "локальный путь подтверждён проверкой на диске (fs.existsSync)",
@@ -3581,21 +3581,6 @@
       "rule": "file-shadow"
     },
     {
-      "id": "bl:local-skill-reverse-engineer-anything",
-      "positionId": "local-skill-reverse-engineer-anything",
-      "issues": [
-        "навык зависит от MCP rea, который в mcp_config.json помечен disabled:true — без включения навык неработоспособен"
-      ],
-      "dependencies": [
-        "references/*.md — 7 файлов",
-        "MCP-сервер rea (инструменты REA)"
-      ],
-      "supportStatus": "fully-supported",
-      "owner": "antigravity-android (репозиторий)",
-      "nextStep": "Включить компонент (mcp_config.json / SKILL.md) и выполнить проверку по testScenario (рукопожатие/загрузка), затем обновить матрицу.",
-      "rule": "component-disabled"
-    },
-    {
       "id": "bl:local-skill-rigorous-programming-reasoner",
       "positionId": "local-skill-rigorous-programming-reasoner",
       "issues": [
@@ -3800,7 +3785,7 @@
     "pathUnconfirmed": 55,
     "mandatoryTotal": 21,
     "mandatoryBlocked": [],
-    "backlogCount": 73,
+    "backlogCount": 72,
     "overallMigrationStatus": "требует проверки",
     "overallMigrationReason": "Обязательные позиции не заблокированы; статус остаётся «требует проверки» до сквозных прогонов"
   }

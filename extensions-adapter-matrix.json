@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "title": "Матрица адаптеров компонентов (Этап 5)",
-  "generatedAt": "2026-11-03T06:48:31.448Z",
+  "generatedAt": "2026-11-03T08:42:12.442Z",
   "strategies": {
     "PRESERVE": "preserve",
     "CONVERT": "convert",
