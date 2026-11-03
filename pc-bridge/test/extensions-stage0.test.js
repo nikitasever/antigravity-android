@@ -26,7 +26,10 @@ test('автозасев фиктивных плагинов отсутству�
 });
 
 // Просмотр списка навыков ничего не включает: отключённое остаётся отключённым.
+// (После выноса управления навыками в lib/skill-store.js поведение проверяется
+// через модульный API — прежний vm-срез функций из server.js больше не нужен.)
 test('listSkills не реанимирует отключённый навык при просмотре', async t => {
+    const { createSkillStore } = require('../lib/skill-store');
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'stage0-skills-'));
     t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
     const skillsDir = path.join(tmp, 'skills');
@@ -34,18 +37,18 @@ test('listSkills не реанимирует отключённый навык �
     fs.mkdirSync(aseDir, { recursive: true });
     fs.writeFileSync(path.join(aseDir, 'SKILL.md.disabled'), '---\nname: autonomous-software-engineer\ndescription: "Отключён"\n---\n\nТекст', 'utf8');
 
-    const parseSkillMarkdown = extractFunction('parseSkillMarkdown');
-    const listSkills = extractFunction('listSkills', {
-        fs, path,
-        SKILLS_DIR: skillsDir,
-        DEFAULT_WORKSPACE: path.join(tmp, 'workspace-no-skills'),
-        IDE_BASE_DIR: path.join(tmp, 'builtin-no-skills'),
-        parseSkillMarkdown
+    const store = createSkillStore({
+        skillRoots: [
+            { dir: path.join(tmp, 'workspace-no-skills'), source: 'workspace' },
+            { dir: skillsDir, source: 'global' },
+            { dir: path.join(tmp, 'builtin-no-skills'), source: 'builtin' }
+        ],
+        writeDir: skillsDir
     });
 
     const before = fs.existsSync(path.join(aseDir, 'SKILL.md'));
     assert.equal(before, false, 'до просмотра активного файла нет');
-    const skills = listSkills();
+    const skills = store.listSkills();
     const ase = skills.find(s => s.name === 'autonomous-software-engineer');
     assert.ok(ase, 'отключённый навык виден в списке');
     assert.equal(ase.enabled, false, 'но остаётся отключённым');
@@ -53,7 +56,7 @@ test('listSkills не реанимирует отключённый навык �
         'просмотр не создал активный SKILL.md');
 
     // Второй просмотр — тот же результат, отключение переживает любые вызовы.
-    const second = listSkills().find(s => s.name === 'autonomous-software-engineer');
+    const second = store.listSkills().find(s => s.name === 'autonomous-software-engineer');
     assert.equal(second.enabled, false);
     assert.equal(fs.existsSync(path.join(aseDir, 'SKILL.md')), false);
 });

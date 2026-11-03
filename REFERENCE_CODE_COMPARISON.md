@@ -50,12 +50,12 @@ assesses as lower-risk, and blocks the rest»).
 
 | # | Вопрос | Референс (факт кода/строк) | Было у нас | Действие | Статус |
 |---|---|---|---|---|---|
-| 1 | Права инструментов MCP | Claude: `McpToolPermission(server, tool)` + `McpSetAllToolsPermission(server)`; значения Ask/Always allow/Deny (+ Deny with comment) | только грубая политика `toolExecutionPolicy` (preset AUTOPILOT) без поштучных прав | **Сделать как у них**: поштучные права с приоритетом tool > «все инструменты сервера» > политика; отказы deny/ask честные, проверка до соединения; UI «Права инструментов» + «Изменить права всех инструментов» | **реализовано в этом проходе** (§4) |
-| 2 | Просмотр инструкций навыка | Claude: `ViewSkillInstructions`, `SkillDetail(id)`, `SkillEdit(id)` | превью 240 символов + обрезка 4000, без полного просмотра и редактирования | **Сделать как у них**: деталь навыка с полным текстом SKILL.md; `SkillEdit` — отложить | просмотр — **реализовано**; edit — «требует проверки» (отложено) |
+| 1 | Права инструментов MCP | Claude: `McpToolPermission(server, tool)` + `McpSetAllToolsPermission(server)`; значения Ask/Always allow/Deny (+ Deny with comment); скоупы «Always allow for this project / session / task / website» | только грубая политика `toolExecutionPolicy` (preset AUTOPILOT) без поштучных прав | **Сделать как у них**: поштучные права с приоритетом tool > «все инструменты сервера» > политика; отказы deny/ask честные, проверка до соединения; UI «Права инструментов» + «Изменить права всех инструментов»; скоупы project/session/task/website | **реализовано в этом проходе** (§4); скоупы — **реализовано**: мост (приоритет task > session > tool > website > server > policy; session/task — память моста, website — только HTTP-origin) + Android-пикер скоупа с честными подписями (30 suites / 170 tests). «Deny with comment» — «требует проверки» (семантика комментария по коду не разобрана) |
+| 2 | Просмотр инструкций навыка | Claude: `ViewSkillInstructions`, `SkillDetail(id)`, `SkillEdit(id)`, «Skill name», «Delete skill?», «You already have a skill named /%1$s.» | превью 240 символов + обрезка 4000, без полного просмотра и редактирования | **Сделать как у них**: деталь навыка с полным текстом SKILL.md; редактирование/переименование/удаление с подтверждением | **реализовано** (просмотр + SkillEdit): мост `lib/skill-store.js` (update/rename со стабильным id и проверкой коллизий `skill_name_taken`, builtin — только чтение `skill_read_only`, удаление по фактической папке источника), Android — редактор SKILL.md + «Удалить навык?» с текстом референса (29 suites / 160 tests). Граница: «настройки только на claude.ai» не наблюдается в нашем контракте — «требует проверки» |
 | 3 | Деталь карточки каталога | Claude: `ConnectorDirectoryDetail`, `ConnectDirectoryEntryWebScreen`, `AddCustomConnectorWebScreen` | список каталога + «Установить», без detail-sheet | **Сделать как у них**: sheet-деталь позиции (издатель/источник/лицензия/блокер/сценарий) + «Установить» | **реализовано в этом проходе** (§4) |
 | 4 | Жизненный цикл MCP-входа | Claude: `McpAuthException$ StartFailed/ExchangeFailed/Cancelled/Denied/MissingCallbackParameters` + `AdditionalAccountsOffException` | наши статусы pending/authorized/denied/failed/expired/revoked/superseded (+safe-тексты ошибок) | расхождение тонкое: `MissingCallbackParameters` у нас — ветка `failed` с текстом; `AdditionalAccountsOff` (многоаккаунтность) — аналога нет | зафиксировано; код не менялся («требует проверки» продукта — многоаккаунтность) |
-| 5 | Composer-механики плагинов | ChatGPT: `ComposerPluginMention/Token*` (упоминания/токены) | `/slash`-команды + «Вставить в чат» | @-упоминания/токены плагинов — отложить | «требует проверки» (отложено) |
-| 6 | Auto-режим оценки рисков tool calls | Claude: Auto mode («checks each tool call for risky actions and prompt injection… blocks the rest») | нет аналога | большая фича — отложить | «требует проверки» (отложено) |
+| 5 | Composer-механики плагинов | ChatGPT: `ComposerPlugin{TokenType=SYSTEM_HINT/GIZMO/SKILL/TARGETED_REPLY, AdditionTrigger=TYPED_AT/PLUS_MENU, MentionMechanism, TokenActionType=INSERTED/REMOVED}` (упоминания/токены) | `/slash`-команды + «Вставить в чат» | @-токены композитора «как у них» по механике | **реализовано (честная модель)**: фишки-токены упоминаний над композитором (INSERTED/REMOVED, дубликаты не добавляются), «Упомянуть…» в меню «+» (PLUS_MENU), ввод «@» (TYPED_AT) прежний; типы фишек — НАШИ категории (Субагент/Навык/MCP/Файл/Диск/Плагин/Контекст/Прочее), их enum SYSTEM_HINT/GIZMO/SKILL/TARGETED_REPLY не воспроизводится дословно — «требует проверки»; токены добавляются к промпту перед черновиком (32 suites / 190 tests) |
+| 6 | Auto-режим оценки рисков tool calls | Claude: Auto mode («checks each tool call for risky actions and prompt injection… blocks the rest»); enum `PermissionMode` = default/plan/auto/acceptEdits/dontAsk/bypassPermissions (`sessions/types.PermissionMode`), org-политика `permission_mode_policy` | нет аналога | **Сделать как у них по составу режимов**; их модельная оценка рисков и prompt injection НЕ воспроизводится (честная граница) | **реализовано (честный аналог)**: мост `lib/permission-modes.js` (6 режимов, auto — открытая эвристика, «deny прав никогда не обходится», живая проверка API) + Android «Режим разрешений» (31 suites / 180 tests) |
 | 7 | MCP Apps (встраиваемые приложения, handoff, лимиты контекста) | Claude: `mcpapps/*`, `McpAppHostCapability` | нет аналога | отдельная фича продукта — отложить | «требует проверки» (отложено) |
 | 8 | Модель навыков | ChatGPT: навыки скачиваются (`RedactedDownloadException`) | файловые SKILL.md локально | разная модель продуктов — не дефект; фиксируется | зафиксировано |
 | 9 | Правка сообщения → версии внутри разговора | claude.ai web (живая проверка 1 ноября): Edit/Cancel/Save + переключение версий | правка создаёт отдельный chat ID | «как у них» — версии внутри разговора | **реализовано** (сверка 3 ноября обновила статус): `ChatMessageVersions.kt` (`forkMessageVersion`/`selectMessageVersion` — архивация хвоста в ветки версий со стабильным id якоря, `conversationExecutionId` сохраняет видимый id разговора), `editAndResendUserMessage`/`selectUserMessageVersion`, UI «Предыдущая/Следующая версия» (`MainScreen.kt:2770–2779`) |
@@ -127,6 +127,59 @@ assesses as lower-risk, and blocks the rest»).
   ошибкой среды AGY CLI (gRPC «proto: … contains invalid UTF-8», exit 3);
   панель и уведомления отразили статусы и счётчики верно — эквивалентность
   движка не заявляется.
+- **Волна 3 — SkillEdit (3 ноября, «полный переход» пункта №2)**: мост
+  `lib/skill-store.js` (вынесен из server.js в тестируемый модуль; update/
+  rename со стабильным id и проверкой дубликатов имён `skill_name_taken`,
+  встроенные навыки — только чтение `skill_read_only`, удаление по фактической
+  папке источника — попутно исправлен баг: раньше remove вычислял путь только
+  в глобальном каталоге и для workspace-навыков мог удалять не ту папку);
+  Android — редактор SKILL.md («Имя навыка» + полный текст), «Удалить навык?»
+  с текстом референса «Навык и его история версий будут удалены навсегда.»,
+  отказ `skill_name_taken` не закрывает редактор (29 suites / 160 tests).
+  Живая проверка моста: UTF-8 round-trip содержимого, переименование, коллизия
+  имени, очистка. Граница: их «This skill has settings that can only be edited
+  on claude.ai.» не наблюдается в нашем контракте — «требует проверки».
+- **Живая приёмка волн 3–4 (эмулятор, скриншоты `w*.png` в
+  `verification_screenshots/`)**: `w2_skill_editor.png` («Имя навыка» +
+  SKILL.md + «Сохранить»/«Отмена»), `w2_skill_detail_buttons.png`
+  («Редактировать»/«Удалить»), `w3_modes_full_list.png` и `w3_modes_note2.png`
+  (6 режимов с подписями и обязательной пометкой про невоспроизводимую
+  модельную проверку), `w3_permission_picker.png` («Всегда разрешать ✓/
+  Спрашивать/Запретить»), `w3_scope_picker.png` (4 скоупа, честные подписи,
+  «нет активной задачи», нижняя пометка «Скоупы — наша модель по мотивам
+  Claude…»), `w3_toolperm_rows.png` (строки прав после живого рукопожатия
+  «1 инстр. • рукопожатие ОК»), `w4_composer_token.png` (фишка `@gdrive:…` с
+  бейджем «Google Диск» и «✕ Удалить упоминание»). Живой round-trip режима:
+  radio «План» → мост `permission_mode` = `plan`, переключение обратно на
+  «Обычный» → `default` (случайный тап приёмки превратился в проверку).
+- **Волна 4 — скоупы прав и режимы разрешений (3 ноября, «полный переход»
+  пунктов «permission scopes» и №6)**:
+  - Скоупы «Always allow for this project / session / task / website»:
+    `lib/tool-permissions.js` — приоритет task > session > tool(project) >
+    website > server > policy; session/task — честно в памяти моста (не
+    переживают перезапуск), website — только по origin HTTP-подключения
+    (stdio — отказ `website_scope_requires_origin`, «не выдумываем»);
+    общий экземпляр прав для enforcement; Android-пикер скоупа с подписями
+    «Для этого проекта (сохраняется на ПК)» / «Для этой сессии (до перезапуска
+    моста)» / «Для этой задачи…» / «Для этого сайта (только HTTP-подключения)»
+    и пометкой «Скоупы — наша модель по мотивам Claude; точная семантика
+    референса не подтверждена» (30 suites / 170 tests).
+  - Режимы разрешений `lib/permission-modes.js`: состав как у референса
+    (enum `PermissionMode` = default/plan/auto/acceptEdits/dontAsk/
+    bypassPermissions разобран по декомпиляции; org-политика
+    `permission_mode_policy`); НО их Auto-режим (модельная оценка рисков и
+    prompt injection) не воспроизводится — наш auto = открытая бинарная
+    эвристика (EXEC_DESTRUCTIVE_NAME/WRITE_NAME/DANGEROUS_ARGS), граница
+    заявлена в текстах отказов («НАША эвристическая оценка… «требует
+    проверки»»); «deny прав никогда не обходится» закреплено тестами;
+    API `permission_mode`/`set_permission_mode`, enforcement в callTool
+    (8 тестов). Живая проверка моста: состав из 6 значений совпадает с enum
+    референса, переключение режима работает, неизвестный режим — честный отказ
+    без смены режима; приёмкой вскрыт и исправлен роутинг: действия
+    `permission_mode`/`set_permission_mode` первоначально упирались в валидацию
+    имени сервера (глобальные действия перенесены выше проверки). Android UI
+    режимов — **реализовано** (31 suites / 180 tests: радио-список 6 значений с
+    честными подписями и пометкой про невоспроизводимую модельную проверку).
 
 ## 5. Ограничения
 
@@ -137,8 +190,9 @@ assesses as lower-risk, and blocks the rest»).
   `connector/auth/b.java` — 152 КБ обфусцированного кода авторизации; его
   внутренняя логика не разбиралась).
 - Строки ресурсов доказывают наличие UI-текстов, не алгоритм; точная семантика
-  скоупов «Always allow for this project/session/task/website» по коду не
-  разобрана — «требует проверки».
+  скоупов «Always allow for this project/session/task/website» по коду
+  референса не разобрана — наша реализация скоупов (Волна 4) заявлена как
+  «наша модель по мотивам Claude», не как воспроизведение их семантики.
 - Живое поведение обоих приложений в части новых экранов вживую не прогонялось
   (нет входов в аккаунты референсов) — статические находки не выдаются за
   пользовательские сценарии.

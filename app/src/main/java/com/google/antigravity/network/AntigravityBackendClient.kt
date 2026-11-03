@@ -31,6 +31,7 @@ import com.google.antigravity.model.ProjectWorkspace
 import com.google.antigravity.model.ProjectWorkspaces
 import com.google.antigravity.model.RemoteSessionItem
 import com.google.antigravity.model.SkillDetailInfo
+import com.google.antigravity.model.SkillEditResult
 import com.google.antigravity.model.SwarmAgentNode
 import com.google.antigravity.model.SwarmCounts
 import com.google.antigravity.model.SwarmSnapshot
@@ -734,24 +735,7 @@ class AntigravityBackendClient(
         }
     }
 
-    private fun parseSkillsJson(json: JSONObject): List<PcSkillItem> {
-        val arr = json.optJSONArray("skills") ?: return emptyList()
-        val out = mutableListOf<PcSkillItem>()
-        for (i in 0 until arr.length()) {
-            val obj = arr.getJSONObject(i)
-            out.add(
-                PcSkillItem(
-                    id = obj.optString("id", "skill_$i"),
-                    name = obj.optString("name", "Скилл"),
-                    description = obj.optString("description", ""),
-                    enabled = obj.optBoolean("enabled", true),
-                    path = obj.optString("path", ""),
-                    instructionsPreview = obj.optString("instructionsPreview", "")
-                )
-            )
-        }
-        return out
-    }
+    private fun parseSkillsJson(json: JSONObject): List<PcSkillItem> = parseSkillItems(json)
 
     suspend fun fetchMcpServers(pcBridgeUrl: String): Pair<List<PcMcpServerItem>, String?> = withContext(Dispatchers.IO) {
         val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext emptyList<PcMcpServerItem>() to "Мост ПК недоступен"
@@ -907,12 +891,16 @@ class AntigravityBackendClient(
         pcBridgeUrl: String,
         name: String,
         tool: String,
-        permission: String
+        permission: String,
+        scope: String = "project",
+        scopeId: String? = null,
+        origin: String? = null
     ): Pair<McpPermissionUpdateReply?, String?> {
+        val payload = JSONObject().put("action", "set_tool_permission").put("name", name)
+            .put("tool", tool).put("permission", permission)
+        applyMcpToolScope(payload, scope, scopeId, origin)
         val (json, error) = postBridgeJson(
-            pcBridgeUrl, "/api/mcp",
-            JSONObject().put("action", "set_tool_permission").put("name", name)
-                .put("tool", tool).put("permission", permission),
+            pcBridgeUrl, "/api/mcp", payload,
             "Не удалось изменить право инструмента"
         )
         return if (json == null) null to error else parseMcpPermissionUpdate(json) to null
@@ -922,15 +910,78 @@ class AntigravityBackendClient(
     internal suspend fun setAllMcpToolPermissions(
         pcBridgeUrl: String,
         name: String,
-        permission: String
+        permission: String,
+        scope: String = "project",
+        scopeId: String? = null,
+        origin: String? = null
     ): Pair<McpPermissionUpdateReply?, String?> {
+        val payload = JSONObject().put("action", "set_all_tools_permissions").put("name", name)
+            .put("permission", permission)
+        applyMcpToolScope(payload, scope, scopeId, origin)
         val (json, error) = postBridgeJson(
-            pcBridgeUrl, "/api/mcp",
-            JSONObject().put("action", "set_all_tools_permissions").put("name", name)
-                .put("permission", permission),
+            pcBridgeUrl, "/api/mcp", payload,
             "Не удалось изменить права всех инструментов"
         )
         return if (json == null) null to error else parseMcpPermissionUpdate(json) to null
+    }
+
+    /**
+     * Поля скоупа запроса прав («как у них»): scope всегда (дефолт project —
+     * прежнее поведение), scopeId/origin — только когда они непустые; пустые
+     * значения не отправляются и не выдумываются.
+     */
+    private fun applyMcpToolScope(
+        payload: JSONObject,
+        scope: String,
+        scopeId: String?,
+        origin: String?
+    ) {
+        payload.put("scope", scope.ifBlank { "project" })
+        if (!scopeId.isNullOrBlank()) payload.put("scopeId", scopeId)
+        if (!origin.isNullOrBlank()) payload.put("origin", origin)
+    }
+
+    /** Текущий режим разрешений (действие permission_mode /api/mcp). */
+    internal suspend fun getMcpPermissionMode(pcBridgeUrl: String): McpPermissionModeReply =
+        postPermissionModeRequest(pcBridgeUrl, JSONObject().put("action", "permission_mode"))
+
+    /**
+     * Смена режима разрешений (действие set_permission_mode /api/mcp).
+     * Неизвестный режим мост отклоняет (ok:false + error) — текст показывается
+     * без маскировки.
+     */
+    internal suspend fun setMcpPermissionMode(
+        pcBridgeUrl: String,
+        mode: String
+    ): McpPermissionModeReply = postPermissionModeRequest(
+        pcBridgeUrl,
+        JSONObject().put("action", "set_permission_mode").put("mode", mode)
+    )
+
+    /** POST /api/mcp для режима разрешений: разбор ok/mode/validModes/error. */
+    private suspend fun postPermissionModeRequest(
+        pcBridgeUrl: String,
+        payload: JSONObject
+    ): McpPermissionModeReply = withContext(Dispatchers.IO) {
+        val base = resolveWorkingBaseUrl(pcBridgeUrl)
+            ?: return@withContext McpPermissionModeReply(error = "Мост ПК недоступен")
+        try {
+            val req = Request.Builder().url("$base/api/mcp")
+                .post(payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
+                .build()
+            clientForUrl(base).newCall(req).useCancellable { resp ->
+                val bodyText = runCatching { resp.body?.string() }.getOrNull().orEmpty()
+                if (!resp.isSuccessful) {
+                    return@withContext McpPermissionModeReply(
+                        error = "Мост ПК вернул HTTP ${resp.code}: ${safeBridgeErrorText(bodyText)}"
+                    )
+                }
+                return@withContext parseMcpPermissionMode(JSONObject(bodyText.ifBlank { "{}" }))
+            }
+        } catch (e: Throwable) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            McpPermissionModeReply(error = e.localizedMessage ?: "Не удалось получить режим разрешений")
+        }
     }
 
     /** Полный текст SKILL.md навыка (действие detail /api/skills). */
@@ -944,6 +995,72 @@ class AntigravityBackendClient(
             "Не удалось получить SKILL.md навыка"
         )
         return if (json == null) null to error else parseSkillDetail(json) to null
+    }
+
+    /**
+     * Правка навыка (действие update /api/skills): полный текст SKILL.md и
+     * опциональное новое имя (newName; id папки стабилен, меняется имя в
+     * frontmatter). Отказы моста не маскируются: ok/message/error/code
+     * (skill_name_taken, skill_read_only) читаются как есть.
+     */
+    internal suspend fun updateSkill(
+        pcBridgeUrl: String,
+        name: String,
+        content: String,
+        newName: String? = null
+    ): SkillEditResult {
+        val payload = JSONObject().apply {
+            put("action", "update")
+            put("name", name)
+            put("content", content)
+            // Пустое newName не отправляется: имя не меняется, не выдумывается.
+            if (!newName.isNullOrBlank()) put("newName", newName)
+        }
+        return postSkillEditRequest(pcBridgeUrl, payload)
+    }
+
+    /**
+     * Удаление навыка (действие remove /api/skills). Для source = builtin мост
+     * отказывает skill_read_only — текст ошибки возвращается без маскировки.
+     */
+    internal suspend fun deleteSkill(
+        pcBridgeUrl: String,
+        name: String
+    ): SkillEditResult {
+        val payload = JSONObject().apply {
+            put("action", "remove")
+            put("name", name)
+        }
+        return postSkillEditRequest(pcBridgeUrl, payload)
+    }
+
+    /**
+     * POST /api/skills для правки/удаления: разбор ok/message/error/code;
+     * отказ никогда не превращается в выдуманный успех.
+     */
+    private suspend fun postSkillEditRequest(
+        pcBridgeUrl: String,
+        payload: JSONObject
+    ): SkillEditResult = withContext(Dispatchers.IO) {
+        val base = resolveWorkingBaseUrl(pcBridgeUrl)
+            ?: return@withContext SkillEditResult(error = "Мост ПК недоступен")
+        try {
+            val req = Request.Builder().url("$base/api/skills")
+                .post(payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
+                .build()
+            clientForUrl(base).newCall(req).useCancellable { resp ->
+                val bodyText = runCatching { resp.body?.string() }.getOrNull().orEmpty()
+                if (!resp.isSuccessful) {
+                    return@withContext SkillEditResult(
+                        error = "Мост ПК вернул HTTP ${resp.code}: ${safeBridgeErrorText(bodyText)}"
+                    )
+                }
+                return@withContext parseSkillEditResult(JSONObject(bodyText.ifBlank { "{}" }))
+            }
+        } catch (e: Throwable) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            SkillEditResult(error = e.localizedMessage ?: "Не удалось выполнить операцию со скиллом")
+        }
     }
 
     suspend fun probeMcpServer(
@@ -979,11 +1096,16 @@ class AntigravityBackendClient(
     }
 
     // Этап 3: реальный вызов MCP-инструмента (tools/call) на указанном сервере.
+    // Контекст скоупов (sessionId/taskId/origin) передаётся мосту — enforcement
+    // прав его учитывает; пустые значения не отправляются.
     suspend fun callMcpTool(
         pcBridgeUrl: String,
         name: String,
         tool: String,
-        argumentsJson: String = "{}"
+        argumentsJson: String = "{}",
+        sessionId: String? = null,
+        taskId: String? = null,
+        origin: String? = null
     ): Pair<String?, String?> = withContext(Dispatchers.IO) {
         val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext null to "Мост ПК недоступен"
         try {
@@ -994,6 +1116,9 @@ class AntigravityBackendClient(
                 put("name", name)
                 put("tool", tool)
                 put("arguments", args)
+                if (!sessionId.isNullOrBlank()) put("sessionId", sessionId)
+                if (!taskId.isNullOrBlank()) put("taskId", taskId)
+                if (!origin.isNullOrBlank()) put("origin", origin)
             }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
             val req = Request.Builder().url("$base/api/mcp").post(payload).build()
             clientForUrl(base).newCall(req).useCancellable { resp ->
@@ -3457,15 +3582,50 @@ internal fun parseMcpToolPermissions(json: JSONObject): McpToolPermissionsReply 
 internal data class McpPermissionUpdateReply(
     val server: String = "",
     val tool: String = "",
-    val permission: String = ""
+    val permission: String = "",
+    /** Скоуп записанного правила (project/session/task/website); "" — «не записано». */
+    val scope: String = ""
 )
 
 internal fun parseMcpPermissionUpdate(json: JSONObject): McpPermissionUpdateReply =
     McpPermissionUpdateReply(
         server = json.optString("server", "").ifBlank { json.optString("name", "") },
         tool = json.optString("tool", ""),
-        permission = json.optString("permission", "")
+        permission = json.optString("permission", ""),
+        scope = json.optString("scope", "")
     )
+
+/**
+ * Разобранный ответ permission_mode / set_permission_mode («как у них»):
+ * ok + mode + validModes при успехе, error при отказе (например неизвестный
+ * режим). ok без поля не выдумывается (false); пустые mode/validModes —
+ * «не записано».
+ */
+internal data class McpPermissionModeReply(
+    val ok: Boolean = false,
+    /** Wire-значение режима (default/plan/auto/acceptEdits/dontAsk/bypassPermissions). */
+    val mode: String = "",
+    /** Wire-значения допустимых режимов из ответа моста. */
+    val validModes: List<String> = emptyList(),
+    /** Текст отказа моста без маскировки. */
+    val error: String? = null
+)
+
+internal fun parseMcpPermissionMode(json: JSONObject): McpPermissionModeReply {
+    val validArr = json.optJSONArray("validModes")
+    val validModes = mutableListOf<String>()
+    if (validArr != null) {
+        for (i in 0 until validArr.length()) {
+            validModes.add(validArr.optString(i, ""))
+        }
+    }
+    return McpPermissionModeReply(
+        ok = json.optBoolean("ok", false),
+        mode = json.optString("mode", ""),
+        validModes = validModes,
+        error = json.optString("error", "").ifBlank { null }
+    )
+}
 
 /**
  * Разбор ответа skills detail: полный текст SKILL.md (content). enabled = null,
@@ -3485,6 +3645,43 @@ internal fun parseSkillDetail(json: JSONObject): SkillDetailInfo {
         content = obj.optString("content", "")
     )
 }
+
+/**
+ * Разбор списка skills[] из ответов моста. Общий для fetch/manage и для
+ * ответа update/remove (skills возвращаются свежим списком).
+ */
+internal fun parseSkillItems(json: JSONObject): List<PcSkillItem> {
+    val arr = json.optJSONArray("skills") ?: return emptyList()
+    val out = mutableListOf<PcSkillItem>()
+    for (i in 0 until arr.length()) {
+        val obj = arr.getJSONObject(i)
+        out.add(
+            PcSkillItem(
+                id = obj.optString("id", "skill_$i"),
+                name = obj.optString("name", "Скилл"),
+                description = obj.optString("description", ""),
+                enabled = obj.optBoolean("enabled", true),
+                path = obj.optString("path", ""),
+                instructionsPreview = obj.optString("instructionsPreview", "")
+            )
+        )
+    }
+    return out
+}
+
+/**
+ * Разбор ответа skills update/remove («как у них»): ok + message при успехе,
+ * error + code при отказе (skill_name_taken, skill_read_only). ok без поля
+ * не выдумывается (false). skills — свежий список навыков; null — мост его не
+ * прислал («не записано»), пустой список остаётся пустым.
+ */
+internal fun parseSkillEditResult(json: JSONObject): SkillEditResult = SkillEditResult(
+    ok = json.optBoolean("ok", false),
+    message = json.optString("message", ""),
+    errorCode = json.optString("code", "").ifBlank { null },
+    error = json.optString("error", "").ifBlank { null },
+    skills = if (json.has("skills") && !json.isNull("skills")) parseSkillItems(json) else null
+)
 
 // ---------------------------------------------------------------------------
 // Снимок роя «как у них» (Claude: «%1$d running task(s)», «No background

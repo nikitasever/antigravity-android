@@ -25,6 +25,7 @@ const path = require('node:path');
 const { killProcessTree } = require('./subagent-cli');
 const { parseMcpServerEntry } = require('./extension-formats');
 const { createToolPermissions } = require('./tool-permissions');
+const { createPermissionModes } = require('./permission-modes');
 
 // Версии протокола, которые клиент реально поддерживает. Клиент запрашивает
 // предпочтительную, сервер отвечает своей; незнакомая версия — честный отказ.
@@ -1159,10 +1160,25 @@ class McpClientManager {
             this.toolPermissions = this.clientOptions.toolPermissions || createToolPermissions();
         }
         const permCheck = this.toolPermissions.checkToolCall(String(id), String(name), {
+            userInitiated: options.userInitiated === true,
+            // Скоупы «как у них»: сессия/задача/сайт (см. lib/tool-permissions.js).
+            sessionId: String(options.sessionId || ''),
+            taskId: String(options.taskId || ''),
+            origin: String(options.origin || '')
+        });
+        // Режимы разрешений («как у них»: PermissionMode default/plan/auto/
+        // acceptEdits/dontAsk/bypassPermissions; см. lib/permission-modes.js).
+        // Применяются к вердикту прав: явный deny не обходится, режим может
+        // снять «Спрашивать» или добавить честный запрос подтверждения по
+        // эвристике риска (не модельная проверка — «требует проверки»).
+        if (!this.permissionModes) {
+            this.permissionModes = this.clientOptions.permissionModes || createPermissionModes();
+        }
+        const modeCheck = this.permissionModes.applyModeToCheck(permCheck, String(name), args, {
             userInitiated: options.userInitiated === true
         });
-        if (!permCheck.allow) {
-            return { ok: false, error: permCheck.error, errorCode: permCheck.errorCode };
+        if (!modeCheck.allow) {
+            return { ok: false, error: modeCheck.error, errorCode: modeCheck.errorCode };
         }
         if (this.clientOptions.authorizeDescriptor) {
             try {

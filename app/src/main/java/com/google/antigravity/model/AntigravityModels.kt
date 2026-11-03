@@ -219,10 +219,14 @@ data class McpToolPermissionsState(
         copy(loading = false, error = message)
 
     /** Успешная смена права одного инструмента (set_tool_permission). */
-    fun onToolPermissionChanged(tool: String, permission: String): McpToolPermissionsState =
+    fun onToolPermissionChanged(
+        tool: String,
+        permission: String,
+        source: String = "tool"
+    ): McpToolPermissionsState =
         copy(
             tools = tools.map {
-                if (it.tool == tool) it.copy(permission = permission, source = "tool") else it
+                if (it.tool == tool) it.copy(permission = permission, source = source) else it
             },
             error = ""
         )
@@ -232,11 +236,14 @@ data class McpToolPermissionsState(
      * уровень «все инструменты сервера». Инструменты с собственным правом
      * (source = tool) сохраняют его: приоритет per-tool выше.
      */
-    fun onAllToolsPermissionChanged(permission: String): McpToolPermissionsState =
+    fun onAllToolsPermissionChanged(
+        permission: String,
+        source: String = "server"
+    ): McpToolPermissionsState =
         copy(
             defaultPermission = permission,
             tools = tools.map {
-                if (it.source == "tool") it else it.copy(permission = permission, source = "server")
+                if (it.source == "tool") it else it.copy(permission = permission, source = source)
             },
             error = ""
         )
@@ -268,6 +275,126 @@ data class SkillDetailState(
         copy(detail = detail, loading = false, error = "")
 
     fun onError(message: String): SkillDetailState = copy(loading = false, error = message)
+}
+
+/**
+ * Результат правки или удаления навыка (ответ update/remove /api/skills):
+ * ok + message при успехе, error + code при отказе (skill_name_taken,
+ * skill_read_only). skills — свежий список навыков из ответа моста; null —
+ * мост его не прислал («не записано»), значения не выдумываются.
+ */
+data class SkillEditResult(
+    val ok: Boolean = false,
+    val message: String = "",
+    /** Код отказа моста (например skill_name_taken / skill_read_only). */
+    val errorCode: String? = null,
+    /** Текст отказа моста без маскировки. */
+    val error: String? = null,
+    val skills: List<PcSkillItem>? = null
+)
+
+/**
+ * Честный текст отказа правки навыка: для skill_name_taken — ярлык «Навык с
+ * именем «X» уже существует.», для остальных — текст ошибки моста как есть
+ * (ничего не выдумывается).
+ */
+fun skillEditErrorLabel(result: SkillEditResult, attemptedName: String): String =
+    when (result.errorCode) {
+        "skill_name_taken" -> "Навык с именем «$attemptedName» уже существует."
+        else -> result.error?.takeIf { it.isNotBlank() }
+            ?: result.message.takeIf { it.isNotBlank() }
+            ?: "Не удалось изменить навык"
+    }
+
+/**
+ * Состояние редактора навыка («как у них»: Edit skill): загрузка черновика /
+ * редактор / сохранение / честная ошибка. nameDraft/contentDraft — черновик
+ * имени и полного текста SKILL.md. Встроенный навык (source = builtin) —
+ * только чтение: мост отклоняет правку кодом skill_read_only.
+ */
+data class SkillEditState(
+    val skillId: String = "",
+    /** Черновик имени навыка (поле «Имя навыка»); пустой — newName не отправляется. */
+    val nameDraft: String = "",
+    /** Черновик полного текста SKILL.md. */
+    val contentDraft: String = "",
+    /** Источник навыка (из detail); пусто — «не записано». */
+    val source: String = "",
+    /** Загрузка черновика (detail) выполняется. */
+    val loading: Boolean = false,
+    /** Редактор открыт (черновик загружен). */
+    val editorOpen: Boolean = false,
+    /** Сохранение выполняется — кнопки заблокированы. */
+    val saving: Boolean = false,
+    /** Текст честной ошибки (загрузки или сохранения). */
+    val error: String = "",
+    /** Код ошибки моста последнего отказа (например skill_name_taken). */
+    val errorCode: String? = null
+) {
+    /** Встроенный навык — только чтение. */
+    val readOnly: Boolean get() = source == "builtin"
+
+    /** Причина, по которой сохранение недоступно ("" — можно сохранять). */
+    val saveBlockReason: String
+        get() = when {
+            readOnly -> "встроенный навык — только чтение"
+            contentDraft.isBlank() -> "Содержимое навыка не может быть пустым."
+            else -> ""
+        }
+
+    /** Сохранение доступно: редактор открыт, не загружается, не сохраняется. */
+    val canSave: Boolean
+        get() = editorOpen && !loading && !saving && saveBlockReason.isEmpty()
+
+    /** Запрос к мосту отправлен (честное состояние загрузки черновика). */
+    fun onLoading(): SkillEditState =
+        copy(loading = true, editorOpen = false, saving = false, error = "", errorCode = null)
+
+    /** Успешный detail — редактор открыт с черновиками имени и SKILL.md. */
+    fun onLoaded(detail: SkillDetailInfo): SkillEditState = copy(
+        nameDraft = detail.name,
+        contentDraft = detail.content,
+        source = detail.source,
+        loading = false,
+        editorOpen = true,
+        saving = false,
+        error = "",
+        errorCode = null
+    )
+
+    /** Отказ загрузки черновика: ошибка видима текстом, редактор не открывается. */
+    fun onError(message: String): SkillEditState =
+        copy(loading = false, saving = false, error = message)
+
+    /** Правка имени в черновике; прежняя ошибка сбрасывается при новой правке. */
+    fun onNameChanged(name: String): SkillEditState =
+        copy(nameDraft = name, error = "", errorCode = null)
+
+    /** Правка SKILL.md в черновике; прежняя ошибка сбрасывается при новой правке. */
+    fun onContentChanged(content: String): SkillEditState =
+        copy(contentDraft = content, error = "", errorCode = null)
+
+    /** Запрос update отправлен — кнопки заблокированы до ответа. */
+    fun onSaving(): SkillEditState = copy(saving = true, error = "", errorCode = null)
+
+    /** Успех сохранения — редактор закрывается. */
+    fun onSaved(): SkillEditState =
+        copy(saving = false, editorOpen = false, error = "", errorCode = null)
+
+    /**
+     * Отказ сохранения: редактор НЕ закрывается (в том числе skill_name_taken),
+     * текст ошибки виден честно (ярлык для известного кода, иначе текст моста).
+     */
+    fun onSaveError(result: SkillEditResult, attemptedName: String): SkillEditState = copy(
+        saving = false,
+        editorOpen = true,
+        error = skillEditErrorLabel(result, attemptedName),
+        errorCode = result.errorCode
+    )
+
+    /** Редактор закрыт пользователем («Отмена») без сохранения. */
+    fun onClose(): SkillEditState =
+        copy(editorOpen = false, saving = false, error = "", errorCode = null)
 }
 
 /**
@@ -339,6 +466,255 @@ fun describeToolPermission(permission: String): String = when (permission.trim()
     "deny" -> "Запретить"
     "" -> "не записано"
     else -> permission
+}
+
+/**
+ * Скоуп права инструмента MCP («как у них»: «Always allow for this
+ * project/session/task/website»). Семантика — наша честная модель по мотивам
+ * Claude; точная семантика референса не подтверждена («требует проверки»).
+ * project — сохраняется на ПК (permissions-config.json); session/task —
+ * только память моста (до его перезапуска); website — сохраняется по origin
+ * HTTP-подключения.
+ */
+enum class McpToolPermissionScope(
+    /** Значение поля scope в запросе моста. */
+    val wire: String,
+    /** Подпись варианта (честная, по конвенции проекта). */
+    val label: String,
+    /** Короткая честная подсказка под подписью. */
+    val hint: String
+) {
+    PROJECT(
+        "project",
+        "Для этого проекта (сохраняется на ПК)",
+        "Правило сохраняется в файле прав на ПК."
+    ),
+    SESSION(
+        "session",
+        "Для этой сессии (до перезапуска моста)",
+        "Хранится только в памяти моста — до его перезапуска."
+    ),
+    TASK(
+        "task",
+        "Для этой задачи (до перезапуска моста)",
+        "Хранится только в памяти моста — до его перезапуска."
+    ),
+    WEBSITE(
+        "website",
+        "Для этого сайта (только HTTP-подключения)",
+        "только для HTTP-подключений; у stdio-серверов сайта нет"
+    );
+
+    /** Источник строки tool_permissions для правила этого скоупа (как у них). */
+    val rowSource: String get() = if (wire == "project") "tool" else wire
+}
+
+/**
+ * Контекст для отправки права со скоупом: sessionId текущего разговора,
+ * taskId текущей/последней пачки субагентов (пусто — «нет активной задачи»),
+ * origin HTTP-подключения сервера (пусто — у подключения сайта нет).
+ */
+data class McpToolScopeContext(
+    val sessionId: String = "",
+    val taskId: String = "",
+    val serverOrigin: String = ""
+)
+
+/** Результат выбора скоупа: параметры запроса либо честный отказ до отправки. */
+sealed interface McpToolScopeRequest {
+    /** Запрос готов: scope всегда, scopeId/origin — только если нужны скоупу. */
+    data class Ready(
+        val scope: String,
+        val scopeId: String? = null,
+        val origin: String? = null
+    ) : McpToolScopeRequest
+
+    /** Отказ до отправки (нет scopeId/origin) — как отказал бы мост, без выдумок. */
+    data class Refused(val message: String) : McpToolScopeRequest
+}
+
+/**
+ * Подготовка параметров скоупа для set_tool_permission /
+ * set_all_tools_permissions. Пустые scopeId/origin — честный отказ ДО
+ * отправки (мост отклоняет такие запросы): ничего не выдумывается.
+ */
+fun resolveMcpToolScope(
+    scope: McpToolPermissionScope,
+    context: McpToolScopeContext
+): McpToolScopeRequest = when (scope) {
+    McpToolPermissionScope.PROJECT ->
+        McpToolScopeRequest.Ready(scope = scope.wire)
+
+    McpToolPermissionScope.SESSION ->
+        if (context.sessionId.isBlank()) {
+            McpToolScopeRequest.Refused(
+                "Для скоупа «${scope.label}» нужен sessionId — нет активного разговора."
+            )
+        } else {
+            McpToolScopeRequest.Ready(scope = scope.wire, scopeId = context.sessionId)
+        }
+
+    McpToolPermissionScope.TASK ->
+        if (context.taskId.isBlank()) {
+            McpToolScopeRequest.Refused(
+                "Для скоупа «${scope.label}» нужен taskId — нет активной задачи."
+            )
+        } else {
+            McpToolScopeRequest.Ready(scope = scope.wire, scopeId = context.taskId)
+        }
+
+    McpToolPermissionScope.WEBSITE ->
+        if (context.serverOrigin.isBlank()) {
+            McpToolScopeRequest.Refused(
+                "Скоуп «для этого сайта» доступен только для HTTP-подключений; у stdio-серверов сайта нет."
+            )
+        } else {
+            McpToolScopeRequest.Ready(scope = scope.wire, origin = context.serverOrigin)
+        }
+}
+
+/**
+ * Человекочитаемая подпись источника права (tool_permissions): скоупы
+ * session/task/website и уровни tool/server/policy. Пусто — «не записано»;
+ * неизвестные значения показываются как есть, без выдумывания.
+ */
+fun describeMcpPermissionSource(source: String): String = when (source.trim().lowercase()) {
+    "task" -> "для этой задачи"
+    "session" -> "для этой сессии"
+    "tool" -> "для этого проекта"
+    "website" -> "для этого сайта"
+    "server" -> "все инструменты сервера"
+    "policy" -> "глобальная политика"
+    "" -> "не записано"
+    else -> source
+}
+
+/**
+ * Приоритет источника права («как у них»): task > session > tool (project) >
+ * website > server > policy. Неизвестные источники ниже всех известных.
+ */
+fun mcpPermissionSourcePriority(source: String): Int = when (source.trim().lowercase()) {
+    "task" -> 6
+    "session" -> 5
+    "tool" -> 4
+    "website" -> 3
+    "server" -> 2
+    "policy" -> 1
+    else -> 0
+}
+
+/**
+ * Режим разрешений MCP («как у них»: default/plan/auto/acceptEdits/dontAsk/
+ * bypassPermissions). Состав режимов — как в Claude; точная семантика их
+ * Auto-режима (модельная оценка рисков и prompt injection) НЕ воспроизводится
+ * — «требует проверки». Наше «Автоматически» — эвристика по именам
+ * инструментов и аргументам.
+ */
+enum class McpPermissionMode(
+    /** Значение поля mode в запросе моста. */
+    val wire: String,
+    /** Подпись варианта (честная, по конвенции проекта). */
+    val label: String,
+    /** Короткая честная подсказка под подписью. */
+    val hint: String
+) {
+    DEFAULT(
+        "default",
+        "Обычный (по правам инструментов)",
+        "Действуют права инструментов (allow/ask/deny)."
+    ),
+    PLAN(
+        "plan",
+        "План (без изменений и выполнения)",
+        "Изменения и выполнение не производятся."
+    ),
+    AUTO(
+        "auto",
+        "Автоматически (наша эвристическая оценка риска — не их Auto-режим)",
+        "Оценка риска — эвристика по именам инструментов и аргументам; рискованные действия требуют подтверждения. Модельная проверка рисков и prompt injection не воспроизводится — «требует проверки»."
+    ),
+    ACCEPT_EDITS(
+        "acceptEdits",
+        "Принимать правки (правки файлов автоматически)",
+        "Правки файлов выполняются автоматически; выполнение и разрушительные действия — с подтверждения."
+    ),
+    DONT_ASK(
+        "dontAsk",
+        "Не спрашивать",
+        "Всё выполняется без вопросов, кроме явных запретов."
+    ),
+    BYPASS_PERMISSIONS(
+        "bypassPermissions",
+        "Обход разрешений",
+        "Всё выполняется без вопросов, кроме явных запретов; deny прав никогда не обходится."
+    );
+
+    companion object {
+        /**
+         * Режим из wire-значения моста; неизвестное значение — null
+         * («не записано», режим не выдумывается).
+         */
+        fun fromWire(value: String): McpPermissionMode? =
+            entries.firstOrNull { it.wire == value.trim() }
+    }
+}
+
+/**
+ * Состояние режима разрешений (загрузка / успех / честная ошибка). mode =
+ * null — мост не прислал режим или прислал неизвестное значение («не
+ * записано», не выдумывается).
+ */
+data class McpPermissionModeState(
+    val mode: McpPermissionMode? = null,
+    /** Wire-значения допустимых режимов из ответа моста (пусто — «не записано»). */
+    val validModes: List<String> = emptyList(),
+    val loaded: Boolean = false,
+    val loading: Boolean = false,
+    val error: String = ""
+) {
+    /** Запрос к мосту отправлен (честное состояние загрузки). */
+    fun onLoading(): McpPermissionModeState = copy(loading = true, error = "")
+
+    /** Успешный ответ моста: режим (или null — «не записано») и список допустимых. */
+    fun onLoaded(
+        mode: McpPermissionMode?,
+        validModes: List<String>
+    ): McpPermissionModeState = copy(
+        mode = mode,
+        validModes = validModes,
+        loaded = true,
+        loading = false,
+        error = ""
+    )
+
+    /** Отказ сервера/связи: ошибка видима текстом, успех не выдумывается. */
+    fun onError(message: String): McpPermissionModeState =
+        copy(loading = false, error = message)
+
+    /** Успешная смена режима (set_permission_mode). */
+    fun onModeChanged(mode: McpPermissionMode): McpPermissionModeState =
+        copy(mode = mode, loading = false, error = "")
+}
+
+/**
+ * Origin HTTP-подключения сервера (scheme://host[:port]) для скоупа «для
+ * этого сайта». У stdio-серверов и без записанного URL — пусто («не
+ * записано»): сайта у такого подключения нет, ничего не выдумывается.
+ */
+fun mcpServerOrigin(server: PcMcpServerItem): String {
+    val raw = server.commandOrUrl.ifBlank { server.command }.trim()
+    val match = Regex("https?://\\S+").find(raw) ?: return ""
+    return runCatching {
+        val uri = java.net.URI(match.value)
+        if (uri.scheme.isNullOrBlank() || uri.host.isNullOrBlank()) {
+            ""
+        } else {
+            buildString {
+                append(uri.scheme).append("://").append(uri.host)
+                if (uri.port != -1) append(":").append(uri.port)
+            }
+        }
+    }.getOrDefault("")
 }
 
 enum class AgentExecutionTarget(val shortLabel: String, val titleRu: String, val subtitleRu: String) {
@@ -777,6 +1153,107 @@ data class SlashMentionSuggestionItem(
     val category: String = categoryBadge,
     val actionType: String = "INSERT"
 )
+
+/**
+ * Тип фишки упоминания в композиторе («как у них»: их TokenType
+ * SYSTEM_HINT/GIZMO/SKILL/TARGETED_REPLY НЕ воспроизводится дословно —
+ * «требует проверки»). Типы — наши честные категории по categoryBadge
+ * существующих предложений SlashMentionSuggestionItem.
+ */
+enum class ComposerTokenType(val label: String) {
+    SUBAGENT("Субагент"),
+    SKILL("Навык"),
+    MCP("MCP"),
+    FILE("Файл"),
+    DRIVE("Google Диск"),
+    PLUGIN("Плагин"),
+    CONTEXT("Контекст"),
+    OTHER("Прочее");
+
+    companion object {
+        /**
+         * Тип по categoryBadge предложения. Неизвестная категория — «Прочее»
+         * (ничего не выдумывается).
+         */
+        fun fromCategoryBadge(categoryBadge: String): ComposerTokenType {
+            val badge = categoryBadge.trim()
+            return when {
+                badge.contains("Субагент", ignoreCase = true) ||
+                    badge.contains("ЛИДЕР", ignoreCase = true) -> SUBAGENT
+                badge.contains("Скилл", ignoreCase = true) ||
+                    badge.contains("Навык", ignoreCase = true) -> SKILL
+                badge.contains("MCP", ignoreCase = true) -> MCP
+                badge.contains("Диск", ignoreCase = true) -> DRIVE
+                badge.contains("Плагин", ignoreCase = true) -> PLUGIN
+                badge.contains("Файл", ignoreCase = true) -> FILE
+                badge.contains("Контекст", ignoreCase = true) -> CONTEXT
+                else -> OTHER
+            }
+        }
+    }
+}
+
+/**
+ * Фишка упоминания в композиторе («как у них»: токены их composer'а).
+ * Действия: INSERTED при добавлении, REMOVED при удалении. insertText — тот же
+ * текстовый insert, что и раньше (@handle в черновике): фишка —
+ * ДОПОЛНИТЕЛЬНЫЙ механизм, текстовое упоминание работает как раньше.
+ */
+data class ComposerToken(
+    val id: String,
+    val label: String,
+    val insertText: String,
+    val typeLabel: String
+) {
+    companion object {
+        /** Фишка из предложения палитры (INSERTED). */
+        fun fromSuggestion(item: SlashMentionSuggestionItem): ComposerToken = ComposerToken(
+            id = item.id,
+            label = item.title.ifBlank { item.trigger },
+            insertText = item.insertText,
+            typeLabel = ComposerTokenType.fromCategoryBadge(item.categoryBadge).label
+        )
+    }
+}
+
+/**
+ * Логика фишек упоминаний композитора (чистая, без Android-контекста):
+ * добавление (INSERTED) без дубликатов по id, удаление (REMOVED), очистка и
+ * композиция промпта — тексты фишек (insertText) одной строкой через пробел
+ * ПЕРЕД текстом черновика.
+ */
+data class ComposerTokensState(
+    val tokens: List<ComposerToken> = emptyList()
+) {
+    /** Добавление фишки (INSERTED); дубликат по id не добавляется. */
+    fun onAdded(token: ComposerToken): ComposerTokensState =
+        if (tokens.any { it.id == token.id }) this else copy(tokens = tokens + token)
+
+    /** Удаление фишки (REMOVED); остальные сохраняются в порядке добавления. */
+    fun onRemoved(id: String): ComposerTokensState =
+        copy(tokens = tokens.filterNot { it.id == id })
+
+    /** Очистка всех фишек (после отправки). */
+    fun onCleared(): ComposerTokensState = copy(tokens = emptyList())
+
+    /**
+     * Итоговый текст хода: insertText фишек одной строкой через пробел ПЕРЕД
+     * текстом черновика. Пустой черновик не мешает отправке — уходят только
+     * фишки; пустые части не добавляют лишних пробелов.
+     */
+    fun composePrompt(draft: String): String {
+        val tokenLine = tokens
+            .map { it.insertText.trim() }
+            .filter { it.isNotBlank() }
+            .joinToString(" ")
+        return listOf(tokenLine, draft.trim())
+            .filter { it.isNotBlank() }
+            .joinToString(" ")
+    }
+
+    /** Есть ли содержимое для отправки (фишки или черновик). */
+    fun hasContent(draft: String): Boolean = composePrompt(draft).isNotBlank()
+}
 
 data class AntigravitySettings(
     val selectedModelId: String = "gemini-4-argon-high",

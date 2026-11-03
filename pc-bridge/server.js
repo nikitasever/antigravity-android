@@ -61,9 +61,15 @@ function resolveInsideAllowedRoots(rawPath, field) {
 // берутся ТОЛЬКО из реального рукопожатия initialize → initialized →
 // tools/list; без проверки сервер честно «настроен», без выдуманных имён.
 const mcpOAuth = new McpOAuth({ vault: new CredentialVault(path.join(os.homedir(), '.antigravity-private', 'mcp-oauth')) });
+// Общий экземпляр прав инструментов: скоупы session/task живут в памяти
+// процесса и должны совпадать у HTTP-обработчиков и у enforcement в callTool.
+const toolPerm = require('./lib/tool-permissions').createToolPermissions();
+const permissionModes = require('./lib/permission-modes').createPermissionModes();
 const mcpClientManager = new mcpClientLib.McpClientManager({ clientOptions: {
     authorizeDescriptor: d => mcpOAuth.authorize(d),
-    onAuthFailure: d => mcpOAuth.handleAuthFailure(d)
+    onAuthFailure: d => mcpOAuth.handleAuthFailure(d),
+    toolPermissions: toolPerm,
+    permissionModes
 } });
 const mcpLiveState = new Map();
 const mcpOAuthApi = createMcpOAuthApi({
@@ -1462,13 +1468,17 @@ function selectSkillForPrompt(promptText) {
 
 // Вызов MCP-инструмента через реестр: строго по serverId, без взаимозамены
 // одноимённых инструментов; авторизация — из конфига (без утечек).
-function callMcpToolViaRegistry(serverId, toolName, args, { signal, timeoutMs } = {}) {
+function callMcpToolViaRegistry(serverId, toolName, args, { signal, timeoutMs, sessionId, taskId, origin, userInitiated } = {}) {
     const raw = findRawMcpEntry(serverId);
     const descriptor = raw ? mcpClientLib.buildMcpDescriptor(serverId, raw.cfg) : undefined;
     return mcpClientManager.callTool(serverId, toolName, (args && typeof args === 'object') ? args : {}, {
         descriptor,
         signal,
-        requestTimeoutMs: timeoutMs
+        requestTimeoutMs: timeoutMs,
+        sessionId,
+        taskId,
+        origin,
+        userInitiated
     });
 }
 
@@ -2653,174 +2663,23 @@ async function managePlugin(payload) {
     return { ok: false, error: `Неизвестное действие для плагина: ${action}`, plugins: await listPlugins() };
 }
 
-function parseSkillMarkdown(rawMd, fallbackName) {
-    let name = fallbackName;
-    let description = '';
-    let instruction = rawMd;
-    const fmMatch = rawMd.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
-    if (fmMatch) {
-        const yamlPart = fmMatch[1];
-        instruction = (fmMatch[2] || '').trim();
-        const nameMatch = yamlPart.match(/^name:\s*(.+)$/m);
-        if (nameMatch) name = nameMatch[1].trim().replace(/^["']|["']$/g, '');
-        const descBlockMatch = yamlPart.match(/^description:\s*\|?\s*\r?\n((?:[ \t]+.+\r?\n?)+)/m);
-        if (descBlockMatch) {
-            description = descBlockMatch[1].replace(/^[ \t]+/gm, '').replace(/\s+/g, ' ').trim();
-        } else {
-            const descLineMatch = yamlPart.match(/^description:\s*(.+)$/m);
-            if (descLineMatch) description = descLineMatch[1].trim().replace(/^["']|["']$/g, '');
-        }
-    }
-    return { name, description, instruction };
-}
-
-function listSkills() {
-    const skills = [];
-    const seenIds = new Set();
-
-    // Этап 0: просмотр списка ничего не включает. Раньше здесь незаметно
-    // восстанавливался отключённый autonomous-software-engineer — отключение
-    // пользователя переживало только пока список не открывали заново.
-    const skillRoots = [
+// Хранилище навыков (SKILL.md) вынесено в lib/skill-store.js: список, деталь,
+// создание, правка/переименование «как у них» (SkillEdit: «Skill name», «Delete
+// skill?», «You already have a skill named …»), включение/отключение и удаление
+// с честными отказами (дубликат имени, встроенный навык только чтение, пустое
+// содержимое). Тонкие алиасы сохраняют существующие call sites.
+const { createSkillStore } = require('./lib/skill-store');
+const skillStore = createSkillStore({
+    skillRoots: [
         { dir: path.join(DEFAULT_WORKSPACE, '.agents', 'skills'), source: 'workspace' },
         { dir: SKILLS_DIR, source: 'global' },
         { dir: path.join(IDE_BASE_DIR, 'builtin', 'skills'), source: 'builtin' }
-    ];
-
-    for (const root of skillRoots) {
-        try {
-            if (!fs.existsSync(root.dir)) continue;
-            for (const entry of fs.readdirSync(root.dir, { withFileTypes: true })) {
-                if (!entry.isDirectory()) continue;
-                const folderPath = path.join(root.dir, entry.name);
-                const activeFile = path.join(folderPath, 'SKILL.md');
-                const disabledFile = path.join(folderPath, 'SKILL.md.disabled');
-                let filePath = '';
-                let enabled = true;
-                if (fs.existsSync(activeFile)) {
-                    filePath = activeFile;
-                    enabled = true;
-                } else if (fs.existsSync(disabledFile)) {
-                    filePath = disabledFile;
-                    enabled = false;
-                } else {
-                    continue;
-                }
-                const raw = fs.readFileSync(filePath, 'utf8');
-                const parsed = parseSkillMarkdown(raw, entry.name);
-                const skillId = parsed.name || entry.name;
-                if (seenIds.has(skillId)) continue;
-                seenIds.add(skillId);
-                skills.push({
-                    id: entry.name,
-                    name: skillId,
-                    description: parsed.description || `Скилл Antigravity (${root.source})`,
-                    instruction: parsed.instruction.slice(0, 4000),
-                    instructionsPreview: parsed.instruction.slice(0, 240),
-                    enabled,
-                    source: root.source,
-                    path: activeFile
-                });
-            }
-        } catch (_) {}
-    }
-    return skills;
-}
-
-function manageSkill(payload) {
-    let action = String(payload.action || '').toLowerCase();
-    if (action === 'toggle') {
-        action = payload.enabled === false ? 'disable' : 'enable';
-    }
-    const rawName = String(payload.name || payload.id || '').trim();
-    if (!rawName) {
-        return { ok: false, error: 'Не указано имя скилла', skills: listSkills() };
-    }
-
-    // Деталь навыка «как у них» (референс Claude: SkillDetail /
-    // ViewSkillInstructions): полное содержимое SKILL.md для экрана просмотра
-    // инструкций; путь резолвится к активному или отключённому файлу.
-    if (action === 'detail' || action === 'skill_detail' || action === 'read') {
-        const all = listSkills();
-        const found = all.find(s => s.id === rawName || s.name === rawName);
-        if (!found) {
-            return { ok: false, error: `Скилл не найден: ${rawName}`, skills: all };
-        }
-        let filePath = found.path || '';
-        if (!fs.existsSync(filePath) && filePath.endsWith('SKILL.md')) {
-            const disabledPath = filePath.replace(/SKILL\.md$/, 'SKILL.md.disabled');
-            if (fs.existsSync(disabledPath)) filePath = disabledPath;
-        }
-        let content = '';
-        try { content = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : ''; } catch (_) {}
-        return {
-            ok: true,
-            skill: {
-                id: found.id,
-                name: found.name,
-                description: found.description,
-                enabled: found.enabled,
-                source: found.source,
-                path: filePath,
-                content
-            },
-            skills: all
-        };
-    }
-
-    const slug = rawName.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || `skill-${Date.now()}`;
-    const folderPath = path.join(SKILLS_DIR, fs.existsSync(path.join(SKILLS_DIR, rawName)) ? rawName : slug);
-    const activeFile = path.join(folderPath, 'SKILL.md');
-    const disabledFile = path.join(folderPath, 'SKILL.md.disabled');
-
-    if (action === 'add' || action === 'install' || action === 'create') {
-        const description = String(payload.description || `Специализированный навык ${rawName}`).trim();
-        const instruction = String(payload.instruction || payload.instructions || payload.content || `# ${rawName}\n\nИнструкция выполнения навыка ${rawName}.`).trim();
-        fs.mkdirSync(folderPath, { recursive: true });
-        const mdContent =
-            `---\n` +
-            `name: ${slug}\n` +
-            `description: ${JSON.stringify(description)}\n` +
-            `---\n\n` +
-            `${instruction}\n`;
-        fs.writeFileSync(activeFile, mdContent, 'utf8');
-        if (fs.existsSync(disabledFile)) {
-            try { fs.unlinkSync(disabledFile); } catch (_) {}
-        }
-        invalidateAllIdleWorkers();
-        return {
-            ok: true,
-            message: `Скилл "${slug}" создан в ${activeFile}`,
-            skills: listSkills()
-        };
-    }
-
-    if (action === 'enable') {
-        if (fs.existsSync(disabledFile) && !fs.existsSync(activeFile)) {
-            fs.renameSync(disabledFile, activeFile);
-        }
-        invalidateAllIdleWorkers();
-        return { ok: true, message: `Скилл "${rawName}" включён`, skills: listSkills() };
-    }
-
-    if (action === 'disable') {
-        if (fs.existsSync(activeFile)) {
-            fs.renameSync(activeFile, disabledFile);
-        }
-        invalidateAllIdleWorkers();
-        return { ok: true, message: `Скилл "${rawName}" отключён`, skills: listSkills() };
-    }
-
-    if (action === 'remove' || action === 'uninstall' || action === 'delete') {
-        if (fs.existsSync(folderPath)) {
-            fs.rmSync(folderPath, { recursive: true, force: true });
-        }
-        invalidateAllIdleWorkers();
-        return { ok: true, message: `Скилл "${rawName}" удалён`, skills: listSkills() };
-    }
-
-    return { ok: false, error: `Неизвестное действие для скилла: ${action}`, skills: listSkills() };
-}
+    ],
+    writeDir: SKILLS_DIR,
+    onMutate: () => invalidateAllIdleWorkers()
+});
+const listSkills = () => skillStore.listSkills();
+const manageSkill = (payload) => skillStore.manageSkill(payload);
 
 function syncMcpConfigFileFromSettings() {
     try {
@@ -2961,6 +2820,30 @@ async function manageMcpServer(payload) {
     if (action === 'toggle') {
         action = payload.enabled === false ? 'disable' : 'enable';
     }
+
+    // Режимы разрешений «как у них» (PermissionMode: default/plan/auto/
+    // acceptEdits/dontAsk/bypassPermissions; см. lib/permission-modes.js —
+    // честная эвристика вместо их модельной проверки). Глобальны: имя сервера
+    // не требуется (проверка имени — ниже).
+    if (action === 'permission_mode' || action === 'permissionmode') {
+        return {
+            ok: true,
+            mode: permissionModes.getMode(),
+            validModes: permissionModes.validModes
+        };
+    }
+
+    if (action === 'set_permission_mode' || action === 'setpermissionmode') {
+        const mode = String(payload.mode || payload.permissionMode || '').trim();
+        const saved = permissionModes.setMode(mode);
+        return {
+            ok: saved.ok,
+            mode: saved.mode || permissionModes.getMode(),
+            error: saved.error || '',
+            validModes: permissionModes.validModes
+        };
+    }
+
     const name = String(payload.name || payload.id || '').trim();
     if (!name) {
         return { ok: false, error: 'Не указано имя MCP-сервера', mcpServers: await listMcpServers() };
@@ -3011,7 +2894,11 @@ async function manageMcpServer(payload) {
             descriptor,
             // Явное действие пользователя из UI — проходит режим «Спрашивать».
             userInitiated: true,
-            requestTimeoutMs: callTimeoutMs ? Math.min(callTimeoutMs, 300000) : undefined
+            requestTimeoutMs: callTimeoutMs ? Math.min(callTimeoutMs, 300000) : undefined,
+            // Скоупы прав «как у них» (session/task/website) — из запроса клиента.
+            sessionId: String(payload.sessionId || ''),
+            taskId: String(payload.taskId || ''),
+            origin: String(payload.origin || '')
         });
         // Синхронизация живого статуса: смерть процесса снимает connected.
         if (call.ok) {
@@ -3047,7 +2934,6 @@ async function manageMcpServer(payload) {
     // $McpSetAllToolsPermission(server); «Change tool permission» /
     // «Change permission for all tools»).
     if (action === 'tool_permissions' || action === 'toolpermissions') {
-        const toolPerm = require('./lib/tool-permissions').createToolPermissions();
         const live = mcpLiveState.get(name);
         const toolNames = (live && Array.isArray(live.tools))
             ? live.tools.map(t => (t && typeof t === 'object' && t.name) ? String(t.name) : String(t))
@@ -3063,30 +2949,38 @@ async function manageMcpServer(payload) {
     }
 
     if (action === 'set_tool_permission' || action === 'settoolpermission') {
-        const toolPerm = require('./lib/tool-permissions').createToolPermissions();
         const tool = String(payload.tool || payload.toolName || '').trim();
         const permission = String(payload.permission || '').trim();
         if (!tool || !toolPerm.validPermissions.includes(permission)) {
             return { ok: false, error: 'Нужны tool и permission: allow|ask|deny', mcpServers: await listMcpServers() };
         }
-        const saved = toolPerm.setToolPermission(name, tool, permission);
+        // Скоупы «как у них» («Always allow for this project / session / task /
+        // website»); наша честная семантика — см. lib/tool-permissions.js.
+        const scope = String(payload.scope || 'project').trim() || 'project';
+        const scopeId = String(payload.scopeId || payload.sessionId || payload.taskId || '').trim();
+        const origin = String(payload.origin || '').trim();
+        const saved = toolPerm.setToolPermission(name, tool, permission, { scope, scopeId, origin });
         return {
             ok: saved.ok,
             server: name,
             tool,
             permission: saved.permission || permission,
+            scope: saved.scope || scope,
             error: saved.error || '',
+            errorCode: saved.code || '',
             mcpServers: await listMcpServers()
         };
     }
 
     if (action === 'set_all_tools_permissions' || action === 'setalltoolspermissions') {
-        const toolPerm = require('./lib/tool-permissions').createToolPermissions();
         const permission = String(payload.permission || '').trim();
         if (!toolPerm.validPermissions.includes(permission)) {
             return { ok: false, error: 'Нужен permission: allow|ask|deny', mcpServers: await listMcpServers() };
         }
-        const saved = toolPerm.setServerDefault(name, permission);
+        const scope = String(payload.scope || 'project').trim() || 'project';
+        const scopeId = String(payload.scopeId || payload.sessionId || payload.taskId || '').trim();
+        const origin = String(payload.origin || '').trim();
+        const saved = toolPerm.setToolPermission(name, '', permission, { scope, scopeId, origin })
         return {
             ok: saved.ok,
             server: name,

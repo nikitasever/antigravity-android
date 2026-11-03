@@ -43,6 +43,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -80,11 +82,16 @@ import androidx.compose.ui.window.Dialog
 import com.google.antigravity.model.ComponentAdapterRecord
 import com.google.antigravity.model.ExtensionCatalogItem
 import com.google.antigravity.model.InstalledPluginItem
+import com.google.antigravity.model.McpPermissionMode
+import com.google.antigravity.model.McpPermissionModeState
+import com.google.antigravity.model.McpToolPermissionScope
 import com.google.antigravity.model.McpToolPermissionsState
 import com.google.antigravity.model.PcMcpServerItem
 import com.google.antigravity.model.PcSkillItem
 import com.google.antigravity.model.SkillDetailState
+import com.google.antigravity.model.SkillEditState
 import com.google.antigravity.model.describeMcpAuthStatus
+import com.google.antigravity.model.describeMcpPermissionSource
 import com.google.antigravity.model.describeMcpStatus
 import com.google.antigravity.model.describeToolPermission
 import com.google.antigravity.ui.TwoLineMenuCircleButton
@@ -128,6 +135,9 @@ private val AccentBlue = Color(0xFF60A5FA)
 private val WarningAmber = Color(0xFFF59E0B)
 private val DangerRed = Color(0xFFF87171)
 
+/** Приглушённый фон кнопки «Удалить» (тонированный DangerRed). */
+private val DangerBtnBg = Color(0x26F87171)
+
 private enum class ExtensionsTab(val title: String) {
     CONNECTIONS("Подключения"),
     SKILLS("Навыки"),
@@ -142,6 +152,8 @@ private enum class ExtensionsScope(val title: String) {
 private sealed interface ExtensionDetailTarget {
     data class Mcp(val serverId: String) : ExtensionDetailTarget
     data class Skill(val skillId: String) : ExtensionDetailTarget
+    /** Редактор навыка («как у них»: SkillEdit) — имя и полный SKILL.md. */
+    data class SkillEdit(val skillId: String) : ExtensionDetailTarget
     data class Plugin(val pluginId: String) : ExtensionDetailTarget
     data class Catalog(val itemId: String) : ExtensionDetailTarget
 }
@@ -184,10 +196,20 @@ fun ExtensionsScreen(
     onInstallCatalogItem: (ExtensionCatalogItem) -> Unit,
     mcpToolPermissions: Map<String, McpToolPermissionsState>,
     onLoadMcpToolPermissions: (String) -> Unit,
-    onSetMcpToolPermission: (String, String, String) -> Unit,
-    onSetAllMcpToolPermissions: (String, String) -> Unit,
+    onSetMcpToolPermission: (String, String, String, McpToolPermissionScope) -> Unit,
+    onSetAllMcpToolPermissions: (String, String, McpToolPermissionScope) -> Unit,
+    mcpScopeSessionId: String,
+    mcpScopeTaskId: String,
+    permissionModeState: McpPermissionModeState,
+    onLoadPermissionMode: () -> Unit,
+    onSetPermissionMode: (McpPermissionMode) -> Unit,
     skillDetailStates: Map<String, SkillDetailState>,
-    onLoadSkillDetail: (String) -> Unit
+    onLoadSkillDetail: (String) -> Unit,
+    skillEditState: SkillEditState,
+    onStartSkillEdit: (String) -> Unit,
+    onSkillEditNameChange: (String) -> Unit,
+    onSkillEditContentChange: (String) -> Unit,
+    onSaveSkillEdit: (String, String, String) -> Unit
 ) {
     var activeTab by remember { mutableIntStateOf(0) } // 0=Подключения, 1=Навыки, 2=Плагины
     var scopeMine by remember { mutableStateOf(true) } // true=Мои, false=Каталог
@@ -552,12 +574,17 @@ fun ExtensionsScreen(
                             server = server,
                             permissions = mcpToolPermissions[server.id],
                             onLoadPermissions = { onLoadMcpToolPermissions(server.id) },
-                            onSetToolPermission = { tool, permission ->
-                                onSetMcpToolPermission(server.id, tool, permission)
+                            onSetToolPermission = { tool, permission, scope ->
+                                onSetMcpToolPermission(server.id, tool, permission, scope)
                             },
-                            onSetAllToolPermissions = { permission ->
-                                onSetAllMcpToolPermissions(server.id, permission)
+                            onSetAllToolPermissions = { permission, scope ->
+                                onSetAllMcpToolPermissions(server.id, permission, scope)
                             },
+                            scopeSessionId = mcpScopeSessionId,
+                            scopeTaskId = mcpScopeTaskId,
+                            permissionModeState = permissionModeState,
+                            onLoadPermissionMode = onLoadPermissionMode,
+                            onSetPermissionMode = onSetPermissionMode,
                             onCheck = { onCheckMcp(server.id) },
                             onLogin = { onLoginMcp(server.id) },
                             onOpenToolsDialog = {
@@ -588,6 +615,9 @@ fun ExtensionsScreen(
                                 onInsertSkillIntoChat(skill.id.removePrefix("/"))
                             },
                             onToggle = { onToggleSkill(skill.id) },
+                            onEdit = {
+                                detailTarget = ExtensionDetailTarget.SkillEdit(skill.id)
+                            },
                             onDelete = {
                                 onDeleteSkill(skill.id)
                                 detailTarget = null
@@ -597,6 +627,20 @@ fun ExtensionsScreen(
                     } else {
                         detailTarget = null
                     }
+                }
+
+                is ExtensionDetailTarget.SkillEdit -> {
+                    SkillEditSheetContent(
+                        skillId = target.skillId,
+                        state = skillEditState,
+                        onStartLoad = { onStartSkillEdit(target.skillId) },
+                        onNameChange = onSkillEditNameChange,
+                        onContentChange = onSkillEditContentChange,
+                        onSave = { newName, content ->
+                            onSaveSkillEdit(target.skillId, newName, content)
+                        },
+                        onClose = { detailTarget = null }
+                    )
                 }
 
                 is ExtensionDetailTarget.Plugin -> {
@@ -1956,8 +2000,15 @@ private fun McpDetailSheetContent(
     server: PcMcpServerItem,
     permissions: McpToolPermissionsState?,
     onLoadPermissions: () -> Unit,
-    onSetToolPermission: (String, String) -> Unit,
-    onSetAllToolPermissions: (String) -> Unit,
+    onSetToolPermission: (String, String, McpToolPermissionScope) -> Unit,
+    onSetAllToolPermissions: (String, McpToolPermissionScope) -> Unit,
+    /** Id текущего разговора для скоупа «Для этой сессии» (пусто — нет разговора). */
+    scopeSessionId: String,
+    /** Id пачки субагентов для скоупа «Для этой задачи» (пусто — «нет активной задачи»). */
+    scopeTaskId: String,
+    permissionModeState: McpPermissionModeState?,
+    onLoadPermissionMode: () -> Unit,
+    onSetPermissionMode: (McpPermissionMode) -> Unit,
     onCheck: () -> Unit,
     onLogin: () -> Unit,
     onOpenToolsDialog: () -> Unit,
@@ -1968,9 +2019,15 @@ private fun McpDetailSheetContent(
     val isConnected = effectiveMcpStatus(server.status, server.error, server.errorCode).equals("connected", ignoreCase = true)
     val isFailed = server.status.equals("failed", ignoreCase = true) || server.error.isNotBlank()
 
-    // Права инструментов («как у них») загружаются при открытии деталей.
-    LaunchedEffect(server.id) { onLoadPermissions() }
+    // Права инструментов («как у них») и режим разрешений загружаются при
+    // открытии деталей.
+    LaunchedEffect(server.id) {
+        onLoadPermissions()
+        onLoadPermissionMode()
+    }
     var permissionPicker by remember { mutableStateOf<PermissionPickerTarget?>(null) }
+    // Мини-пикер скоупа для «Всегда разрешать» (project/session/task/website).
+    var scopePicker by remember { mutableStateOf<PermissionPickerTarget?>(null) }
 
     Column(
         modifier = Modifier
@@ -2197,6 +2254,114 @@ private fun McpDetailSheetContent(
             }
         }
 
+        // Режим разрешений («как у них»: default/plan/auto/acceptEdits/dontAsk/
+        // bypassPermissions) — рядом с правами инструментов, выбор radio-списком.
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(IconBoxBg)
+                .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = "Режим разрешений",
+                color = TextPrimary,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            when {
+                permissionModeState == null ||
+                    (permissionModeState.loading && !permissionModeState.loaded) -> {
+                    Text(
+                        text = "Загрузка режима разрешений…",
+                        color = TextSecondary,
+                        fontSize = 11.5.sp
+                    )
+                }
+                permissionModeState.error.isNotBlank() -> {
+                    // Отказ моста (включая неизвестный режим) — видимый текст.
+                    Text(
+                        text = "⚠ ${permissionModeState.error}",
+                        color = DangerRed,
+                        fontSize = 11.5.sp
+                    )
+                }
+                else -> {
+                    if (permissionModeState.mode == null) {
+                        Text(
+                            text = "Режим не записан мостом.",
+                            color = SubtleText,
+                            fontSize = 11.sp
+                        )
+                    }
+                    McpPermissionMode.entries.forEach { mode ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { onSetPermissionMode(mode) }
+                        ) {
+                            RadioButton(
+                                selected = permissionModeState.mode == mode,
+                                onClick = { onSetPermissionMode(mode) },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = AccentGreen,
+                                    unselectedColor = SubtleText
+                                )
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = mode.label,
+                                    color = if (permissionModeState.mode == mode) {
+                                        TextPrimary
+                                    } else {
+                                        TextSecondary
+                                    },
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                if (mode == McpPermissionMode.AUTO) {
+                                    // Честная граница нашего «Автоматически».
+                                    Text(
+                                        text = "Оценка риска — эвристика по именам инструментов и аргументам",
+                                        color = WarningAmber,
+                                        fontSize = 10.5.sp,
+                                        lineHeight = 14.sp
+                                    )
+                                } else {
+                                    Text(
+                                        text = mode.hint,
+                                        color = SubtleText,
+                                        fontSize = 10.5.sp,
+                                        lineHeight = 14.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    if (permissionModeState.loading) {
+                        Text(
+                            text = "Сохранение режима…",
+                            color = SubtleText,
+                            fontSize = 11.sp
+                        )
+                    }
+                    HorizontalDivider(thickness = 1.dp, color = BorderSubtle)
+                    Text(
+                        text = "Состав режимов — как в Claude (default/plan/auto/acceptEdits/dontAsk/bypassPermissions); " +
+                            "точная семантика их Auto-режима (модельная оценка рисков и prompt injection) " +
+                            "не воспроизводится — «требует проверки».",
+                        color = SubtleText,
+                        fontSize = 10.5.sp,
+                        lineHeight = 14.sp
+                    )
+                }
+            }
+        }
+
         // Права инструментов («как у них»): allow/ask/deny на каждый инструмент;
         // приоритет per-tool > «все инструменты сервера» > глобальная политика.
         Column(
@@ -2265,8 +2430,12 @@ private fun McpDetailSheetContent(
                                 modifier = Modifier.weight(1f)
                             )
                             Text(
-                                text = describeToolPermission(entry.permission) +
-                                    if (entry.source == "policy") " • по политике" else "",
+                                text = describeToolPermission(entry.permission) + when (entry.source) {
+                                    "policy" -> " • по политике"
+                                    "session", "task", "website" ->
+                                        " • ${describeMcpPermissionSource(entry.source)}"
+                                    else -> ""
+                                },
                                 color = when (entry.permission) {
                                     "allow" -> AccentGreen
                                     "deny" -> DangerRed
@@ -2375,11 +2544,21 @@ private fun McpDetailSheetContent(
                     ).forEach { (value, label) ->
                         TextButton(
                             onClick = {
-                                when (target) {
-                                    is PermissionPickerTarget.Tool ->
-                                        onSetToolPermission(target.tool, value)
-                                    PermissionPickerTarget.AllTools ->
-                                        onSetAllToolPermissions(value)
+                                if (value == "allow") {
+                                    // «Всегда разрешать» — сначала мини-пикер скоупа
+                                    // («как у них»: Always allow for this project/…).
+                                    scopePicker = target
+                                } else {
+                                    when (target) {
+                                        is PermissionPickerTarget.Tool ->
+                                            onSetToolPermission(
+                                                target.tool, value, McpToolPermissionScope.PROJECT
+                                            )
+                                        PermissionPickerTarget.AllTools ->
+                                            onSetAllToolPermissions(
+                                                value, McpToolPermissionScope.PROJECT
+                                            )
+                                    }
                                 }
                                 permissionPicker = null
                             }
@@ -2400,6 +2579,79 @@ private fun McpDetailSheetContent(
             }
         )
     }
+
+    // Мини-пикер скоупа для «Всегда разрешать» («как у них»: «Always allow for
+    // this project/session/task/website»). Скоупы — наша модель по мотивам
+    // Claude; точная семантика референса не подтверждена.
+    scopePicker?.let { target ->
+        AlertDialog(
+            onDismissRequest = { scopePicker = null },
+            containerColor = CardBg,
+            title = {
+                Text(
+                    text = "Скоуп правила «Всегда разрешать»",
+                    color = TextPrimary,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    McpToolPermissionScope.entries.forEach { scope ->
+                        val unavailableReason = when {
+                            scope == McpToolPermissionScope.SESSION &&
+                                scopeSessionId.isBlank() -> "нет активного разговора"
+                            scope == McpToolPermissionScope.TASK &&
+                                scopeTaskId.isBlank() -> "нет активной задачи"
+                            else -> ""
+                        }
+                        Column {
+                            TextButton(
+                                onClick = {
+                                    when (target) {
+                                        is PermissionPickerTarget.Tool ->
+                                            onSetToolPermission(
+                                                target.tool, "allow", scope
+                                            )
+                                        PermissionPickerTarget.AllTools ->
+                                            onSetAllToolPermissions("allow", scope)
+                                    }
+                                    scopePicker = null
+                                },
+                                enabled = unavailableReason.isBlank()
+                            ) {
+                                Text(
+                                    text = scope.label,
+                                    color = if (unavailableReason.isBlank()) TextPrimary else SubtleText,
+                                    fontSize = 13.5.sp
+                                )
+                            }
+                            // Честная подсказка: границы скоупа и недоступность.
+                            Text(
+                                text = unavailableReason.ifBlank { scope.hint },
+                                color = if (unavailableReason.isBlank()) SubtleText else WarningAmber,
+                                fontSize = 11.sp,
+                                lineHeight = 15.sp,
+                                modifier = Modifier.padding(start = 16.dp)
+                            )
+                        }
+                    }
+                    HorizontalDivider(thickness = 1.dp, color = BorderSubtle)
+                    Text(
+                        text = "Скоупы — наша модель по мотивам Claude; точная семантика референса не подтверждена.",
+                        color = SubtleText,
+                        fontSize = 10.5.sp,
+                        lineHeight = 14.sp
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { scopePicker = null }) {
+                    Text("Отмена", color = TextSecondary)
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -2409,12 +2661,18 @@ private fun SkillDetailSheetContent(
     onLoadDetail: () -> Unit,
     onInsertIntoChat: () -> Unit,
     onToggle: () -> Unit,
+    onEdit: () -> Unit,
     onDelete: () -> Unit,
     onClose: () -> Unit
 ) {
     // Полный текст SKILL.md (content из skillDetail) загружается при открытии.
     LaunchedEffect(skill.id) { onLoadDetail() }
     val detail = detailState?.detail
+    // Встроенный навык (source = builtin) — только чтение: «Удалить» скрыт,
+    // «Редактировать» заблокирован, показана честная пометка. Мост отклоняет
+    // правку и удаление builtin кодом skill_read_only.
+    val isBuiltin = detail?.source == "builtin"
+    var showDeleteConfirm by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -2562,32 +2820,282 @@ private fun SkillDetailSheetContent(
             }
         }
 
+        Button(
+            onClick = onInsertIntoChat,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = WhiteBtnBg,
+                contentColor = WhiteBtnText
+            ),
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                text = "Вставить в чат: /${skill.id.removePrefix("/")}",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Button(
-                onClick = onInsertIntoChat,
+                onClick = onEdit,
+                enabled = !isBuiltin,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = WhiteBtnBg,
-                    contentColor = WhiteBtnText
+                    containerColor = ActivePillBg,
+                    contentColor = TextPrimary
                 ),
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.weight(1f)
             ) {
+                Text("Редактировать", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            }
+            if (isBuiltin) {
+                // Честная пометка вместо «Удалить»: встроенный навык только читается.
                 Text(
-                    text = "Вставить в чат: /${skill.id.removePrefix("/")}",
-                    fontSize = 13.sp,
+                    text = "встроенный навык — только чтение",
+                    color = SubtleText,
+                    fontSize = 11.5.sp,
+                    modifier = Modifier.weight(1f)
+                )
+            } else {
+                Button(
+                    onClick = { showDeleteConfirm = true },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = DangerBtnBg,
+                        contentColor = DangerRed
+                    ),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Удалить", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+    }
+
+    // Подтверждение удаления («как у них»: «Delete skill?»): действие необратимо,
+    // навык и его история версий удаляются навсегда.
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            containerColor = CardBg,
+            title = {
+                Text(
+                    text = "Удалить навык?",
+                    color = TextPrimary,
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold
                 )
-            }
-            IconButton(onClick = onDelete) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "Удалить навык",
-                    tint = DangerRed
+            },
+            text = {
+                Text(
+                    text = "Навык и его история версий будут удалены навсегда.",
+                    color = TextSecondary,
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp
                 )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteConfirm = false
+                    onDelete()
+                }) {
+                    Text("Удалить", color = DangerRed, fontWeight = FontWeight.SemiBold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("Отмена", color = TextSecondary)
+                }
+            }
+        )
+    }
+}
+
+/**
+ * Редактор навыка («как у них»: SkillEdit — «Edit skill», «Skill name»):
+ * имя навыка и полный текст SKILL.md. Состояния: загрузка черновика, ошибка
+ * сохранения текстом моста, блокировка кнопок на время сохранения. Редактор
+ * закрывается только по «Отмена» или после успешного сохранения; отказ
+ * (включая skill_name_taken) оставляет его открытым с текстом ошибки.
+ */
+@Composable
+private fun SkillEditSheetContent(
+    skillId: String,
+    state: SkillEditState,
+    onStartLoad: () -> Unit,
+    onNameChange: (String) -> Unit,
+    onContentChange: (String) -> Unit,
+    onSave: (String, String) -> Unit,
+    onClose: () -> Unit
+) {
+    // Черновик имени и SKILL.md загружается при открытии редактора.
+    LaunchedEffect(skillId) { onStartLoad() }
+
+    // Закрытие шторки только после реального закрытия редактора состоянием
+    // (onSaved сбрасывает editorOpen); иначе отказ сохранения закрыл бы его.
+    var editorWasOpen by remember(skillId) { mutableStateOf(false) }
+    LaunchedEffect(state.editorOpen) {
+        if (state.editorOpen) editorWasOpen = true
+        else if (editorWasOpen) onClose()
+    }
+
+    val textFieldColors = OutlinedTextFieldDefaults.colors(
+        focusedBorderColor = TextPrimary,
+        unfocusedBorderColor = BorderSubtle,
+        focusedTextColor = TextPrimary,
+        unfocusedTextColor = TextPrimary,
+        cursorColor = TextPrimary,
+        focusedLabelColor = TextSecondary,
+        unfocusedLabelColor = SubtleText
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .padding(bottom = 28.dp)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Редактирование навыка",
+                    color = TextPrimary,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "/${skillId.removePrefix("/")}",
+                    color = AccentGreen,
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+            IconButton(onClick = onClose, modifier = Modifier.size(28.dp)) {
+                Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = TextSecondary)
+            }
+        }
+
+        HorizontalDivider(thickness = 1.dp, color = BorderSubtle)
+
+        when {
+            // Черновик ещё не загружен (или это состояние другого навыка).
+            state.skillId != skillId || state.loading -> {
+                Text(
+                    text = "Загрузка SKILL.md…",
+                    color = TextSecondary,
+                    fontSize = 12.5.sp
+                )
+            }
+
+            // Загрузка не удалась: ошибка видима текстом, редактор не открыт.
+            !state.editorOpen -> {
+                Text(
+                    text = "⚠ ${state.error.ifBlank { "SKILL.md не получен" }}",
+                    color = DangerRed,
+                    fontSize = 12.sp
+                )
+                Button(
+                    onClick = onClose,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = WhiteBtnBg,
+                        contentColor = WhiteBtnText
+                    ),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Закрыть", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+
+            else -> {
+                OutlinedTextField(
+                    value = state.nameDraft,
+                    onValueChange = onNameChange,
+                    label = { Text("Имя навыка") },
+                    singleLine = true,
+                    enabled = !state.saving && !state.readOnly,
+                    colors = textFieldColors,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = state.contentDraft,
+                    onValueChange = onContentChange,
+                    label = { Text("SKILL.md") },
+                    enabled = !state.saving && !state.readOnly,
+                    textStyle = TextStyle(
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp,
+                        color = TextPrimary
+                    ),
+                    colors = textFieldColors,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 220.dp, max = 380.dp)
+                )
+                if (state.readOnly) {
+                    Text(
+                        text = "встроенный навык — только чтение",
+                        color = SubtleText,
+                        fontSize = 11.5.sp
+                    )
+                }
+                // Ошибка сохранения (включая skill_name_taken) — текстом моста,
+                // без маскировки; редактор остаётся открытым.
+                if (state.error.isNotBlank()) {
+                    Text(
+                        text = "⚠ ${state.error}",
+                        color = DangerRed,
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp
+                    )
+                } else if (!state.canSave && state.saveBlockReason.isNotBlank()) {
+                    // Честная причина, почему сохранение недоступно.
+                    Text(
+                        text = state.saveBlockReason,
+                        color = WarningAmber,
+                        fontSize = 11.5.sp
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Button(
+                        onClick = { onSave(state.nameDraft, state.contentDraft) },
+                        enabled = state.canSave,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = WhiteBtnBg,
+                            contentColor = WhiteBtnText
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Сохранить", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    TextButton(
+                        onClick = onClose,
+                        enabled = !state.saving,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Отмена", color = TextSecondary, fontSize = 13.sp)
+                    }
+                }
+                if (state.saving) {
+                    Text(
+                        text = "Сохранение…",
+                        color = TextSecondary,
+                        fontSize = 11.5.sp
+                    )
+                }
             }
         }
     }

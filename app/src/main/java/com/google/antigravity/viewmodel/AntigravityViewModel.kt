@@ -42,8 +42,16 @@ import com.google.antigravity.model.prepareChatBranch
 import com.google.antigravity.model.prepareChatEdit
 import com.google.antigravity.model.prepareChatRetry
 import com.google.antigravity.model.McpAuthState
+import com.google.antigravity.model.McpPermissionMode
+import com.google.antigravity.model.McpPermissionModeState
+import com.google.antigravity.model.McpToolPermissionScope
 import com.google.antigravity.model.McpToolPermissionsState
+import com.google.antigravity.model.McpToolScopeContext
+import com.google.antigravity.model.McpToolScopeRequest
+import com.google.antigravity.model.mcpServerOrigin
+import com.google.antigravity.model.resolveMcpToolScope
 import com.google.antigravity.model.SkillDetailState
+import com.google.antigravity.model.SkillEditState
 import com.google.antigravity.model.MessageRole
 import com.google.antigravity.model.OpenRouterCategory
 import com.google.antigravity.model.OpenRouterModelItem
@@ -57,6 +65,8 @@ import com.google.antigravity.model.RemoteSessionItem
 import com.google.antigravity.model.ScratchProjectItem
 import com.google.antigravity.model.ScheduledAutomationItem
 import com.google.antigravity.model.SlashMentionSuggestionItem
+import com.google.antigravity.model.ComposerToken
+import com.google.antigravity.model.ComposerTokensState
 import com.google.antigravity.model.SwarmAgentNode
 import com.google.antigravity.model.TopModeTab
 import com.google.antigravity.model.VirtualSandboxProject
@@ -84,6 +94,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
 import com.google.antigravity.model.QueuedFollowUp
@@ -191,6 +202,29 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     private fun restoreComposerDraft(sessionId: String) {
         _composerDraft.value = prefs.getString("draft:$sessionId", "").orEmpty()
         _pendingAttachments.value = attachmentDrafts[sessionId].orEmpty()
+    }
+
+    // Фишки упоминаний композитора («как у них»: токены их composer'а).
+    // INSERTED при выборе @-предложения палитры (ДОПОЛНИТЕЛЬНО к прежнему
+    // текстовому insert — он сохранён как был), REMOVED при удалении фишки.
+    private val _composerTokens = MutableStateFlow(ComposerTokensState())
+    val composerTokens: StateFlow<List<ComposerToken>> = _composerTokens.asStateFlow()
+        .map { it.tokens }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Добавление фишки упоминания (INSERTED); дубликат по id не добавляется. */
+    fun addComposerToken(item: SlashMentionSuggestionItem) {
+        _composerTokens.update { it.onAdded(ComposerToken.fromSuggestion(item)) }
+    }
+
+    /** Удаление фишки упоминания (REMOVED). */
+    fun removeComposerToken(id: String) {
+        _composerTokens.update { it.onRemoved(id) }
+    }
+
+    /** Очистка всех фишек (после отправки). */
+    fun clearComposerTokens() {
+        _composerTokens.value = ComposerTokensState()
     }
 
     private val sessionHistoryCache = java.util.concurrent.ConcurrentHashMap<String, List<ChatMessage>>()
@@ -2008,6 +2042,8 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     // Этап 3: реальный вызов MCP-инструмента (tools/call) через мост.
+    // Контекст скоупов (sessionId разговора / taskId пачки субагентов / origin
+    // HTTP-подключения) передаётся мосту — enforcement прав его учитывает.
     fun callMcpTool(id: String, tool: String) {
         viewModelScope.launch {
             _isMcpToolCallRunning.value = true
@@ -2015,7 +2051,11 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
             val (result, err) = backendClient.callMcpTool(
                 pcBridgeUrl = _settings.value.pcBridgeUrl,
                 name = id,
-                tool = tool
+                tool = tool,
+                sessionId = _settings.value.activeConversationId.ifBlank { null },
+                taskId = subagentRequestId.ifBlank { null },
+                origin = _mcpServers.value.firstOrNull { it.id == id }
+                    ?.let { mcpServerOrigin(it) }?.ifBlank { null }
             )
             _mcpToolResult.value = result ?: (err ?: "Вызов инструмента не выполнен")
             if (err != null) _extensionsError.value = err
@@ -2051,19 +2091,36 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     /**
-     * Смена права одного инструмента (allow/ask/deny). Отказ сервера
-     * показывается текстом как ошибка; после успеха — перезагрузка прав
-     * (свежий ответ tool_permissions) и списка подключений.
+     * Смена права одного инструмента (allow/ask/deny), опционально со скоупом
+     * («Always allow for this project/session/task/website»). Скоупы — наша
+     * честная модель по мотивам Claude; точная семантика референса не
+     * подтверждена. Отказы (нет активного разговора / «нет активной задачи» /
+     * у подключения нет origin) показываются текстом и мосту не отправляются;
+     * ошибки моста показываются честно их текстом.
      */
-    fun setMcpToolPermission(id: String, tool: String, permission: String) {
+    fun setMcpToolPermission(
+        id: String,
+        tool: String,
+        permission: String,
+        scope: McpToolPermissionScope = McpToolPermissionScope.PROJECT
+    ) {
         viewModelScope.launch {
+            val request = resolveMcpToolScope(scope, mcpScopeContext(id))
+            if (request is McpToolScopeRequest.Refused) {
+                updateToolPermissionsState(id) { it.onError(request.message) }
+                return@launch
+            }
+            val ready = request as McpToolScopeRequest.Ready
             updateToolPermissionsState(id) { it.onLoading() }
             val (reply, error) = backendClient.setMcpToolPermission(
-                _settings.value.pcBridgeUrl, id, tool, permission
+                _settings.value.pcBridgeUrl, id, tool, permission,
+                scope = ready.scope, scopeId = ready.scopeId, origin = ready.origin
             )
             if (reply != null) {
                 updateToolPermissionsState(id) {
-                    it.onToolPermissionChanged(tool, reply.permission.ifBlank { permission })
+                    it.onToolPermissionChanged(
+                        tool, reply.permission.ifBlank { permission }, source = scope.rowSource
+                    )
                 }
                 loadMcpToolPermissions(id)
                 refreshExtensionsFromPc()
@@ -2076,15 +2133,28 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     /** Смена прав всех инструментов сервера (уровень «все инструменты сервера»). */
-    fun setAllMcpToolPermissions(id: String, permission: String) {
+    fun setAllMcpToolPermissions(
+        id: String,
+        permission: String,
+        scope: McpToolPermissionScope = McpToolPermissionScope.PROJECT
+    ) {
         viewModelScope.launch {
+            val request = resolveMcpToolScope(scope, mcpScopeContext(id))
+            if (request is McpToolScopeRequest.Refused) {
+                updateToolPermissionsState(id) { it.onError(request.message) }
+                return@launch
+            }
+            val ready = request as McpToolScopeRequest.Ready
             updateToolPermissionsState(id) { it.onLoading() }
             val (reply, error) = backendClient.setAllMcpToolPermissions(
-                _settings.value.pcBridgeUrl, id, permission
+                _settings.value.pcBridgeUrl, id, permission,
+                scope = ready.scope, scopeId = ready.scopeId, origin = ready.origin
             )
             if (reply != null) {
                 updateToolPermissionsState(id) {
-                    it.onAllToolsPermissionChanged(reply.permission.ifBlank { permission })
+                    it.onAllToolsPermissionChanged(
+                        reply.permission.ifBlank { permission }, source = scope.rowSource
+                    )
                 }
                 loadMcpToolPermissions(id)
                 refreshExtensionsFromPc()
@@ -2092,6 +2162,64 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                 updateToolPermissionsState(id) {
                     it.onError(error ?: "Не удалось изменить права всех инструментов")
                 }
+            }
+        }
+    }
+
+    /**
+     * Контекст скоупов для прав сервера: sessionId текущего разговора,
+     * taskId текущей/последней пачки субагентов, origin HTTP-подключения.
+     */
+    private fun mcpScopeContext(serverId: String): McpToolScopeContext = McpToolScopeContext(
+        sessionId = _settings.value.activeConversationId,
+        taskId = subagentRequestId,
+        serverOrigin = _mcpServers.value.firstOrNull { it.id == serverId }
+            ?.let { mcpServerOrigin(it) }.orEmpty()
+    )
+
+    /** Id текущей/последней пачки субагентов (пусто — «нет активной задачи»). */
+    val currentSubagentTaskId: String get() = subagentRequestId
+
+    // Режим разрешений («как у них»: default/plan/auto/acceptEdits/dontAsk/
+    // bypassPermissions). Состав режимов — как в Claude; точная семантика их
+    // Auto-режима не воспроизводится — «требует проверки».
+    private val _permissionModeState = MutableStateFlow(McpPermissionModeState())
+    val permissionModeState: StateFlow<McpPermissionModeState> =
+        _permissionModeState.asStateFlow()
+
+    /** Загрузка текущего режима разрешений (permission_mode /api/mcp). */
+    fun loadPermissionMode() {
+        viewModelScope.launch {
+            _permissionModeState.value = _permissionModeState.value.onLoading()
+            val reply = backendClient.getMcpPermissionMode(_settings.value.pcBridgeUrl)
+            if (reply.ok) {
+                _permissionModeState.value = _permissionModeState.value.onLoaded(
+                    mode = McpPermissionMode.fromWire(reply.mode),
+                    validModes = reply.validModes
+                )
+            } else {
+                _permissionModeState.value = _permissionModeState.value.onError(
+                    reply.error ?: "Режим разрешений не получен"
+                )
+            }
+        }
+    }
+
+    /** Смена режима разрешений; ошибки моста (включая неизвестный режим) — их текстом. */
+    fun setPermissionMode(mode: McpPermissionMode) {
+        viewModelScope.launch {
+            _permissionModeState.value = _permissionModeState.value.onLoading()
+            val reply = backendClient.setMcpPermissionMode(_settings.value.pcBridgeUrl, mode.wire)
+            if (reply.ok) {
+                // ok:true — подтверждённая смена; предпочтительно эхо моста,
+                // если оно не записано — подтверждённый запрос.
+                _permissionModeState.value = _permissionModeState.value.onModeChanged(
+                    McpPermissionMode.fromWire(reply.mode) ?: mode
+                )
+            } else {
+                _permissionModeState.value = _permissionModeState.value.onError(
+                    reply.error ?: "Не удалось изменить режим разрешений"
+                )
             }
         }
     }
@@ -2129,6 +2257,85 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     ) {
         _skillDetailStates.value = _skillDetailStates.value.toMutableMap().apply {
             put(id, transform(getOrPut(id) { SkillDetailState(skillId = id) }))
+        }
+    }
+
+    // Редактирование навыка («как у них»: Edit skill): черновик имени и полного
+    // текста SKILL.md; редактор один (открыт для одного навыка).
+    private val _skillEditState = MutableStateFlow(SkillEditState())
+    val skillEditState: StateFlow<SkillEditState> = _skillEditState.asStateFlow()
+
+    /**
+     * Открыть редактор навыка: загрузить detail → черновики имени и SKILL.md.
+     * Ошибки загрузки показываются их текстом, редактор не открывается.
+     */
+    fun startSkillEdit(skillId: String) {
+        viewModelScope.launch {
+            _skillEditState.value = SkillEditState(skillId = skillId).onLoading()
+            val (detail, error) = backendClient.skillDetail(_settings.value.pcBridgeUrl, skillId)
+            if (detail != null) {
+                _skillEditState.value = _skillEditState.value.onLoaded(detail)
+            } else {
+                _skillEditState.value = _skillEditState.value.onError(error ?: "SKILL.md не получен")
+            }
+        }
+    }
+
+    /** Правка имени в черновике редактора. */
+    fun changeSkillEditName(name: String) {
+        _skillEditState.update { it.onNameChanged(name) }
+    }
+
+    /** Правка полного текста SKILL.md в черновике редактора. */
+    fun changeSkillEditContent(content: String) {
+        _skillEditState.update { it.onContentChanged(content) }
+    }
+
+    /**
+     * Сохранение правок навыка (update /api/skills). При skill_name_taken
+     * ошибка «Навык с именем «X» уже существует.» показывается, редактор НЕ
+     * закрывается; при успехе — свежий список навыков, обновление детали и
+     * закрытие редактора. Ошибки моста показываются честно их текстом.
+     */
+    fun saveSkillEdit(skillId: String, newName: String, content: String) {
+        viewModelScope.launch {
+            _skillEditState.value = _skillEditState.value.onSaving()
+            val result = backendClient.updateSkill(
+                pcBridgeUrl = _settings.value.pcBridgeUrl,
+                name = skillId,
+                content = content,
+                newName = newName.trim()
+            )
+            if (result.ok) {
+                _skillEditState.value = _skillEditState.value.onSaved()
+                result.skills?.let { _installedSkills.value = it }
+                // id (= имя папки) стабилен — деталь перечитывается по нему же.
+                loadSkillDetail(skillId)
+            } else {
+                _skillEditState.value = _skillEditState.value.onSaveError(
+                    result,
+                    attemptedName = newName.trim().ifBlank { skillId }
+                )
+            }
+        }
+    }
+
+    /**
+     * Удаление навыка (remove /api/skills): список обновляется из ответа
+     * моста; для builtin мост отказывает skill_read_only — текст ошибки
+     * показывается без маскировки.
+     */
+    fun deleteSkill(skillId: String) {
+        viewModelScope.launch {
+            _isExtensionsLoading.value = true
+            val result = backendClient.deleteSkill(_settings.value.pcBridgeUrl, skillId)
+            if (result.ok) {
+                result.skills?.let { _installedSkills.value = it } ?: refreshExtensionsFromPc()
+            } else {
+                _extensionsError.value = result.error
+                    ?: result.message.ifBlank { "Не удалось удалить навык" }
+            }
+            _isExtensionsLoading.value = false
         }
     }
 
@@ -3172,7 +3379,11 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
         versionAnchor: ChatMessage? = null
     ) {
         val currentAttachments = versionAnchor?.attachments ?: queuedTurn?.attachments ?: _pendingAttachments.value
-        val cleanInput = rawPrompt.trim()
+        // Фишки упоминаний («как у них»): тексты фишек (insertText) одной
+        // строкой через пробел ДО текста черновика; после отправки фишки
+        // очищаются. Прежний текстовый insert (@handle в черновике) работает
+        // как раньше — фишки ДОПОЛНИТЕЛЬНЫЙ механизм.
+        val cleanInput = _composerTokens.value.composePrompt(rawPrompt)
         val prompt = cleanInput.ifEmpty {
             if (currentAttachments.isNotEmpty()) {
                 "Проанализируй прикреплённые файлы: ${currentAttachments.joinToString(", ") { it.name }}"
@@ -3187,6 +3398,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
             if (_queuedFollowUps.value.count { it.conversationId == settings.activeConversationId } >= 10) {
                 android.widget.Toast.makeText(getApplication(), "В очереди уже 10 сообщений. Удалите лишние перед добавлением.", android.widget.Toast.LENGTH_LONG).show()
                 _composerDraft.value = rawPrompt
+                // Сообщение не ушло — фишки остаются (отправка не выдумывается).
                 return
             }
             _queuedFollowUps.update { it + QueuedFollowUp(conversationId = settings.activeConversationId,
@@ -3194,9 +3406,14 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                 temporary = _temporaryChatActive.value,
                 executionContextId = conversationExecutionId(settings.activeConversationId, _messages.value)) }
             _pendingAttachments.value = emptyList()
+            // Промпт с фишками поставлен в очередь — фишки потреблены.
+            _composerTokens.value = ComposerTokensState()
             saveFollowUpQueue()
             return
         }
+
+        // Сообщение отправляется — фишки, вошедшие в промпт, очищаются.
+        _composerTokens.value = ComposerTokensState()
 
         // Быстрые встроенные слэш-действия контекста
         if (prompt.trim().equals("/reset", ignoreCase = true)) {

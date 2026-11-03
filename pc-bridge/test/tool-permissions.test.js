@@ -88,3 +88,73 @@ test('McpClientManager: проверка прав выполняется ДО с
     assert.equal(asked.ok, false);
     assert.notEqual(asked.errorCode, 'tool_needs_approval', 'deny действует и для явных вызовов');
 });
+
+// --- Скоупы «как у них» («Always allow for this project / session / task / website») ---
+
+test('скоупы: session и task побеждают project-право; task — самый специфичный', t => {
+    const { tp } = tmpConfig(t, { toolExecutionPolicy: 'always-proceed' });
+    tp.setToolPermission('srv', 'tool1', 'deny', { scope: 'project' });
+    assert.equal(tp.getToolPermission('srv', 'tool1').permission, 'deny');
+    tp.setToolPermission('srv', 'tool1', 'allow', { scope: 'session', scopeId: 'conv-1' });
+    assert.deepEqual(
+        tp.getToolPermission('srv', 'tool1', { sessionId: 'conv-1' }),
+        { permission: 'allow', source: 'session' },
+        'session-скоуп побеждает project-запрет'
+    );
+    assert.equal(tp.getToolPermission('srv', 'tool1', { sessionId: 'other' }).permission, 'deny',
+        'для другой сессии project-право остаётся');
+    tp.setToolPermission('srv', 'tool1', 'ask', { scope: 'task', scopeId: 'batch-1' });
+    assert.deepEqual(
+        tp.getToolPermission('srv', 'tool1', { sessionId: 'conv-1', taskId: 'batch-1' }),
+        { permission: 'ask', source: 'task' },
+        'task-скоуп побеждает session'
+    );
+});
+
+test('скоупы: session/task не пишутся в permissions-config.json и не переживают новый экземпляр', t => {
+    const { file, tp } = tmpConfig(t, { toolExecutionPolicy: 'always-proceed' });
+    tp.setToolPermission('srv', 'tool1', 'allow', { scope: 'session', scopeId: 'conv-1' });
+    tp.setToolPermission('srv', 'tool2', 'allow', { scope: 'task', scopeId: 'batch-1' });
+    const back = JSON.parse(fs.readFileSync(file, 'utf8'));
+    assert.equal(back.toolPermissions?.srv?.tools?.tool1, undefined, 'session-право не в файле');
+    assert.equal(back.toolPermissions?.srv?.tools?.tool2, undefined, 'task-право не в файле');
+    const { createToolPermissions } = require('../lib/tool-permissions');
+    const fresh = createToolPermissions({ configPath: file });
+    assert.equal(fresh.getToolPermission('srv', 'tool1', { sessionId: 'conv-1' }).source, 'policy',
+        'новый экземпляр (после перезапуска моста) не помнит session-скоуп');
+});
+
+test('скоупы: website действует по origin и честно недоступен без него', t => {
+    const { tp } = tmpConfig(t, { toolExecutionPolicy: 'always-proceed' });
+    tp.setServerDefault('srv', 'ask');
+    const noOrigin = tp.setToolPermission('srv', 'tool1', 'allow', { scope: 'website' });
+    assert.equal(noOrigin.ok, false);
+    assert.equal(noOrigin.code, 'website_scope_requires_origin', 'stdio-сервер без origin — честный отказ');
+    const saved = tp.setToolPermission('srv', 'tool1', 'allow', { scope: 'website', origin: 'https://mcp.example.com' });
+    assert.equal(saved.ok, true);
+    assert.deepEqual(
+        tp.getToolPermission('srv', 'tool1', { origin: 'https://mcp.example.com' }),
+        { permission: 'allow', source: 'website' },
+        'website-скоуп побеждает server-право'
+    );
+    assert.equal(tp.getToolPermission('srv', 'tool1', { origin: 'https://other.example.com' }).permission, 'ask',
+        'другой origin получает server-право');
+});
+
+test('скоупы: неверный scopeId — честный отказ без записи', t => {
+    const { tp } = tmpConfig(t);
+    const r1 = tp.setToolPermission('srv', 'tool1', 'allow', { scope: 'session' });
+    assert.equal(r1.ok, false);
+    assert.match(r1.error, /sessionId/);
+    const r2 = tp.setToolPermission('srv', 'tool1', 'allow', { scope: 'task' });
+    assert.equal(r2.ok, false);
+    assert.match(r2.error, /taskId/);
+});
+
+test('скоупы: checkToolCall сообщает источник скоупа в отказе', t => {
+    const { tp } = tmpConfig(t, { toolExecutionPolicy: 'always-proceed' });
+    tp.setToolPermission('srv', 'tool1', 'deny', { scope: 'session', scopeId: 'conv-1' });
+    const denied = tp.checkToolCall('srv', 'tool1', { sessionId: 'conv-1' });
+    assert.equal(denied.allow, false);
+    assert.match(denied.error, /скоуп: session/);
+});

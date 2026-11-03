@@ -49,6 +49,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AlternateEmail
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.CameraAlt
@@ -225,6 +226,8 @@ fun MainScreen(
     val extensionCatalog by viewModel.extensionCatalog.collectAsState()
     val mcpToolPermissions by viewModel.mcpToolPermissions.collectAsState()
     val skillDetailStates by viewModel.skillDetailStates.collectAsState()
+    val skillEditState by viewModel.skillEditState.collectAsState()
+    val permissionModeState by viewModel.permissionModeState.collectAsState()
     val pendingAttachments by viewModel.pendingAttachments.collectAsState()
     val pcBridgeStatus by viewModel.pcBridgeStatus.collectAsState()
     val drawerSection by viewModel.drawerSection.collectAsState()
@@ -639,7 +642,7 @@ fun MainScreen(
                             onDeletePlugin = { id -> viewModel.deletePluginOnPc(id) },
                             onToggleSkill = { id -> viewModel.toggleSkillEnabled(id) },
                             onAddSkill = { name, desc, instr -> viewModel.addSkillOnPc(name, desc, instr) },
-                            onDeleteSkill = { id -> viewModel.deleteSkillOnPc(id) },
+                            onDeleteSkill = { id -> viewModel.deleteSkill(id) },
                             onInsertSkillIntoChat = { name ->
                                 viewModel.setComposerDraft("/$name ")
                                 viewModel.selectDrawerSection(DrawerSection.CHAT)
@@ -656,14 +659,26 @@ fun MainScreen(
                             onInstallCatalogItem = { item -> viewModel.installCatalogExtension(item) },
                             mcpToolPermissions = mcpToolPermissions,
                             onLoadMcpToolPermissions = { id -> viewModel.loadMcpToolPermissions(id) },
-                            onSetMcpToolPermission = { id, tool, permission ->
-                                viewModel.setMcpToolPermission(id, tool, permission)
+                            onSetMcpToolPermission = { id, tool, permission, scope ->
+                                viewModel.setMcpToolPermission(id, tool, permission, scope)
                             },
-                            onSetAllMcpToolPermissions = { id, permission ->
-                                viewModel.setAllMcpToolPermissions(id, permission)
+                            onSetAllMcpToolPermissions = { id, permission, scope ->
+                                viewModel.setAllMcpToolPermissions(id, permission, scope)
                             },
+                            mcpScopeSessionId = settings.activeConversationId,
+                            mcpScopeTaskId = viewModel.currentSubagentTaskId,
+                            permissionModeState = permissionModeState,
+                            onLoadPermissionMode = { viewModel.loadPermissionMode() },
+                            onSetPermissionMode = { mode -> viewModel.setPermissionMode(mode) },
                             skillDetailStates = skillDetailStates,
-                            onLoadSkillDetail = { name -> viewModel.loadSkillDetail(name) }
+                            onLoadSkillDetail = { name -> viewModel.loadSkillDetail(name) },
+                            skillEditState = skillEditState,
+                            onStartSkillEdit = { id -> viewModel.startSkillEdit(id) },
+                            onSkillEditNameChange = { name -> viewModel.changeSkillEditName(name) },
+                            onSkillEditContentChange = { content -> viewModel.changeSkillEditContent(content) },
+                            onSaveSkillEdit = { id, newName, content ->
+                                viewModel.saveSkillEdit(id, newName, content)
+                            }
                         )
                     }
 
@@ -789,6 +804,12 @@ fun MainScreen(
                 onOpenPhoneStorage = {
                     showAttachmentSheet = false
                     viewModel.selectDrawerSection(DrawerSection.PHONE_EXPLORER)
+                },
+                // PLUS_MENU («как у них»): «Упомянуть…» открывает палитру @
+                // через триггер «@» в черновике.
+                onMention = {
+                    showAttachmentSheet = false
+                    viewModel.setComposerDraft(viewModel.composerDraft.value + "@")
                 },
                 onDismiss = { showAttachmentSheet = false }
             )
@@ -1886,6 +1907,7 @@ private fun ChatGptBottomInputPill(
     val selectedMcpConnections by viewModel.selectedMcpConnections.collectAsState()
     val swarmAgents by viewModel.swarmAgents.collectAsState()
     val googleDriveFiles by viewModel.googleDriveFiles.collectAsState()
+    val composerTokens by viewModel.composerTokens.collectAsState()
 
     val slashAndMentionSuggestions = remember(text, installedSkills, mcpServers, swarmAgents, googleDriveFiles) {
         viewModel.computeSlashAndMentionSuggestions(text)
@@ -2029,10 +2051,65 @@ private fun ChatGptBottomInputPill(
                             val lastSpace = text.lastIndexOfAny(charArrayOf(' ', '\n'))
                             val prefix = if (lastSpace >= 0) text.substring(0, lastSpace + 1) else ""
                             viewModel.setComposerDraft(prefix + item.insertText)
+                            // Фишка упоминания («как у них») — ДОПОЛНИТЕЛЬНО к
+                            // текстовому insert (он сохранён как был); фишка
+                            // добавляется только для @-предложений.
+                            if (item.trigger.startsWith("@")) {
+                                viewModel.addComposerToken(item)
+                            }
                         }
                     }
                 }
             )
+        }
+
+        // Фишки упоминаний над полем ввода («как у них»): label + тип серым +
+        // «✕» удаления. Пустой список — строки нет.
+        if (composerTokens.isNotEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                composerTokens.forEach { token ->
+                    Surface(
+                        color = Color(0xFF212121),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(start = 12.dp, top = 8.dp, end = 8.dp, bottom = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = token.label,
+                                color = Color.White,
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = token.typeLabel,
+                                color = Color(0xFF8E8E8E),
+                                fontSize = 10.5.sp,
+                                maxLines = 1
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Удалить упоминание",
+                                tint = Color(0xFFB0B0B0),
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .clickable { viewModel.removeComposerToken(token.id) }
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         // Плашки прикреплённых файлов над полем ввода (как в ChatGPT при загрузке файлов)
@@ -2229,6 +2306,7 @@ private fun ChatGptAttachmentPickerDialog(
     onPickPhotos: () -> Unit,
     onPickAnyFiles: () -> Unit,
     onOpenPhoneStorage: () -> Unit,
+    onMention: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -2268,6 +2346,40 @@ private fun ChatGptAttachmentPickerDialog(
                     onClick = onPickAnyFiles,
                     modifier = Modifier.weight(1f)
                 )
+            }
+
+            Surface(
+                color = Color(0xFF282828),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onMention() }
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AlternateEmail,
+                        contentDescription = null,
+                        tint = Color(0xFF60A5FA),
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = "Упомянуть…",
+                            color = Color.White,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "Фишки упоминаний: субагент, навык, MCP, файл (как в ChatGPT, триггер «+»)",
+                            color = Color(0xFF9E9E9E),
+                            fontSize = 12.sp
+                        )
+                    }
+                }
             }
 
             Surface(
