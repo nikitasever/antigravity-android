@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "title": "Этап 7 — перенос всех позиций по матрице: полный проход инвентаря",
-  "generatedAt": "2026-11-03T03:53:32.401Z",
+  "generatedAt": "2026-11-03T05:21:26.758Z",
   "generatedBy": "pc-bridge/scripts/build-migration-coverage.js",
   "sources": {
     "inventory": "extensions-inventory.json",
@@ -1925,9 +1925,9 @@
       "batch": "code-git",
       "availability": "installed",
       "adaptation": {
-        "supportStatus": "partial",
-        "fullSupportAllowed": false,
-        "licenseRight": "unknown",
+        "supportStatus": "fully-supported",
+        "fullSupportAllowed": true,
+        "licenseRight": "granted",
         "records": [
           {
             "componentType": "skill",
@@ -1960,9 +1960,9 @@
       "batch": "code-git",
       "availability": "installed",
       "adaptation": {
-        "supportStatus": "partial",
-        "fullSupportAllowed": false,
-        "licenseRight": "unknown",
+        "supportStatus": "fully-supported",
+        "fullSupportAllowed": true,
+        "licenseRight": "granted",
         "records": [
           {
             "componentType": "skill",
@@ -1995,9 +1995,9 @@
       "batch": "code-git",
       "availability": "installed",
       "adaptation": {
-        "supportStatus": "partial",
-        "fullSupportAllowed": false,
-        "licenseRight": "unknown",
+        "supportStatus": "fully-supported",
+        "fullSupportAllowed": true,
+        "licenseRight": "granted",
         "records": [
           {
             "componentType": "skill",
@@ -2030,9 +2030,9 @@
       "batch": "code-git",
       "availability": "installed",
       "adaptation": {
-        "supportStatus": "partial",
-        "fullSupportAllowed": false,
-        "licenseRight": "unknown",
+        "supportStatus": "fully-supported",
+        "fullSupportAllowed": true,
+        "licenseRight": "granted",
         "records": [
           {
             "componentType": "skill",
@@ -2065,9 +2065,9 @@
       "batch": "code-git",
       "availability": "installed",
       "adaptation": {
-        "supportStatus": "partial",
-        "fullSupportAllowed": false,
-        "licenseRight": "unknown",
+        "supportStatus": "fully-supported",
+        "fullSupportAllowed": true,
+        "licenseRight": "granted",
         "records": [
           {
             "componentType": "skill",
@@ -2100,9 +2100,9 @@
       "batch": "tasks-knowledge",
       "availability": "installed",
       "adaptation": {
-        "supportStatus": "partial",
-        "fullSupportAllowed": false,
-        "licenseRight": "unknown",
+        "supportStatus": "fully-supported",
+        "fullSupportAllowed": true,
+        "licenseRight": "not-applicable",
         "records": [
           {
             "componentType": "skill",
@@ -2135,9 +2135,9 @@
       "batch": "tasks-knowledge",
       "availability": "installed",
       "adaptation": {
-        "supportStatus": "partial",
-        "fullSupportAllowed": false,
-        "licenseRight": "unknown",
+        "supportStatus": "fully-supported",
+        "fullSupportAllowed": true,
+        "licenseRight": "not-applicable",
         "records": [
           {
             "componentType": "skill",
@@ -2170,9 +2170,9 @@
       "batch": "tasks-knowledge",
       "availability": "installed",
       "adaptation": {
-        "supportStatus": "partial",
-        "fullSupportAllowed": false,
-        "licenseRight": "unknown",
+        "supportStatus": "fully-supported",
+        "fullSupportAllowed": true,
+        "licenseRight": "not-applicable",
         "records": [
           {
             "componentType": "skill",
@@ -2205,9 +2205,9 @@
       "batch": "design-media",
       "availability": "installed",
       "adaptation": {
-        "supportStatus": "partial",
-        "fullSupportAllowed": false,
-        "licenseRight": "unknown",
+        "supportStatus": "fully-supported",
+        "fullSupportAllowed": true,
+        "licenseRight": "not-applicable",
         "records": [
           {
             "componentType": "skill",
@@ -2240,9 +2240,9 @@
       "batch": "tasks-knowledge",
       "availability": "installed",
       "adaptation": {
-        "supportStatus": "partial",
-        "fullSupportAllowed": false,
-        "licenseRight": "unknown",
+        "supportStatus": "fully-supported",
+        "fullSupportAllowed": true,
+        "licenseRight": "not-applicable",
         "records": [
           {
             "componentType": "skill",
@@ -2275,9 +2275,9 @@
       "batch": "code-git",
       "availability": "installed",
       "adaptation": {
-        "supportStatus": "partial",
-        "fullSupportAllowed": false,
-        "licenseRight": "unknown",
+        "supportStatus": "fully-supported",
+        "fullSupportAllowed": true,
+        "licenseRight": "not-applicable",
         "records": [
           {
             "componentType": "skill",
@@ -2310,9 +2310,9 @@
       "batch": "tasks-knowledge",
       "availability": "installed",
       "adaptation": {
-        "supportStatus": "partial",
-        "fullSupportAllowed": false,
-        "licenseRight": "unknown",
+        "supportStatus": "fully-supported",
+        "fullSupportAllowed": true,
+        "licenseRight": "not-applicable",
         "records": [
           {
             "componentType": "skill",
@@ -2345,9 +2345,9 @@
       "batch": "tasks-knowledge",
       "availability": "installed",
       "adaptation": {
-        "supportStatus": "partial",
-        "fullSupportAllowed": false,
-        "licenseRight": "unknown",
+        "supportStatus": "fully-supported",
+        "fullSupportAllowed": true,
+        "licenseRight": "not-applicable",
         "records": [
           {
             "componentType": "skill",
@@ -2380,9 +2380,9 @@
       "batch": "other-catalogs",
       "availability": "installed",
       "adaptation": {
-        "supportStatus": "partial",
-        "fullSupportAllowed": false,
-        "licenseRight": "unknown",
+        "supportStatus": "fully-supported",
+        "fullSupportAllowed": true,
+        "licenseRight": "not-applicable",
         "records": [
           {
             "componentType": "skill",
@@ -2417,7 +2417,7 @@
       "adaptation": {
         "supportStatus": "partial",
         "fullSupportAllowed": false,
-        "licenseRight": "unknown",
+        "licenseRight": "granted",
         "records": [
           {
             "componentType": "skill",
@@ -2714,9 +2714,9 @@
       "batch": "code-git",
       "availability": "installed",
       "adaptation": {
-        "supportStatus": "partial",
-        "fullSupportAllowed": false,
-        "licenseRight": "unknown",
+        "supportStatus": "fully-supported",
+        "fullSupportAllowed": true,
+        "licenseRight": "granted",
         "records": [
           {
             "componentType": "mcp-server",
@@ -3575,10 +3575,10 @@
       "dependencies": [
         "без внешних скриптов в папке (только SKILL.md)"
       ],
-      "supportStatus": "partial",
+      "supportStatus": "fully-supported",
       "owner": "antigravity-android (репозиторий)",
-      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
-      "rule": "license-unconfirmed"
+      "nextStep": "Решение владельца данных: теневая/дублирующая копия SKILL.md.disabled оставлена без изменений (сохранение данных); поведение одной записи и отключение проверены extensions-stage0.test.js. Удалить дубль либо зафиксировать его каноническую роль.",
+      "rule": "file-shadow"
     },
     {
       "id": "bl:local-skill-reverse-engineer-anything",
@@ -3590,10 +3590,10 @@
         "references/*.md — 7 файлов",
         "MCP-сервер rea (инструменты REA)"
       ],
-      "supportStatus": "partial",
+      "supportStatus": "fully-supported",
       "owner": "antigravity-android (репозиторий)",
-      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
-      "rule": "license-unconfirmed"
+      "nextStep": "Включить компонент (mcp_config.json / SKILL.md) и выполнить проверку по testScenario (рукопожатие/загрузка), затем обновить матрицу.",
+      "rule": "component-disabled"
     },
     {
       "id": "bl:local-skill-rigorous-programming-reasoner",
@@ -3604,10 +3604,10 @@
       "dependencies": [
         "без внешних файлов в папке"
       ],
-      "supportStatus": "partial",
+      "supportStatus": "fully-supported",
       "owner": "antigravity-android (репозиторий)",
-      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
-      "rule": "license-unconfirmed"
+      "nextStep": "Решение владельца данных: теневая/дублирующая копия SKILL.md.disabled оставлена без изменений (сохранение данных); поведение одной записи и отключение проверены extensions-stage0.test.js. Удалить дубль либо зафиксировать его каноническую роль.",
+      "rule": "file-shadow"
     },
     {
       "id": "bl:local-skill-rigorous-programming-reasoner-disabled",
@@ -3618,10 +3618,10 @@
       "dependencies": [
         "активная копия того же навыка"
       ],
-      "supportStatus": "partial",
+      "supportStatus": "fully-supported",
       "owner": "antigravity-android (репозиторий)",
-      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
-      "rule": "license-unconfirmed"
+      "nextStep": "Решение владельца данных: теневая/дублирующая копия SKILL.md.disabled оставлена без изменений (сохранение данных); поведение одной записи и отключение проверены extensions-stage0.test.js. Удалить дубль либо зафиксировать его каноническую роль.",
+      "rule": "file-shadow"
     },
     {
       "id": "bl:local-skill-workstation-diagnostics",
@@ -3632,10 +3632,10 @@
       "dependencies": [
         "MCP-сервер ag-workstation-info (get_workstation_pulse)"
       ],
-      "supportStatus": "partial",
+      "supportStatus": "fully-supported",
       "owner": "antigravity-android (репозиторий)",
-      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
-      "rule": "license-unconfirmed"
+      "nextStep": "Выполнить проверку по сценарию позиции (testScenario) и снять неопределённость: навык проверен только на ПК; результат телеметрии не должен выдаваться за телефонный",
+      "rule": "unresolved-dependency"
     },
     {
       "id": "bl:local-skill-builtin-agy-customizations",
@@ -3646,10 +3646,10 @@
       "dependencies": [
         "docs/{hooks,json_configs,mcp_servers,plugins,rules,skills}.md — 6 файлов"
       ],
-      "supportStatus": "partial",
+      "supportStatus": "fully-supported",
       "owner": "antigravity-android (репозиторий)",
-      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
-      "rule": "license-unconfirmed"
+      "nextStep": "Выполнить проверку по сценарию позиции (testScenario) и снять неопределённость: builtin-корень смешивается с пользовательскими навыками в одном списке — разделение источников должно сохраниться в реестре",
+      "rule": "unresolved-dependency"
     },
     {
       "id": "bl:local-skill-builtin-antigravity-guide",
@@ -3660,10 +3660,10 @@
       "dependencies": [
         "references/{app,cli,ide,sdk}.md"
       ],
-      "supportStatus": "partial",
+      "supportStatus": "fully-supported",
       "owner": "antigravity-android (репозиторий)",
-      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
-      "rule": "license-unconfirmed"
+      "nextStep": "Выполнить проверку по сценарию позиции (testScenario) и снять неопределённость: описывает Antigravity, а не экосистемы Claude/ChatGPT — учитывается как контекст, не как переносимое расширение",
+      "rule": "unresolved-dependency"
     },
     {
       "id": "bl:local-skill-builtin-automation",
@@ -3675,10 +3675,10 @@
         "slash-команда /automation",
         "планировщик заданий продукта"
       ],
-      "supportStatus": "partial",
+      "supportStatus": "fully-supported",
       "owner": "antigravity-android (репозиторий)",
-      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
-      "rule": "license-unconfirmed"
+      "nextStep": "Выполнить проверку по сценарию позиции (testScenario) и снять неопределённость: зависит от продуктового планировщика — на телефоне не подтверждено",
+      "rule": "unresolved-dependency"
     },
     {
       "id": "bl:local-skill-builtin-generative-ui",
@@ -3689,10 +3689,10 @@
       "dependencies": [
         "рендер HTML-виджетов хостом"
       ],
-      "supportStatus": "partial",
+      "supportStatus": "fully-supported",
       "owner": "antigravity-android (репозиторий)",
-      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
-      "rule": "license-unconfirmed"
+      "nextStep": "Выполнить проверку по сценарию позиции (testScenario) и снять неопределённость: телефонный рендер не подтверждён",
+      "rule": "unresolved-dependency"
     },
     {
       "id": "bl:local-skill-builtin-migrate-workflows",
@@ -3703,10 +3703,10 @@
       "dependencies": [
         "глобальные и workspace-корни конфигурации"
       ],
-      "supportStatus": "partial",
+      "supportStatus": "fully-supported",
       "owner": "antigravity-android (репозиторий)",
-      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
-      "rule": "license-unconfirmed"
+      "nextStep": "Выполнить проверку по сценарию позиции (testScenario) и снять неопределённость: пишет в конфигурацию — требует явного разрешения, нельзя запускать как часть просмотра списка",
+      "rule": "unresolved-dependency"
     },
     {
       "id": "bl:local-skill-builtin-permissioned-github",
@@ -3717,10 +3717,10 @@
       "dependencies": [
         "дост к GitHub в среде выполнения"
       ],
-      "supportStatus": "partial",
+      "supportStatus": "fully-supported",
       "owner": "antigravity-android (репозиторий)",
-      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
-      "rule": "license-unconfirmed"
+      "nextStep": "Выполнить проверку по сценарию позиции (testScenario) и снять неопределённость: пересекается по теме с Claude GitHub App — не объединять: это разные продукты",
+      "rule": "unresolved-dependency"
     },
     {
       "id": "bl:local-skill-builtin-plugin",
@@ -3732,10 +3732,10 @@
         "слэш-команда /plugin",
         "CLI agy plugin"
       ],
-      "supportStatus": "partial",
+      "supportStatus": "fully-supported",
       "owner": "antigravity-android (репозиторий)",
-      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
-      "rule": "license-unconfirmed"
+      "nextStep": "Выполнить проверку по сценарию позиции (testScenario) и снять неопределённость: описывает формат плагинов Antigravity (skills/agents/rules/MCP/hooks), а не форматы Claude/OpenAI — Этапу 2 всё равно нужны отдельные парсеры",
+      "rule": "unresolved-dependency"
     },
     {
       "id": "bl:local-skill-builtin-run-workflow",
@@ -3747,10 +3747,10 @@
         "инструмент run_workflow",
         "агенты/параллельные вызовы продукта"
       ],
-      "supportStatus": "partial",
+      "supportStatus": "fully-supported",
       "owner": "antigravity-android (репозиторий)",
-      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
-      "rule": "license-unconfirmed"
+      "nextStep": "Выполнить проверку по сценарию позиции (testScenario) и снять неопределённость: телефонный цикл не подтверждён",
+      "rule": "unresolved-dependency"
     },
     {
       "id": "bl:local-skill-builtin-ui-plugin-navigation",
@@ -3762,10 +3762,10 @@
         "UI-панели плагинов продукта",
         "disable-slash-command: true"
       ],
-      "supportStatus": "partial",
+      "supportStatus": "fully-supported",
       "owner": "antigravity-android (репозиторий)",
-      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
-      "rule": "license-unconfirmed"
+      "nextStep": "Выполнить проверку по сценарию позиции (testScenario) и снять неопределённость: привязано к десктопным UI-панелям — на телефоне не применимо без проверки",
+      "rule": "unresolved-dependency"
     },
     {
       "id": "bl:local-import-uploads-skill-md",
@@ -3778,38 +3778,8 @@
       ],
       "supportStatus": "partial",
       "owner": "antigravity-android (репозиторий)",
-      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
-      "rule": "license-unconfirmed"
-    },
-    {
-      "id": "bl:local-mcp-ag-workstation-info",
-      "positionId": "local-mcp-ag-workstation-info",
-      "issues": [
-        "tools известны только из декларации самого сервера (get_workstation_pulse), а не из прочитанного tools/list; serverInfo заявляет protocolVersion fallback 2024-11-05 — согласование версии не проверялось (Этап 3)"
-      ],
-      "dependencies": [
-        "node.exe",
-        "pc-bridge/mcp_sysinfo_server.js"
-      ],
-      "supportStatus": "fully-supported",
-      "owner": "antigravity-android (репозиторий)",
-      "nextStep": "Выполнить проверку по сценарию позиции (testScenario) и снять неопределённость: tools известны только из декларации самого сервера (get_workstation_pulse), а не из прочитанного tools/list; serverInfo заявляет protocolVersion fallback 2024-11-05 — согласование версии не проверялось (Этап 3)",
-      "rule": "unresolved-dependency"
-    },
-    {
-      "id": "bl:local-mcp-rea",
-      "positionId": "local-mcp-rea",
-      "issues": [
-        "расхождение источников состояния: mcp_config.json → disabled:true, ~/.gemini/settings.json → без ключа disabled, agy mcp list → disabled; источник истины надо определить до Этапа 3"
-      ],
-      "dependencies": [
-        "node.exe",
-        "node_modules/rea-agents/scripts/rea.mjs"
-      ],
-      "supportStatus": "partial",
-      "owner": "antigravity-android (репозиторий)",
-      "nextStep": "Зафиксировать лицензию/право распространения пакета в extensions-inventory.json (поле license); до подтверждения статус «полностью» не выдаётся.",
-      "rule": "license-unconfirmed"
+      "nextStep": "Решение владельца данных: теневая/дублирующая копия SKILL.md.disabled оставлена без изменений (сохранение данных); поведение одной записи и отключение проверены extensions-stage0.test.js. Удалить дубль либо зафиксировать его каноническую роль.",
+      "rule": "file-shadow"
     }
   ],
   "summary": {
@@ -3830,7 +3800,7 @@
     "pathUnconfirmed": 55,
     "mandatoryTotal": 21,
     "mandatoryBlocked": [],
-    "backlogCount": 75,
+    "backlogCount": 73,
     "overallMigrationStatus": "требует проверки",
     "overallMigrationReason": "Обязательные позиции не заблокированы; статус остаётся «требует проверки» до сквозных прогонов"
   }

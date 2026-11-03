@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "title": "Матрица адаптеров компонентов (Этап 5)",
-  "generatedAt": "2026-11-03T03:53:31.945Z",
+  "generatedAt": "2026-11-03T05:17:47.052Z",
   "strategies": {
     "PRESERVE": "preserve",
     "CONVERT": "convert",
@@ -2556,14 +2556,14 @@
         }
       ],
       "licenseCheck": {
-        "raw": "не указана в файле",
-        "classification": "unknown",
-        "rightToRedistribute": "unknown",
-        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+        "raw": "собственный код проекта (slash-команды /autonomous-software-engineer в AntigravityViewModel.kt; методология — ассеты agent_system_prompt.md)",
+        "classification": "own-code",
+        "rightToRedistribute": "granted",
+        "note": "собственный код проекта — распространение разрешено"
       },
-      "supportStatus": "partial",
+      "supportStatus": "fully-supported",
       "blockers": [],
-      "fullSupportAllowed": false
+      "fullSupportAllowed": true
     },
     {
       "id": "local-skill-reverse-engineer-anything",
@@ -2590,14 +2590,14 @@
         }
       ],
       "licenseCheck": {
-        "raw": "не указана в файле",
-        "classification": "unknown",
-        "rightToRedistribute": "unknown",
-        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+        "raw": "MIT (пакет rea-agents 6.8.0: LICENSE «MIT License», package.json; SKILL.md байт-в-байт совпадает с skills/reverse-engineer-anything пакета, sha256 8818b645…)",
+        "classification": "declared",
+        "rightToRedistribute": "granted",
+        "note": "лицензия объявлена (MIT) — права по её условиям"
       },
-      "supportStatus": "partial",
+      "supportStatus": "fully-supported",
       "blockers": [],
-      "fullSupportAllowed": false
+      "fullSupportAllowed": true
     },
     {
       "id": "local-skill-rigorous-programming-reasoner",
@@ -2624,14 +2624,14 @@
         }
       ],
       "licenseCheck": {
-        "raw": "не указана в файле",
-        "classification": "unknown",
-        "rightToRedistribute": "unknown",
-        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+        "raw": "собственный код проекта (методология «Этапы A–I» — app/src/main/assets/agent_system_prompt.md и pc-bridge/agent_system_prompt.md)",
+        "classification": "own-code",
+        "rightToRedistribute": "granted",
+        "note": "собственный код проекта — распространение разрешено"
       },
-      "supportStatus": "partial",
+      "supportStatus": "fully-supported",
       "blockers": [],
-      "fullSupportAllowed": false
+      "fullSupportAllowed": true
     },
     {
       "id": "local-skill-rigorous-programming-reasoner-disabled",
@@ -2658,14 +2658,14 @@
         }
       ],
       "licenseCheck": {
-        "raw": "не указана в файле",
-        "classification": "unknown",
-        "rightToRedistribute": "unknown",
-        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+        "raw": "собственный код проекта (методология «Этапы A–I» — app/src/main/assets/agent_system_prompt.md и pc-bridge/agent_system_prompt.md)",
+        "classification": "own-code",
+        "rightToRedistribute": "granted",
+        "note": "собственный код проекта — распространение разрешено"
       },
-      "supportStatus": "partial",
+      "supportStatus": "fully-supported",
       "blockers": [],
-      "fullSupportAllowed": false
+      "fullSupportAllowed": true
     },
     {
       "id": "local-skill-workstation-diagnostics",
@@ -2692,14 +2692,14 @@
         }
       ],
       "licenseCheck": {
-        "raw": "не указана в файле",
-        "classification": "unknown",
-        "rightToRedistribute": "unknown",
-        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+        "raw": "собственный код проекта (сквозной сценарий H audit_matrix.md:15; токен ANTIGRAVITY-MCP-VERIFIED-2026 и MCP ag-workstation-info — артефакты проекта)",
+        "classification": "own-code",
+        "rightToRedistribute": "granted",
+        "note": "собственный код проекта — распространение разрешено"
       },
-      "supportStatus": "partial",
+      "supportStatus": "fully-supported",
       "blockers": [],
-      "fullSupportAllowed": false
+      "fullSupportAllowed": true
     },
     {
       "id": "local-skill-builtin-agy-customizations",
@@ -2726,14 +2726,14 @@
         }
       ],
       "licenseCheck": {
-        "raw": "не указана в файле",
-        "classification": "unknown",
-        "rightToRedistribute": "unknown",
-        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+        "raw": "встроенный контент продукта Antigravity (Google); в состав проекта не включается и не распространяется — право распространения не применима",
+        "classification": "not-applicable",
+        "rightToRedistribute": "not-applicable",
+        "note": "лицензия неприменима (встроенная функция/модель данных)"
       },
-      "supportStatus": "partial",
+      "supportStatus": "fully-supported",
       "blockers": [],
-      "fullSupportAllowed": false
+      "fullSupportAllowed": true
     },
     {
       "id": "local-skill-builtin-antigravity-guide",
@@ -2760,14 +2760,14 @@
         }
       ],
       "licenseCheck": {
-        "raw": "не указана в файле",
-        "classification": "unknown",
-        "rightToRedistribute": "unknown",
-        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+        "raw": "встроенный контент продукта Antigravity (Google); в состав проекта не включается и не распространяется — право распространения не применима",
+        "classification": "not-applicable",
+        "rightToRedistribute": "not-applicable",
+        "note": "лицензия неприменима (встроенная функция/модель данных)"
       },
-      "supportStatus": "partial",
+      "supportStatus": "fully-supported",
       "blockers": [],
-      "fullSupportAllowed": false
+      "fullSupportAllowed": true
     },
     {
       "id": "local-skill-builtin-automation",
@@ -2794,14 +2794,14 @@
         }
       ],
       "licenseCheck": {
-        "raw": "не указана в файле",
-        "classification": "unknown",
-        "rightToRedistribute": "unknown",
-        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+        "raw": "встроенный контент продукта Antigravity (Google); в состав проекта не включается и не распространяется — право распространения не применима",
+        "classification": "not-applicable",
+        "rightToRedistribute": "not-applicable",
+        "note": "лицензия неприменима (встроенная функция/модель данных)"
       },
-      "supportStatus": "partial",
+      "supportStatus": "fully-supported",
       "blockers": [],
-      "fullSupportAllowed": false
+      "fullSupportAllowed": true
     },
     {
       "id": "local-skill-builtin-generative-ui",
@@ -2828,14 +2828,14 @@
         }
       ],
       "licenseCheck": {
-        "raw": "не указана в файле",
-        "classification": "unknown",
-        "rightToRedistribute": "unknown",
-        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+        "raw": "встроенный контент продукта Antigravity (Google); в состав проекта не включается и не распространяется — право распространения не применима",
+        "classification": "not-applicable",
+        "rightToRedistribute": "not-applicable",
+        "note": "лицензия неприменима (встроенная функция/модель данных)"
       },
-      "supportStatus": "partial",
+      "supportStatus": "fully-supported",
       "blockers": [],
-      "fullSupportAllowed": false
+      "fullSupportAllowed": true
     },
     {
       "id": "local-skill-builtin-migrate-workflows",
@@ -2862,14 +2862,14 @@
         }
       ],
       "licenseCheck": {
-        "raw": "не указана в файле",
-        "classification": "unknown",
-        "rightToRedistribute": "unknown",
-        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+        "raw": "встроенный контент продукта Antigravity (Google); в состав проекта не включается и не распространяется — право распространения не применима",
+        "classification": "not-applicable",
+        "rightToRedistribute": "not-applicable",
+        "note": "лицензия неприменима (встроенная функция/модель данных)"
       },
-      "supportStatus": "partial",
+      "supportStatus": "fully-supported",
       "blockers": [],
-      "fullSupportAllowed": false
+      "fullSupportAllowed": true
     },
     {
       "id": "local-skill-builtin-permissioned-github",
@@ -2896,14 +2896,14 @@
         }
       ],
       "licenseCheck": {
-        "raw": "не указана в файле",
-        "classification": "unknown",
-        "rightToRedistribute": "unknown",
-        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+        "raw": "встроенный контент продукта Antigravity (Google); в состав проекта не включается и не распространяется — право распространения не применима",
+        "classification": "not-applicable",
+        "rightToRedistribute": "not-applicable",
+        "note": "лицензия неприменима (встроенная функция/модель данных)"
       },
-      "supportStatus": "partial",
+      "supportStatus": "fully-supported",
       "blockers": [],
-      "fullSupportAllowed": false
+      "fullSupportAllowed": true
     },
     {
       "id": "local-skill-builtin-plugin",
@@ -2930,14 +2930,14 @@
         }
       ],
       "licenseCheck": {
-        "raw": "не указана в файле",
-        "classification": "unknown",
-        "rightToRedistribute": "unknown",
-        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+        "raw": "встроенный контент продукта Antigravity (Google); в состав проекта не включается и не распространяется — право распространения не применима",
+        "classification": "not-applicable",
+        "rightToRedistribute": "not-applicable",
+        "note": "лицензия неприменима (встроенная функция/модель данных)"
       },
-      "supportStatus": "partial",
+      "supportStatus": "fully-supported",
       "blockers": [],
-      "fullSupportAllowed": false
+      "fullSupportAllowed": true
     },
     {
       "id": "local-skill-builtin-run-workflow",
@@ -2964,14 +2964,14 @@
         }
       ],
       "licenseCheck": {
-        "raw": "не указана в файле",
-        "classification": "unknown",
-        "rightToRedistribute": "unknown",
-        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+        "raw": "встроенный контент продукта Antigravity (Google); в состав проекта не включается и не распространяется — право распространения не применима",
+        "classification": "not-applicable",
+        "rightToRedistribute": "not-applicable",
+        "note": "лицензия неприменима (встроенная функция/модель данных)"
       },
-      "supportStatus": "partial",
+      "supportStatus": "fully-supported",
       "blockers": [],
-      "fullSupportAllowed": false
+      "fullSupportAllowed": true
     },
     {
       "id": "local-skill-builtin-ui-plugin-navigation",
@@ -2998,14 +2998,14 @@
         }
       ],
       "licenseCheck": {
-        "raw": "не указана в файле",
-        "classification": "unknown",
-        "rightToRedistribute": "unknown",
-        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+        "raw": "встроенный контент продукта Antigravity (Google); в состав проекта не включается и не распространяется — право распространения не применима",
+        "classification": "not-applicable",
+        "rightToRedistribute": "not-applicable",
+        "note": "лицензия неприменима (встроенная функция/модель данных)"
       },
-      "supportStatus": "partial",
+      "supportStatus": "fully-supported",
       "blockers": [],
-      "fullSupportAllowed": false
+      "fullSupportAllowed": true
     },
     {
       "id": "local-import-uploads-skill-md",
@@ -3032,10 +3032,10 @@
         }
       ],
       "licenseCheck": {
-        "raw": "не указана в файле",
-        "classification": "unknown",
-        "rightToRedistribute": "unknown",
-        "note": "лицензия не зафиксирована — право переиспользования/распространения не подтверждено"
+        "raw": "собственный код проекта (методология «Этапы A–I» — app/src/main/assets/agent_system_prompt.md и pc-bridge/agent_system_prompt.md)",
+        "classification": "own-code",
+        "rightToRedistribute": "granted",
+        "note": "собственный код проекта — распространение разрешено"
       },
       "supportStatus": "partial",
       "blockers": [],
@@ -3356,14 +3356,14 @@
         }
       ],
       "licenseCheck": {
-        "raw": "лицензия пакета npm в проекте не зафиксирована",
-        "classification": "unknown",
-        "rightToRedistribute": "unknown",
-        "note": "лицензия \"лицензия пакета npm в проекте не зафиксирована\" не распознана — право не подтверждено"
+        "raw": "MIT (пакет rea-agents 6.8.0: package.json license, LICENSE «MIT License», Copyright (c) 2026 morluto)",
+        "classification": "declared",
+        "rightToRedistribute": "granted",
+        "note": "лицензия объявлена (MIT) — права по её условиям"
       },
-      "supportStatus": "partial",
+      "supportStatus": "fully-supported",
       "blockers": [],
-      "fullSupportAllowed": false
+      "fullSupportAllowed": true
     }
   ],
   "summary": {
@@ -3372,8 +3372,8 @@
     "bySupportStatus": {
       "observation": 36,
       "blocked": 19,
-      "partial": 19,
-      "fully-supported": 5
+      "partial": 4,
+      "fully-supported": 20
     },
     "byStrategy": {
       "preserve": 63,
@@ -3381,11 +3381,26 @@
       "convert": 12
     },
     "fullySupported": [
+      "local-skill-autonomous-software-engineer",
+      "local-skill-reverse-engineer-anything",
+      "local-skill-rigorous-programming-reasoner",
+      "local-skill-rigorous-programming-reasoner-disabled",
+      "local-skill-workstation-diagnostics",
+      "local-skill-builtin-agy-customizations",
+      "local-skill-builtin-antigravity-guide",
+      "local-skill-builtin-automation",
+      "local-skill-builtin-generative-ui",
+      "local-skill-builtin-migrate-workflows",
+      "local-skill-builtin-permissioned-github",
+      "local-skill-builtin-plugin",
+      "local-skill-builtin-run-workflow",
+      "local-skill-builtin-ui-plugin-navigation",
       "local-plugin-antigravity-workspace-guard",
       "local-plugin-kotlin-compose-inspector",
       "local-plugin-staging-antigravity-workspace-guard",
       "local-plugin-staging-kotlin-compose-inspector",
-      "local-mcp-ag-workstation-info"
+      "local-mcp-ag-workstation-info",
+      "local-mcp-rea"
     ],
     "licenseUnknown": [
       "claude-web-catalog-connectors",
@@ -3435,23 +3450,7 @@
       "chatgpt-gpts",
       "chatgpt-finance-connections",
       "codex-remote-composer-extensions",
-      "codex-visualize-plugin-assets",
-      "local-skill-autonomous-software-engineer",
-      "local-skill-reverse-engineer-anything",
-      "local-skill-rigorous-programming-reasoner",
-      "local-skill-rigorous-programming-reasoner-disabled",
-      "local-skill-workstation-diagnostics",
-      "local-skill-builtin-agy-customizations",
-      "local-skill-builtin-antigravity-guide",
-      "local-skill-builtin-automation",
-      "local-skill-builtin-generative-ui",
-      "local-skill-builtin-migrate-workflows",
-      "local-skill-builtin-permissioned-github",
-      "local-skill-builtin-plugin",
-      "local-skill-builtin-run-workflow",
-      "local-skill-builtin-ui-plugin-navigation",
-      "local-import-uploads-skill-md",
-      "local-mcp-rea"
+      "codex-visualize-plugin-assets"
     ]
   }
 }

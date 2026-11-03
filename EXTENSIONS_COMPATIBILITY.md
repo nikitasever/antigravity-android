@@ -534,6 +534,46 @@ MCP-серверы, инъекции схем нет (и не выдумывае
   не запускает инструменты.
 
 
+## 17. Бэклог antigravity-android и сверка состояний (3 ноября 2026)
+
+- **Сверка состояний закрыта**: было 4 записи «требует сверки состояния»
+  (kotlin-compose-inspector — разрыв регистрации в config.json; rea — расхождение
+  mcp_config.json/settings.json/CLI; autonomous-software-engineer и
+  rigorous-programming-reasoner — неоднозначность SKILL.md ↔ SKILL.md.disabled).
+  Выполнены явные действия: enable плагина (регистрация записи), disable rea
+  (источник истины — mcp_config.json + agy mcp list, оба disabled), заявки
+  userState enabled=true для навыков (соответствует поведению загрузчика: активный
+  SKILL.md приоритетен). Реестр: `byDisplayState {включён:16, отключён:1}`,
+  `needsStateReconciliation: 0`.
+- **ag-workstation-info: сценарий позиции выполнен живьём** (pc-bridge
+  probe/call): tools/list → `get_workstation_pulse`, protocolVersion согласован
+  `2025-06-18` (не fallback 2024-11-05), serverInfo `antigravity-sysinfo-mcp
+  1.0.0`, ответ содержит `mcpVerificationBadge=ANTIGRAVITY-MCP-VERIFIED-2026`.
+  Запись вышла из бэклога.
+- **Лицензии зафиксированы по доказательствам** (правило `license-unconfirmed`
+  закрыто полностью): rea и reverse-engineer-anything — MIT (пакет rea-agents
+  6.8.0, LICENSE/package.json; SKILL.md байт-в-байт сверен, sha256 8818b645…);
+  workstation-diagnostics, rigorous-programming-reasoner (+копии) и
+  autonomous-software-engineer — собственный код проекта (методология
+  «Этапы A–I» в ассетах `agent_system_prompt.md`, токен
+  ANTIGRAVITY-MCP-VERIFIED-2026, slash-команды приложения); 9 builtin-навыков —
+  «встроенный контент продукта Antigravity (Google); в состав проекта не
+  включается и не распространяется — право распространения не применима».
+  Если импорт навыков велся из внешнего источника — запись требует уточнения
+  владельцем (не выдаётся за подтверждённую).
+- **Бэклог 75 → 73**; состав: 55 external-unconfirmed-path (внешние поставщики),
+  3 external-runtime-check (нужен пользователь/вход), 4 file-shadow (теневые
+  копии SKILL.md.disabled — решение владельца данных; удаление не выполнялось),
+  1 component-disabled (reverse-engineer-anything требует включённого rea),
+  10 unresolved-dependency (телефонные/продуктовые сценарии builtin-навыков и
+  телеметрия workstation-diagnostics — не выдаются за телефонные).
+  Уточнение генератора: бэклог фиксирует открытые вопросы (issues); фактические
+  зависимости без открытого вопроса записи бэклога не создают.
+- Проверено: Node-коллекция 174/174 после регенерации матрицы и coverage
+  (`build-adapter-matrix.js`, `build-migration-coverage.js`); license-unknown в
+  матрице 52 → 48.
+
+
 ## Уточнение после закрытия блокеров (2 ноября 2026)
 
 Исходные таблицы выше — исторический срез наблюдений этапа 1. Текущее состояние

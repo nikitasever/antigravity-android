@@ -260,7 +260,9 @@ function backlogFor(pos, matrixPos) {
     if (blockers.length) issues.push(...blockers);
     if (invBlocker && invBlocker !== 'не записано') issues.push(invBlocker);
     const deps = Array.isArray(pos.dependencies) ? pos.dependencies.filter(d => d && d !== 'не записано') : [];
-    if (!issues.length && !deps.length) return null;
+    // Бэклог — про открытые вопросы (issues). Фактические зависимости без
+    // открытого вопроса остаются записанными в позиции, но записи бэклога не создают.
+    if (!issues.length) return null;
 
     const external = !String(pos.sourceProduct || '').startsWith('Antigravity');
     const supportStatus = matrixPos ? matrixPos.supportStatus : 'требует проверки';
@@ -279,6 +281,10 @@ function backlogFor(pos, matrixPos) {
         owner = 'antigravity-android (репозиторий)';
         nextStep = 'Восстановить состав пакета (plugin.json + реальные компоненты skills/hooks/mcp) либо снять позицию из обязательных; проверить сценарием из testScenario.';
         rule = 'composition-defect';
+    } else if (/SKILL\.md\.disabled|тенев|тень|дубл|копи/i.test(issues.join(' '))) {
+        owner = 'antigravity-android (репозиторий)';
+        nextStep = 'Решение владельца данных: теневая/дублирующая копия SKILL.md.disabled оставлена без изменений (сохранение данных); поведение одной записи и отключение проверены extensions-stage0.test.js. Удалить дубль либо зафиксировать его каноническую роль.';
+        rule = 'file-shadow';
     } else if (/disabled|отключ|выключен/i.test(issues.join(' '))) {
         owner = 'antigravity-android (репозиторий)';
         nextStep = 'Включить компонент (mcp_config.json / SKILL.md) и выполнить проверку по testScenario (рукопожатие/загрузка), затем обновить матрицу.';
