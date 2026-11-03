@@ -79,6 +79,7 @@ import com.google.antigravity.model.ExtensionCatalogItem
 import com.google.antigravity.model.InstalledPluginItem
 import com.google.antigravity.model.PcMcpServerItem
 import com.google.antigravity.model.PcSkillItem
+import com.google.antigravity.model.describeMcpAuthStatus
 import com.google.antigravity.model.describeMcpStatus
 import com.google.antigravity.ui.TwoLineMenuCircleButton
 
@@ -2037,6 +2038,67 @@ private fun McpDetailSheetContent(
             )
         }
 
+        // Статус авторизации OAuth 2.1 (вход через системный браузер / Custom Tabs).
+        if (server.commandOrUrl.startsWith("http")) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(IconBoxBg)
+                    .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "Авторизация (OAuth 2.1)",
+                    color = TextPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                // Требуется вход / Авторизован / Ошибка токена (+ уточнения).
+                Text(
+                    text = describeMcpAuthStatus(server.authStatus),
+                    color = when {
+                        server.oauthAuthorized -> AccentGreen
+                        server.authStatus == "failed" || server.authStatus == "expired" -> DangerRed
+                        else -> WarningAmber
+                    },
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = when {
+                        server.oauthAuthorized -> "Выход отзывает выданные токены доступа на ПК (pc-bridge)."
+                        server.authStatus == "pending" -> "Вход открыт в браузере. После подтверждения вернитесь в приложение — статус обновится автоматически (onResume)."
+                        server.authStatus == "failed" -> "Ошибка токена: повторите вход."
+                        else -> "Вход выполняется через системный браузер; статус обновляется при возврате в приложение или по кнопке «Проверить»."
+                    },
+                    color = TextSecondary,
+                    fontSize = 11.5.sp
+                )
+                // Действие входа/выхода (revoke) прямо в деталях подключения.
+                Button(
+                    onClick = { if (server.authStatus == "pending") onCheck() else onLogin() },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (server.oauthAuthorized) DangerRed else WhiteBtnBg,
+                        contentColor = if (server.oauthAuthorized) Color.White else WhiteBtnText
+                    ),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = when {
+                            server.oauthAuthorized -> "Выйти (отозвать доступ)"
+                            server.authStatus == "pending" -> "Обновить статус входа"
+                            else -> "Войти"
+                        },
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        }
+
         // Полный текст ошибки / блокера (если есть).
         if (server.error.isNotBlank()) {
             Column(
@@ -2116,18 +2178,7 @@ private fun McpDetailSheetContent(
             ) {
                 Text("Проверить", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
             }
-            Button(
-                onClick = onLogin,
-                enabled = server.commandOrUrl.startsWith("https://"),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = ActivePillBg,
-                    contentColor = TextPrimary
-                ),
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(if (server.oauthAuthorized) "Выйти" else "Войти", fontSize = 12.5.sp, fontWeight = FontWeight.Medium)
-            }
+            // «Войти» / «Выйти (отозвать доступ)» — в карточке авторизации выше.
             Button(
                 onClick = onOpenToolsDialog,
                 enabled = server.tools.isNotEmpty(),

@@ -714,3 +714,27 @@ MCP/авторизация → модельный цикл → адаптеры 
 официальный дескриптор, установленный пакет, авторизованный аккаунт и живое
 подключение проверяются отдельно. OAuth реализован в HTTP MCP-клиенте моста;
 полностью автономный от ПК MCP OAuth на Android этой реализацией не заявляется.
+
+## Итоговая стыковка: OAuth 2.1 в Android-клиенте (3 ноября 2026)
+
+Клиентская часть OAuth 2.1 для MCP реализована по контракту `/api/mcp`
+(`oauthStart` / `oauthStatus` / `oauthRevoke`, см. `PC_BRIDGE_OAUTH_API.md`):
+
+- «Войти» → `oauthStart` → `authUrl` открывается через системный браузер /
+  Custom Tabs (`Intent.ACTION_VIEW`); «Выйти» → `oauthRevoke`; возврат в
+  приложение (`onResume`) и кнопка «Проверить» обновляют статус (`oauthStatus`)
+  и список инструментов. Статусы авторизации в деталях подключения:
+  «Требуется вход» / «Авторизован» / «Ошибка токена» (+ pending/expired/denied/
+  revoked/superseded). Переходы состояния — `McpAuthState`; парсинг полей
+  authUrl/authStatus — `parseMcpOAuthReply` / `parseMcpServerList`.
+- Проверено: `McpOAuthStateTest.kt` (18 тестов), Android 26 наборов / 121 тест /
+  0 падений (testDebugUnitTest lintDebug assembleDebug — BUILD SUCCESSFUL),
+  Node-коллекция моста 174/174 после перезапуска server.js. На эмуляторе
+  Pixel_8a «Плагины → Мои»: antigravity-workspace-guard и kotlin-compose-inspector
+  — «✓ Готов» без «заблокирован» (verification_screenshots/s8_plugins_my.png),
+  OAuth-карточка — s8_auth_card.png.
+- Границы: полный цикл реального внешнего входа не прогонялся (нет тестового
+  аккаунта; demo-oauth-mcp удалён после кадра); bridge-callback по умолчанию —
+  loopback ПК, для браузера на телефоне нужен HTTPS bridgeRedirectUri в приватном
+  конфиге; «authorized» не означает MCP-рукопожатие (для него «Проверить»).
+  Детали — `EXTENSIONS_COMPATIBILITY.md` §16.

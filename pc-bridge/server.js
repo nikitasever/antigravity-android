@@ -3,6 +3,7 @@ const { readJsonBody } = require('./lib/read-json-body');
 const extensionRegistry = require('./lib/extension-registry');
 const mcpClientLib = require('./lib/mcp-client');
 const { McpOAuth, CredentialVault } = require('./lib/mcp-oauth');
+const { createMcpOAuthApi, normalizeOAuthAction } = require('./lib/mcp-oauth-api');
 const extensionRuntime = require('./lib/extension-runtime');
 // Этап 5: собственный исполнитель hooks и адаптеры компонентов плагинов.
 const hookEngine = require('./lib/hook-engine');
@@ -65,6 +66,13 @@ const mcpClientManager = new mcpClientLib.McpClientManager({ clientOptions: {
     onAuthFailure: d => mcpOAuth.handleAuthFailure(d)
 } });
 const mcpLiveState = new Map();
+const mcpOAuthApi = createMcpOAuthApi({
+    oauth: mcpOAuth,
+    findConfig: id => findRawMcpEntry(id)?.cfg,
+    invalidate: async id => { await mcpClientManager.disconnect(id); mcpLiveState.delete(id); },
+    probe: id => manageMcpServer({ action: 'probe', name: id }),
+    bridgeRedirectUri: `http://127.0.0.1:${PORT}/api/mcp/oauth/callback`
+});
 const CHAT_FAST_WORKSPACE = path.join(UPLOADS_DIR, 'chat-fast');
 const AGENT_SYSTEM_PROMPT_FILE = path.join(DEFAULT_WORKSPACE, 'pc-bridge', 'agent_system_prompt.md');
 const BRIDGE_REQUESTS_LOG = path.join(DEFAULT_WORKSPACE, 'pc-bridge', 'bridge_requests.log');
@@ -2926,22 +2934,7 @@ async function manageMcpServer(payload) {
         return { ok: false, error: 'Не указано имя MCP-сервера', mcpServers: await listMcpServers() };
     }
 
-    if (['oauth_start', 'oauth_complete', 'oauth_revoke'].includes(action)) {
-        const raw = findRawMcpEntry(name);
-        if (!raw || !raw.cfg.url) return { ok: false, error: 'OAuth доступен только для настроенного HTTP MCP-сервера' };
-        try {
-            if (action === 'oauth_start') return { ok: true, ...await mcpOAuth.start(name, raw.cfg, { redirectUri: payload.redirectUri }) };
-            if (action === 'oauth_revoke') {
-                try { await mcpOAuth.revoke(name, raw.cfg); }
-                finally { await mcpClientManager.disconnect(name); mcpLiveState.delete(name); }
-                return { ok: true, mcpServers: await listMcpServers() };
-            }
-            await mcpOAuth.complete(name, raw.cfg, payload);
-            return manageMcpServer({ action: 'probe', name });
-        } catch (e) {
-            return { ok: false, error: String(e.message).startsWith('OAuth') || String(e.message).startsWith('Поставщик') ? e.message : 'OAuth: авторизация не выполнена. Проверьте настройки поставщика.', errorCode: 'auth_failed' };
-        }
-    }
+    if (normalizeOAuthAction(action)) return mcpOAuthApi.action({ ...payload, action });
 
     // --- Этап 3: живое MCP-рукопожатие и вызовы инструментов -----------------
     // probe/check: полный цикл initialize → initialized → tools/list; статус
@@ -4866,6 +4859,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     const urlObj = new URL(req.url, `http://localhost:${PORT}`);
+    if (await mcpOAuthApi.callback(req, res, urlObj)) return;
 
     if (req.method === 'GET' && (urlObj.pathname === '/web' || urlObj.pathname === '/')) {
         const sessionId = urlObj.searchParams.get('session') || '';
@@ -5462,7 +5456,7 @@ const server = http.createServer(async (req, res) => {
             if (urlObj.pathname === '/api/mcp') {
                 // Native app only: disallow cross-site browser requests to the
                 // credential lifecycle even though legacy bridge APIs use CORS.
-                if (String(payload.action || '').startsWith('oauth_') && req.headers.origin) {
+                if (normalizeOAuthAction(payload.action) && req.headers.origin) {
                     return sendJson(res, 403, { ok: false, error: 'OAuth доступен из приложения Android' });
                 }
                 const result = await manageMcpServer(payload);

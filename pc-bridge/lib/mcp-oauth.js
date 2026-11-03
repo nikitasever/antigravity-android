@@ -10,7 +10,9 @@ const net = require('node:net');
 const http = require('node:http');
 const https = require('node:https');
 const { Readable } = require('node:stream');
+const { redactSecrets } = require('./mcp-client');
 const REDIRECT_URI = 'http://127.0.0.1:49152/mcp-oauth/callback';
+const BRIDGE_CALLBACK_PATH = '/api/mcp/oauth/callback';
 const random = () => crypto.randomBytes(32).toString('base64url');
 const challenge = verifier => crypto.createHash('sha256').update(verifier).digest('base64url');
 
@@ -61,7 +63,7 @@ class CredentialVault {
 class McpOAuth {
     constructor({ vault, fetchImpl, allowLoopback = false, now = Date.now } = {}) {
         this.vault = vault; this.fetch = fetchImpl || ((url, options) => this.pinnedFetch(url, options)); this.allowLoopback = allowLoopback; this.now = now;
-        this.pending = new Map(); this.refreshes = new Map(); this.epochs = new Map();
+        this.pending = new Map(); this.sessions = new Map(); this.refreshes = new Map(); this.epochs = new Map();
     }
     async safeUrl(raw) {
         const u = new URL(raw);
@@ -147,6 +149,25 @@ class McpOAuth {
         try { return Boolean(this.vault.get(this.binding(id, new URL(url).href))); }
         catch { return false; }
     }
+    secretsFor(id, url) {
+        try {
+            const tokens = this.vault.get(this.binding(id, new URL(url).href))?.tokens || {};
+            return [tokens.access_token, tokens.refresh_token].filter(v => typeof v === 'string');
+        } catch { return []; }
+    }
+    publicError(id, url) {
+        // Never expose exception messages from fetch, metadata or the provider.
+        return redactSecrets('OAuth: авторизация не выполнена. Проверьте настройки подключения и повторите вход.', this.secretsFor(id, url));
+    }
+    status(id, cfg, sessionId) {
+        const resource = new URL(cfg.url).href;
+        const session = sessionId ? this.sessions.get(sessionId) : null;
+        const saved = this.vault.get(this.binding(id, resource));
+        const authorized = Boolean(saved?.tokens && (saved.tokens.refresh_token || saved.tokens.expiresAt > this.now()));
+        if (sessionId && (!session || session.id !== id || session.resource !== resource)) return { status: 'expired', authorized, errorCode: 'unknown_session' };
+        const status = session && session.expires <= this.now() ? 'expired' : session?.status || (authorized ? 'authorized' : 'not_authorized');
+        return { status, authorized, ...(session ? { expiresAt: session.expires } : {}) };
+    }
     handleAuthFailure(descriptor) {
         if (!descriptor?.oauthManaged || !descriptor.url) return false;
         const key = this.binding(descriptor.id, new URL(descriptor.url).href), saved = this.vault.get(key);
@@ -156,11 +177,15 @@ class McpOAuth {
         this.vault.set(key, saved);
         return true;
     }
-    async start(id, cfg, { redirectUri = REDIRECT_URI } = {}) {
+    async start(id, cfg, { redirectUri = REDIRECT_URI, callbackMode = 'native' } = {}) {
         const epoch = this.epochs.get(id) || 0;
         const redirect = new URL(redirectUri);
-        if (redirect.protocol !== 'http:' || redirect.hostname !== '127.0.0.1' || !redirect.port ||
-            redirect.username || redirect.password || redirect.pathname !== '/mcp-oauth/callback' || redirect.search || redirect.hash) throw new Error('OAuth: требуется loopback redirect URI телефона');
+        const bridge = callbackMode === 'bridge';
+        const local = redirect.protocol === 'http:' && redirect.hostname === '127.0.0.1' && Boolean(redirect.port);
+        if ((!local && !(bridge && redirect.protocol === 'https:')) ||
+            redirect.username || redirect.password || redirect.pathname !== (bridge ? BRIDGE_CALLBACK_PATH : '/mcp-oauth/callback') || redirect.search || redirect.hash) throw new Error('OAuth: требуется корректный loopback/HTTPS callback URI');
+        for (const [key, session] of this.sessions) if (session.expires <= this.now()) this.sessions.delete(key);
+        if (this.sessions.size >= 64) throw new Error('OAuth: слишком много сессий входа');
         if (!cfg.url || cfg.disabled) throw new Error('Для входа требуется включённое HTTP MCP-подключение');
         const resource = new URL(cfg.url).href;
         const { metadata, scope } = await this.discover(resource);
@@ -171,14 +196,20 @@ class McpOAuth {
             clientId = registration.client_id;
             if (typeof clientId !== 'string' || !clientId || (registration.token_endpoint_auth_method && registration.token_endpoint_auth_method !== 'none')) throw new Error('OAuth: сервер не зарегистрировал public client');
         }
-        for (const [s, p] of this.pending) if (p.expires <= this.now() || p.id === id) this.pending.delete(s);
+        for (const [s, p] of this.pending) if (p.expires <= this.now() || p.id === id) {
+            const previous = this.sessions.get(p.completionToken);
+            if (previous) previous.status = p.expires <= this.now() ? 'expired' : 'superseded';
+            this.pending.delete(s);
+        }
         if (this.pending.size >= 32) throw new Error('OAuth: слишком много ожидающих входов');
         if ((this.epochs.get(id) || 0) !== epoch) throw new Error('OAuth: вход отменён');
         const state = random(), verifier = random(), completionToken = random();
-        this.pending.set(state, { id, resource, metadata, clientId, verifier, completionToken, redirectUri, expires: this.now() + 10 * 60 * 1000 });
+        const expires = this.now() + 10 * 60 * 1000;
+        this.pending.set(state, { id, resource, metadata, clientId, verifier, completionToken, redirectUri, callbackMode, expires });
+        this.sessions.set(completionToken, { id, resource, status: 'pending', expires });
         const url = new URL(metadata.authorization_endpoint);
         for (const [key, value] of Object.entries({ response_type: 'code', client_id: clientId, redirect_uri: redirectUri, state, code_challenge: challenge(verifier), code_challenge_method: 'S256', resource, ...(scope ? { scope } : {}) })) url.searchParams.set(key, value);
-        return { authorizationUrl: url.href, state, completionToken, redirectUri };
+        return { authUrl: url.href, authorizationUrl: url.href, state, completionToken, sessionId: completionToken, redirectUri };
     }
     async complete(id, cfg, { state, code, error, completionToken }) {
         const p = this.pending.get(state);
@@ -186,11 +217,27 @@ class McpOAuth {
         if (typeof completionToken !== 'string' || completionToken.length !== p.completionToken.length ||
             !crypto.timingSafeEqual(Buffer.from(completionToken), Buffer.from(p.completionToken))) throw new Error('OAuth: ответ не принадлежит этому приложению');
         this.pending.delete(state); // single use, including denial and failed exchange
-        if (error || !code || String(code).length > 4096) throw new Error('OAuth: вход отменён или код отсутствует');
+        const session = this.sessions.get(p.completionToken);
+        if (error || !code || String(code).length > 4096) {
+            if (session) session.status = error ? 'denied' : 'failed';
+            throw new Error('OAuth: вход отменён или код отсутствует');
+        }
         const epoch = this.epochs.get(id) || 0;
-        const tokens = await this.form(p.metadata.token_endpoint, { grant_type: 'authorization_code', code, client_id: p.clientId, redirect_uri: p.redirectUri, code_verifier: p.verifier, resource: p.resource });
-        if ((this.epochs.get(id) || 0) !== epoch) throw new Error('OAuth: вход отменён');
-        this.save(p, tokens);
+        try {
+            const tokens = await this.form(p.metadata.token_endpoint, { grant_type: 'authorization_code', code, client_id: p.clientId, redirect_uri: p.redirectUri, code_verifier: p.verifier, resource: p.resource });
+            if ((this.epochs.get(id) || 0) !== epoch) throw new Error('OAuth: вход отменён');
+            this.save(p, tokens);
+            if (session) session.status = 'authorized';
+        } catch (e) { if (session && session.status !== 'revoked') session.status = 'failed'; throw e; }
+    }
+    async completeBridgeCallback(params, findConfig) {
+        for (const key of ['state', 'code', 'error']) if (params.getAll(key).length > 1) throw new Error('OAuth: повторяющийся параметр callback');
+        const state = params.get('state'), p = this.pending.get(state);
+        if (!p || p.callbackMode !== 'bridge' || p.expires <= this.now()) throw new Error('OAuth: неверный или истёкший callback');
+        const cfg = findConfig(p.id);
+        if (!cfg || cfg.disabled || !cfg.url) throw new Error('OAuth: подключение удалено или выключено');
+        await this.complete(p.id, cfg, { state, code: params.get('code'), error: params.get('error'), completionToken: p.completionToken });
+        return { id: p.id, status: 'authorized' };
     }
     save(p, tokens, old = {}) {
         if (typeof tokens.access_token !== 'string' || !tokens.access_token || tokens.access_token.length > 16384 ||
@@ -205,7 +252,7 @@ class McpOAuth {
         let saved = this.vault.get(key);
         if (!saved) {
             if (!descriptor.oauthManaged) return descriptor;
-            const { authToken, oauthManaged, ...rest } = descriptor;
+            const { authToken, oauthManaged, oauthSecrets, ...rest } = descriptor;
             return rest;
         }
         if (saved.tokens.expiresAt <= this.now() + 30000) {
@@ -226,11 +273,14 @@ class McpOAuth {
             saved = this.vault.get(key);
         }
         const headers = Object.fromEntries(Object.entries(descriptor.headers || {}).filter(([k]) => k.toLowerCase() !== 'authorization'));
-        return { ...descriptor, headers, authToken: saved.tokens.access_token, oauthManaged: true };
+        return { ...descriptor, headers, authToken: saved.tokens.access_token, oauthManaged: true,
+            // Redaction context only, never sent as an MCP transport field.
+            oauthSecrets: [saved.tokens.access_token, saved.tokens.refresh_token].filter(Boolean) };
     }
     async revoke(id, cfg) {
         this.epochs.set(id, (this.epochs.get(id) || 0) + 1);
         for (const [s, p] of this.pending) if (p.id === id) this.pending.delete(s);
+        for (const session of this.sessions.values()) if (session.id === id) session.status = 'revoked';
         const key = this.binding(id, new URL(cfg.url).href), saved = this.vault.get(key);
         this.vault.delete(key); // local logout always succeeds even if provider is offline
         if (saved?.metadata.revocation_endpoint) {
@@ -238,4 +288,4 @@ class McpOAuth {
         }
     }
 }
-module.exports = { McpOAuth, CredentialVault, REDIRECT_URI, challenge, publicAddress };
+module.exports = { McpOAuth, CredentialVault, REDIRECT_URI, BRIDGE_CALLBACK_PATH, challenge, publicAddress };

@@ -112,6 +112,7 @@ function collectSecrets(descriptor) {
         }
     }
     push(descriptor.authToken);
+    for (const secret of descriptor.oauthSecrets || []) push(secret);
     // QA/Security, High #3: секреты/токены в аргументах команды (после флагов
     // --token / --access-token / --api-key / --password, в --header и в формате
     // --flag=value) маскируются так же, как env/headers.
@@ -1088,7 +1089,7 @@ class McpClientManager {
         try {
             const summary = await client.connect();
             this.sessions.set(id, client);
-            const record = {
+            const record = redactDeep({
                 id,
                 status: 'connected',
                 transport: descriptor.transport,
@@ -1103,7 +1104,7 @@ class McpClientManager {
                 error: '',
                 errorCode: null,
                 probedAt
-            };
+            }, client.secrets);
             this.live.set(id, record);
             return { ok: true, ...record };
         } catch (err) {

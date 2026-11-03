@@ -33,6 +33,7 @@ import com.google.antigravity.model.SwarmAgentNode
 import com.google.antigravity.model.ToolCallEvent
 import com.google.antigravity.model.ToolCallStatus
 import com.google.antigravity.model.mapToDirectGeminiModelId
+import com.google.antigravity.model.normalizeMcpAuthStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -817,6 +818,31 @@ class AntigravityBackendClient(
                 } else json to null
             }
         } catch (_: Exception) { null to "Не удалось связаться с мостом для входа MCP" }
+    }
+
+    // OAuth 2.1 для MCP (действия /api/mcp: oauthStart / oauthStatus / oauthRevoke).
+    // Старт возвращает authUrl — клиент открывает его через системный браузер /
+    // Custom Tabs (Intent.ACTION_VIEW); статус опрашивается при возврате в
+    // приложение (onResume / кнопка «Проверить»); revoke — выход (отзыв токенов).
+
+    /** Старт OAuth-входа: ответ содержит authUrl для открытия в браузере. */
+    internal suspend fun mcpOAuthStart(pcBridgeUrl: String, name: String): Pair<McpOAuthReply?, String?> =
+        mcpOAuthAction(pcBridgeUrl, JSONObject().put("action", "oauthStart").put("name", name))
+
+    /** Свежий статус авторизации; sessionId — сессия, полученная при старте входа. */
+    internal suspend fun mcpOAuthStatus(pcBridgeUrl: String, name: String, sessionId: String? = null): Pair<McpOAuthReply?, String?> {
+        val payload = JSONObject().put("action", "oauthStatus").put("name", name)
+        if (!sessionId.isNullOrBlank()) payload.put("sessionId", sessionId)
+        return mcpOAuthAction(pcBridgeUrl, payload)
+    }
+
+    /** Выход: отзыв выданных токенов (revoke). */
+    internal suspend fun mcpOAuthRevoke(pcBridgeUrl: String, name: String): Pair<McpOAuthReply?, String?> =
+        mcpOAuthAction(pcBridgeUrl, JSONObject().put("action", "oauthRevoke").put("name", name))
+
+    private suspend fun mcpOAuthAction(pcBridgeUrl: String, payload: JSONObject): Pair<McpOAuthReply?, String?> {
+        val (json, error) = mcpOAuthRequest(pcBridgeUrl, payload)
+        return if (json == null) null to error else parseMcpOAuthReply(json) to null
     }
 
     suspend fun probeMcpServer(
@@ -3185,6 +3211,14 @@ internal fun parseMcpServerList(json: JSONObject): List<PcMcpServerItem> {
                 it.optString("version", "").takeIf { v -> v.isNotBlank() }
             ).joinToString(" ").takeIf { s -> s.isNotBlank() }
         }
+        // OAuth 2.1: authUrl / authStatus (или признак oauthAuthorized).
+        // Если мост не прислал ни одного поля — статус авторизации неизвестен ("").
+        val authKnown = obj.has("authStatus") || obj.has("oauthAuthorized")
+        val rawAuthStatus = obj.optString("authStatus", "")
+        val authorizedFlag = obj.optBoolean("oauthAuthorized", false)
+        val authStatus = if (authKnown) {
+            normalizeMcpAuthStatus(rawAuthStatus, authorizedFlag).ifBlank { "not_authorized" }
+        } else ""
         out.add(
             PcMcpServerItem(
                 id = obj.optString("id", "mcp_$i"),
@@ -3200,7 +3234,9 @@ internal fun parseMcpServerList(json: JSONObject): List<PcMcpServerItem> {
                 errorCode = obj.optString("errorCode", "").takeIf { it.isNotBlank() },
                 serverInfo = serverInfoText,
                 commandOrUrl = obj.optString("commandOrUrl", obj.optString("command", "")),
-                oauthAuthorized = obj.optBoolean("oauthAuthorized", false)
+                oauthAuthorized = authStatus == "authorized",
+                authUrl = obj.optString("authUrl", "").ifBlank { obj.optString("authorizationUrl", "") },
+                authStatus = authStatus
             )
         )
     }
@@ -3231,5 +3267,66 @@ internal fun safeBridgeErrorText(bodyText: String): String {
         ?.takeIf { it.isNotBlank() }
         ?.take(200)
         ?: trimmed.take(200)
+}
+
+// ---------------------------------------------------------------------------
+// OAuth 2.1: разбор OAuth-полей (authUrl, authStatus) из ответов моста
+// (oauthStart / oauthStatus / oauthRevoke) и сохранение статуса входа при
+// обновлении списка подключений. Top-level internal — тестируется
+// McpOAuthStateTest без запуска сети.
+// ---------------------------------------------------------------------------
+
+/** Разобранный OAuth-ответ моста: authUrl (для браузера) и authStatus. */
+internal data class McpOAuthReply(
+    val id: String = "",
+    /** Адрес страницы входа (поле authUrl; fallback — authorizationUrl). */
+    val authUrl: String = "",
+    /** Нормализованный статус авторизации (см. normalizeMcpAuthStatus). */
+    val authStatus: String = "",
+    /** Производная: вход подтверждён (authStatus == "authorized"). */
+    val authorized: Boolean = false,
+    /** Идентификатор сессии входа (sessionId; fallback — completionToken). */
+    val sessionId: String = ""
+)
+
+/**
+ * Парсинг OAuth-полей (authUrl, authStatus) из JSON-ответа /api/mcp.
+ * Поддерживаются оба написания полей моста: camelCase (authUrl/authStatus)
+ * и легаси (authorizationUrl/status + authorized/oauthAuthorized).
+ */
+internal fun parseMcpOAuthReply(json: JSONObject): McpOAuthReply {
+    val authUrl = json.optString("authUrl", "").ifBlank { json.optString("authorizationUrl", "") }
+    val rawStatus = json.optString("authStatus", "").ifBlank { json.optString("status", "") }
+    val authorizedFlag = json.optBoolean("authorized", json.optBoolean("oauthAuthorized", false))
+    val authKnown = json.has("authStatus") || json.has("status") ||
+        json.has("authorized") || json.has("oauthAuthorized")
+    val authStatus = normalizeMcpAuthStatus(rawStatus, authorizedFlag)
+        .ifBlank { if (authKnown) "not_authorized" else "" }
+    return McpOAuthReply(
+        id = json.optString("id", "").ifBlank { json.optString("name", "") },
+        authUrl = authUrl,
+        authStatus = authStatus,
+        authorized = authStatus == "authorized",
+        sessionId = json.optString("sessionId", "").ifBlank { json.optString("completionToken", "") }
+    )
+}
+
+/**
+ * Слияние свежего списка подключений с текущим: если ответ моста не содержит
+ * OAuth-данных, статус входа (authStatus/authUrl/oauthAuthorized) сохраняется —
+ * вход не «теряется» при обновлении списка. Явные данные моста приоритетны.
+ */
+internal fun mergeMcpAuthFields(
+    previous: List<PcMcpServerItem>,
+    fresh: List<PcMcpServerItem>
+): List<PcMcpServerItem> = fresh.map { item ->
+    if (item.authStatus.isNotBlank() || item.oauthAuthorized) item
+    else previous.firstOrNull { it.id == item.id }?.let { old ->
+        item.copy(
+            authStatus = old.authStatus,
+            authUrl = old.authUrl,
+            oauthAuthorized = old.oauthAuthorized
+        )
+    } ?: item
 }
 

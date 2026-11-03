@@ -61,6 +61,9 @@ test('canonical MIT packages have verified composition; repair preserves enabled
     fs.mkdirSync(configDir, { recursive: true });
     const config = JSON.stringify({ plugins: { 'antigravity-workspace-guard': { enabled: false } } });
     fs.writeFileSync(path.join(configDir, 'config.json'), config);
+    const disabledRoot = path.join(configDir, 'plugins', 'antigravity-workspace-guard');
+    fs.mkdirSync(disabledRoot, { recursive: true });
+    fs.writeFileSync(path.join(disabledRoot, 'plugin.json'), JSON.stringify({ name: 'antigravity-workspace-guard', disabled: true }));
     syncLocalPlugins({ home: dir, staging: path.join(dir, 'staging') });
     assert.equal(fs.readFileSync(path.join(configDir, 'config.json'), 'utf8'), config);
     for (const name of ['antigravity-workspace-guard', 'kotlin-compose-inspector']) {
@@ -68,7 +71,10 @@ test('canonical MIT packages have verified composition; repair preserves enabled
         assert.equal(analysis.support.supportStatus, 'fully-supported', JSON.stringify(analysis.support));
         assert.equal(analysis.licenseCheck.rightToRedistribute, 'granted');
         for (const target of [path.join(configDir, 'plugins', name), path.join(dir, 'staging', name)]) {
-            assert.equal(fs.readFileSync(path.join(target, 'plugin.json'), 'utf8'), fs.readFileSync(path.join(plugin(name), 'plugin.json'), 'utf8'));
+            const actual = JSON.parse(fs.readFileSync(path.join(target, 'plugin.json'), 'utf8'));
+            const expected = JSON.parse(fs.readFileSync(path.join(plugin(name), 'plugin.json'), 'utf8'));
+            if (target === disabledRoot) { assert.equal(actual.disabled, true); delete actual.disabled; }
+            assert.deepEqual(actual, expected);
         }
     }
 });

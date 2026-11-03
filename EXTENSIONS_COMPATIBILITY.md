@@ -490,6 +490,50 @@ MCP-серверы, инъекции схем нет (и не выдумывае
   SUCCESSFUL, 25 наборов / 103 теста / 0 падений, включая `ExtensionBindingsTest`.
 
 
+## 16. OAuth 2.1 в Android-клиенте — итоговая стыковка (3 ноября 2026)
+
+Клиентская часть OAuth 2.1 для MCP-подключений (к серверному модулю
+`pc-bridge/lib/mcp-oauth-api.js`, контракт в `PC_BRIDGE_OAUTH_API.md`):
+
+- Клиент говорит действиями `oauthStart` / `oauthStatus` / `oauthRevoke`
+  (`AntigravityBackendClient.mcpOAuthStart/mcpOAuthStatus/mcpOAuthRevoke`).
+  «Войти» → `oauthStart` → сервер возвращает `authUrl` → он открывается через
+  системный браузер / Custom Tabs (`Intent.ACTION_VIEW`; https либо http только
+  для loopback-адресов разработки). «Выйти» → `oauthRevoke` (отзыв токенов).
+- Статус обновляется при возврате в приложение (`onResume` в MainActivity) и по
+  кнопке «Проверить»: `oauthStatus` (с `sessionId` попытки) + живое
+  рукопожатие за инструментами после успешного входа. Один и тот же authUrl
+  из фонового обновления повторно не открывается. Native loopback-вариант
+  (RFC 8252, `oauth_start` + deep link `com.google.antigravity:/mcp-oauth/callback`)
+  сохранён на сервере и в клиенте как legacy-путь; основным клиентским потоком
+  является bridge-режим (возврат → onResume → `oauthStatus`).
+- Парсинг OAuth-полей: `authUrl` (fallback `authorizationUrl`) и `authStatus`
+  (fallback `status` + `authorized`) — `parseMcpOAuthReply`; в списке
+  `mcpServers` — `parseMcpServerList`; `mergeMcpAuthFields` не даёт статусу
+  входа «потеряться» при обновлении списка без OAuth-полей.
+- UI (`ExtensionsScreen.kt`): в деталях HTTP-подключения карточка
+  «Авторизация (OAuth 2.1)» со статусом «Требуется вход» / «Авторизован» /
+  «Ошибка токена» (плюс pending/denied/expired/revoked/superseded) и действием
+  «Войти» / «Обновить статус входа» / «Выйти (отозвать доступ)».
+- Переходы состояния (`McpAuthState`): «Войти»→pending(authUrl)→по `oauthStatus`
+  authorized | failed («Ошибка токена») | expired | denied | superseded;
+  revoke → «Требуется вход». «authorized» не выдаётся за MCP-рукопожатие —
+  для него есть «Проверить».
+- Проверено: `McpOAuthStateTest.kt` — 18 тестов (парсинг authUrl/authStatus и
+  переходы состояния); Android testDebugUnitTest lintDebug assembleDebug —
+  BUILD SUCCESSFUL, 26 наборов / 121 тест / 0 падений; Node-коллекция моста
+  174/174. Живые скриншоты: `verification_screenshots/s8_plugins_my.png`
+  (оба локальных плагина «✓ Готов», без «заблокирован»),
+  `s8_auth_card.png` («Требуется вход» + «Войти»).
+- Границы (не заявляется выполненным): полный цикл реального входа у внешнего
+  провайдера не прогонялся (нет тестового аккаунта; временное подключение
+  demo-oauth-mcp удалено после кадра). Bridge-callback по умолчанию — loopback
+  ПК (`http://127.0.0.1:8787/api/mcp/oauth/callback`); для браузера на телефоне
+  провайдеру нужен явно настроенный HTTPS `bridgeRedirectUri` в приватном конфиге
+  MCP (см. `PC_BRIDGE_OAUTH_API.md`). Опрос `oauthStatus` не выполняет refresh и
+  не запускает инструменты.
+
+
 ## Уточнение после закрытия блокеров (2 ноября 2026)
 
 Исходные таблицы выше — исторический срез наблюдений этапа 1. Текущее состояние

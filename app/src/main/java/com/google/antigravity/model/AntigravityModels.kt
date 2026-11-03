@@ -203,7 +203,15 @@ data class PcMcpServerItem(
     val errorCode: String? = null,
     /** QA-дефект Medium #2: serverInfo успешного рукопожатия (имя/версия сервера). */
     val serverInfo: String? = null,
-    val oauthAuthorized: Boolean = false
+    /** OAuth 2.1: вход выполнен (производная от authStatus == "authorized"). */
+    val oauthAuthorized: Boolean = false,
+    /** OAuth 2.1: адрес страницы входа (authUrl из ответа моста), если требуется. */
+    val authUrl: String = "",
+    /**
+     * OAuth 2.1: нормализованный статус авторизации
+     * (authorized/not_authorized/pending/denied/failed/expired/revoked; "" — неизвестен).
+     */
+    val authStatus: String = ""
 )
 
 /**

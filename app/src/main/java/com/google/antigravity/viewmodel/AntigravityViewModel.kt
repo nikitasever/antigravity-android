@@ -41,6 +41,7 @@ import com.google.antigravity.model.SavedChat
 import com.google.antigravity.model.prepareChatBranch
 import com.google.antigravity.model.prepareChatEdit
 import com.google.antigravity.model.prepareChatRetry
+import com.google.antigravity.model.McpAuthState
 import com.google.antigravity.model.MessageRole
 import com.google.antigravity.model.OpenRouterCategory
 import com.google.antigravity.model.OpenRouterModelItem
@@ -61,6 +62,7 @@ import com.google.antigravity.model.VoiceProvider
 import com.google.antigravity.model.VoiceTransportMode
 import com.google.antigravity.model.VoiceVisualizerStyle
 import com.google.antigravity.network.AntigravityBackendClient
+import com.google.antigravity.network.mergeMcpAuthFields
 import com.google.antigravity.receiver.ToolApprovalActionReceiver
 import com.google.antigravity.service.AntigravityAgentSessionService
 import com.google.antigravity.service.AntigravityVoiceForegroundService
@@ -1583,7 +1585,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
             if (extLoadSeq.isCurrent(seq)) {
                 if (plugins.isNotEmpty() || pErr == null) _installedPlugins.value = plugins
                 if (skills.isNotEmpty() || sErr == null) _installedSkills.value = skills
-                if (mcps.isNotEmpty() || mErr == null) _mcpServers.value = mcps
+                if (mcps.isNotEmpty() || mErr == null) _mcpServers.value = mergeMcpAuthFields(_mcpServers.value, mcps)
                 if (catalog.isNotEmpty() || cErr == null) _extensionCatalog.value = catalog
 
                 _extensionsError.value = pErr ?: sErr ?: mErr ?: cErr
@@ -1797,7 +1799,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                 enabled = nextEnabled
             )
             if (extLoadSeq.isCurrent(seq)) {
-                if (updated.isNotEmpty()) _mcpServers.value = updated
+                if (updated.isNotEmpty()) _mcpServers.value = mergeMcpAuthFields(_mcpServers.value, updated)
                 if (err != null) _extensionsError.value = err
             }
         }
@@ -1807,52 +1809,142 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     // tools/list). connected и список инструментов — только из живого ответа.
     private var mcpOAuthLoopback: com.google.antigravity.network.McpOAuthLoopback? = null
     private var mcpOAuthStarting = false
+    /** Сессии входа MCP (sessionId из oauthStart) — для oauthStatus при возврате. */
+    private val mcpOAuthSessionIds = mutableMapOf<String, String>()
+    /** Уже открытые authUrl — чтобы не открывать браузер повторно из «Проверить». */
+    private val mcpOpenedAuthUrls = mutableMapOf<String, String>()
 
+    /**
+     * OAuth 2.1 для MCP: «Войти» стартует вход (oauthStart → authUrl открывается
+     * через системный браузер / Custom Tabs), «Выйти» отзывает токены
+     * (oauthRevoke). Статус обновляется при возврате в приложение (onResume) и
+     * по кнопке «Проверить» (oauthStatus + живое рукопожатие).
+     */
     fun loginMcpServer(id: String) {
         viewModelScope.launch {
             if (mcpOAuthStarting) return@launch
             mcpOAuthStarting = true
             _isExtensionsLoading.value = true
             try {
-            _extensionsError.value = null
-            val bridge = _settings.value.pcBridgeUrl
-            if (_mcpServers.value.firstOrNull { it.id == id }?.oauthAuthorized == true) {
-                val (_, error) = backendClient.mcpOAuthRequest(bridge,
-                    JSONObject().put("action", "oauth_revoke").put("name", id))
-                refreshExtensionsFromPc()
-                _extensionsError.value = error
-                return@launch
-            }
-            mcpOAuthLoopback?.close()
-            val loopback = runCatching { com.google.antigravity.network.McpOAuthLoopback() }.getOrElse {
-                _extensionsError.value = "Не удалось открыть локальный адрес для входа MCP"; return@launch
-            }
-            mcpOAuthLoopback = loopback
-            val (result, error) = backendClient.mcpOAuthRequest(bridge,
-                JSONObject().put("action", "oauth_start").put("name", id).put("redirectUri", loopback.redirectUri))
-            if (result == null) { loopback.close(); _extensionsError.value = error; return@launch }
-            try {
-                val authorizationUri = Uri.parse(result.getString("authorizationUrl"))
-                require(authorizationUri.scheme == "https")
-                val pending = JSONObject().put("id", id).put("bridge", bridge)
-                    .put("state", result.getString("state"))
-                    .put("completionToken", result.getString("completionToken"))
-                    .put("expires", System.currentTimeMillis() + 600_000)
-                // Survives process death; Android backup never contains an active flow.
-                java.io.File(getApplication<Application>().noBackupFilesDir, "mcp-oauth-pending.json")
-                    .writeText(pending.toString())
-                viewModelScope.launch(Dispatchers.IO) {
-                    try { loopback.awaitBrowserReturn(result.getString("state")) }
-                    catch (_: Exception) { /* superseded login or closed screen owner */ }
-                    finally { loopback.close() }
+                _extensionsError.value = null
+                val bridge = _settings.value.pcBridgeUrl
+                if (_mcpServers.value.firstOrNull { it.id == id }?.oauthAuthorized == true) {
+                    // Выход: отзыв выданных токенов (действие revoke в деталях подключения).
+                    val (_, error) = backendClient.mcpOAuthRevoke(bridge, id)
+                    mcpOAuthSessionIds.remove(id)
+                    mcpOpenedAuthUrls.remove(id)
+                    applyMcpAuthState(id, authStateOf(id).onRevoked())
+                    if (error != null) {
+                        _extensionsError.value = error
+                    } else {
+                        refreshExtensionsFromPc()
+                    }
+                    return@launch
                 }
-                getApplication<Application>().startActivity(Intent(Intent.ACTION_VIEW, authorizationUri)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            } catch (_: Exception) { loopback.close(); _extensionsError.value = "Не удалось открыть браузер для входа MCP" }
+                // Вход: сервер возвращает authUrl — открываем в системном браузере.
+                val (reply, error) = backendClient.mcpOAuthStart(bridge, id)
+                if (reply == null || error != null) {
+                    _extensionsError.value = error ?: "Мост не вернул адрес авторизации (authUrl)"
+                    return@launch
+                }
+                if (reply.sessionId.isNotBlank()) mcpOAuthSessionIds[id] = reply.sessionId
+                applyMcpAuthState(id, authStateOf(id).onLoginStarted(reply.authUrl, reply.sessionId))
+                openMcpAuthUrl(id, reply.authUrl, force = true)
             } finally {
                 mcpOAuthStarting = false
                 _isExtensionsLoading.value = false
             }
+        }
+    }
+
+    /**
+     * Возврат пользователя в приложение после входа в браузере (onResume):
+     * обновляет статус авторизации (oauthStatus), а после успешного входа —
+     * список инструментов (живое рукопожатие). Браузер из фона не открывается.
+     */
+    fun onAppResumed() {
+        val pending = _mcpServers.value.filter {
+            it.authStatus == "pending" || (mcpOAuthSessionIds[it.id] != null && it.authStatus != "authorized")
+        }.map { it.id }
+        if (pending.isEmpty()) return
+        viewModelScope.launch {
+            for (id in pending) {
+                refreshMcpAuthStatusFor(id)
+                // Вход мог завершиться — подтягиваем инструменты обновлённого подключения.
+                if (_mcpServers.value.firstOrNull { it.id == id }?.oauthAuthorized == true) {
+                    val (updated, _) = backendClient.probeMcpServer(
+                        pcBridgeUrl = _settings.value.pcBridgeUrl,
+                        name = id
+                    )
+                    if (updated.isNotEmpty()) {
+                        _mcpServers.value = mergeMcpAuthFields(_mcpServers.value, updated)
+                    }
+                }
+            }
+        }
+    }
+
+    /** Свежий oauthStatus от моста; возвращает authUrl, если вход всё ещё требуется. */
+    private suspend fun refreshMcpAuthStatusFor(id: String): String {
+        val (reply, error) = backendClient.mcpOAuthStatus(
+            pcBridgeUrl = _settings.value.pcBridgeUrl,
+            name = id,
+            sessionId = mcpOAuthSessionIds[id]
+        )
+        if (reply != null) {
+            applyMcpAuthState(id, authStateOf(id).onStatusChecked(reply.authStatus, reply.authorized, reply.authUrl))
+        }
+        if (error != null) _extensionsError.value = error
+        val state = authStateOf(id)
+        return if (state.needsBrowserLogin) state.authUrl else ""
+    }
+
+    /**
+     * Открывает authUrl через системный браузер / Custom Tabs (Intent.ACTION_VIEW).
+     * force=false — только если этот адрес ещё не открывался (анти-спам при проверке).
+     * Открываются только https (или http для loopback-адресов разработки).
+     */
+    private fun openMcpAuthUrl(id: String, rawUrl: String, force: Boolean) {
+        val url = rawUrl.trim()
+        if (url.isBlank()) return
+        if (!force && mcpOpenedAuthUrls[id] == url) return
+        val uri = runCatching { Uri.parse(url) }.getOrNull()
+        val host = uri?.host.orEmpty()
+        val safe = uri != null && host.isNotBlank() &&
+            (uri.scheme == "https" || (uri.scheme == "http" && host in setOf("127.0.0.1", "localhost", "10.0.2.2")))
+        if (!safe) {
+            _extensionsError.value = "Небезопасный адрес авторизации не открыт (требуется https)"
+            return
+        }
+        try {
+            getApplication<Application>().startActivity(
+                Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+            mcpOpenedAuthUrls[id] = url
+        } catch (_: Exception) {
+            _extensionsError.value = "Не удалось открыть браузер для входа MCP"
+        }
+    }
+
+    /** Текущее OAuth-состояние подключения (из элемента списка + сессии входа). */
+    private fun authStateOf(id: String): McpAuthState {
+        val item = _mcpServers.value.firstOrNull { it.id == id }
+        return McpAuthState(
+            status = item?.authStatus ?: "",
+            authUrl = item?.authUrl ?: "",
+            sessionId = mcpOAuthSessionIds[id] ?: ""
+        )
+    }
+
+    /** Применяет переход OAuth-состояния к элементу списка подключений. */
+    private fun applyMcpAuthState(id: String, next: McpAuthState) {
+        _mcpServers.value = _mcpServers.value.map { item ->
+            if (item.id != id) item
+            else item.copy(
+                authStatus = next.status,
+                authUrl = next.authUrl,
+                oauthAuthorized = next.authorized
+            )
         }
     }
 
@@ -1881,6 +1973,10 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
         val seq = extLoadSeq.next()
         viewModelScope.launch {
             _isExtensionsLoading.value = true
+            // «Проверить» после возврата из браузера: сначала свежий статус
+            // авторизации (oauthStatus)…
+            val authUrl = refreshMcpAuthStatusFor(id)
+            // …затем живое рукопожатие (initialize → initialized → tools/list).
             val (updated, err) = backendClient.probeMcpServer(
                 pcBridgeUrl = _settings.value.pcBridgeUrl,
                 name = id
@@ -1888,10 +1984,15 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
             // Medium #1: ответ проверки применяется, только если за время
             // рукопожатия не пришёл более новый запрос.
             if (extLoadSeq.isCurrent(seq)) {
-                if (updated.isNotEmpty()) _mcpServers.value = updated
+                if (updated.isNotEmpty()) {
+                    _mcpServers.value = mergeMcpAuthFields(_mcpServers.value, updated)
+                }
                 _extensionsError.value = err
                 _isExtensionsLoading.value = false
             }
+            // Сервер вернул authUrl / статус необходимости входа — открываем его
+            // в браузере и при проверке (адрес не повторяется без изменений).
+            openMcpAuthUrl(id, authUrl, force = false)
         }
     }
 
@@ -1931,7 +2032,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                 args = argsList,
                 enabled = true
             )
-            if (updated.isNotEmpty()) _mcpServers.value = updated
+            if (updated.isNotEmpty()) _mcpServers.value = mergeMcpAuthFields(_mcpServers.value, updated)
             _extensionsError.value = err
             _isExtensionsLoading.value = false
         }
@@ -1945,7 +2046,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                 action = "remove",
                 name = id
             )
-            _mcpServers.value = updated
+            _mcpServers.value = mergeMcpAuthFields(_mcpServers.value, updated)
             _extensionsError.value = err
             _isExtensionsLoading.value = false
         }

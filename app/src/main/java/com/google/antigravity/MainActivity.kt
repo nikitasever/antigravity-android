@@ -117,6 +117,8 @@ class MainActivity : ComponentActivity() {
         }
         viewModel.refreshPermissionState()
         viewModel.syncRemoteSessionsFromPc()
+        // OAuth MCP: возврат из браузера — обновить статус авторизации и инструменты.
+        viewModel.onAppResumed()
     }
 
     override fun onNewIntent(intent: Intent) {
