@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "title": "Матрица адаптеров компонентов (Этап 5)",
-  "generatedAt": "2026-11-03T05:17:47.052Z",
+  "generatedAt": "2026-11-03T06:48:31.448Z",
   "strategies": {
     "PRESERVE": "preserve",
     "CONVERT": "convert",
@@ -546,8 +546,8 @@
             "@wonderwhy-er/desktop-commander@0.3.1"
           ]
         },
-        "runtimeVerification": "not-run",
-        "note": "Official open source stdio server. Shell/file access requires explicit tool permissions; no automatic install or launch."
+        "runtimeVerification": "verified-live-2026-11-03",
+        "note": "Official open source stdio server. Shell/file access requires explicit tool permissions; no automatic install or launch. Живая проверка 2026-11-03 (временная регистрация через мост, снята после проверки): initialize → tools/list — protocolVersion 2025-06-18, serverInfo desktop-commander 0.3.1, 25 инструментов; tools/call list_directory — реальный листинг каталога; отказ read_file C:\\pagefile.sys — isError:true (EBUSY) без маскировки успеха. Node v24.22.2 ≥ engines >=22.12.0; запуск node dist/index.js пакета 0.3.1 из изолированного scratch-каталога, эквивалентно дескриптору npx. Постинсталл-скрипты пакета (track-installation, verify-ripgrep) выполняются только при установке в scratch."
       },
       "name": "Desktop Commander",
       "sourceProduct": "claude.ai (web)",
@@ -652,7 +652,7 @@
           ]
         },
         "runtimeVerification": "not-run",
-        "note": "Official MIT stdio server. User supplies API_TOKEN in private MCP env, never in this catalog. Provider usage may be billed."
+        "note": "Official MIT stdio server. User supplies API_TOKEN in private MCP env, never in this catalog. Provider usage may be billed. Проверка 2026-11-03: npm view @brightdata/mcp@4.1.1 подтверждает версию пакета; запуск и tools/call не выполнялись — требуется проверки API_TOKEN аккаунта пользователя (требует проверки)."
       },
       "name": "Bright Data",
       "sourceProduct": "claude.ai (web)",
@@ -1511,7 +1511,7 @@
           "url": "https://api.githubcopilot.com/mcp/"
         },
         "runtimeVerification": "not-run",
-        "note": "Official remote endpoint of the open source GitHub server; not an export of the Claude account connector. Own authentication required."
+        "note": "Official remote endpoint of the open source GitHub server; not an export of the Claude account connector. Own authentication required. Проверка границы 2026-11-03: initialize без токена — HTTP 401 (пустое тело), рукопожатие не проходит; для tools/call нужен токен/вход пользователя (gh auth — входа нет) (требует проверки)."
       },
       "name": "Claude GitHub App (интеграция)",
       "sourceProduct": "Claude for Android 1.261029.20",

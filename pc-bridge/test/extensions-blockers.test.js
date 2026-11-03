@@ -82,13 +82,21 @@ test('canonical MIT packages have verified composition; repair preserves enabled
 test('official descriptors have evidence, explicit runtime limits and zero embedded credentials', () => {
     const catalog = loadOfficialMcp();
     assert.equal(catalog.servers.length, 3);
+    // Живая проверка выполняется только для дескрипторов без внешней учётной
+    // записи; входы пользователя (Bright Data API_TOKEN, GitHub-токен) — «требует
+    // проверки», их runtimeVerification остаётся not-run.
+    const expectedRuntimeVerification = {
+        'desktop-commander': 'verified-live-2026-11-03',
+        'bright-data': 'not-run',
+        'github': 'not-run'
+    };
     const matrix = adapters.buildAdapterMatrix(require('../../extensions-inventory.json'));
     for (const s of catalog.servers) {
         for (const id of s.positionIds) {
             const p = matrix.positions.find(p => p.id === id);
             assert.equal(p.portableMcp.id, s.id);
             assert.notEqual(p.supportStatus, 'fully-supported');
-            assert.equal(p.portableMcp.runtimeVerification, 'not-run');
+            assert.equal(p.portableMcp.runtimeVerification, expectedRuntimeVerification[s.id]);
         }
     }
     const repaired = matrix.positions.filter(p => p.id.startsWith('local-plugin-'));
