@@ -2938,7 +2938,13 @@ async function manageMcpServer(payload) {
         const toolNames = (live && Array.isArray(live.tools))
             ? live.tools.map(t => (t && typeof t === 'object' && t.name) ? String(t.name) : String(t))
             : [];
-        const rows = toolNames.map(t => ({ tool: t, ...toolPerm.getToolPermission(name, t) }));
+        const rows = toolNames.map(t => {
+            const row = { tool: t, ...toolPerm.getToolPermission(name, t) };
+            // Комментарий к запрету («Deny with comment») — только при deny;
+            // отсутствие — «не записано» (пусто), не выдумываем.
+            if (row.permission === 'deny') row.comment = toolPerm.getDenyComment(name, t) || '';
+            return row;
+        });
         return {
             ok: true,
             server: name,
@@ -2956,16 +2962,19 @@ async function manageMcpServer(payload) {
         }
         // Скоупы «как у них» («Always allow for this project / session / task /
         // website»); наша честная семантика — см. lib/tool-permissions.js.
+        // Комментарий — «Deny with comment» (отказ с пояснением пользователя).
         const scope = String(payload.scope || 'project').trim() || 'project';
         const scopeId = String(payload.scopeId || payload.sessionId || payload.taskId || '').trim();
         const origin = String(payload.origin || '').trim();
-        const saved = toolPerm.setToolPermission(name, tool, permission, { scope, scopeId, origin });
+        const comment = String(payload.comment || '').trim();
+        const saved = toolPerm.setToolPermission(name, tool, permission, { scope, scopeId, origin, comment });
         return {
             ok: saved.ok,
             server: name,
             tool,
             permission: saved.permission || permission,
             scope: saved.scope || scope,
+            comment: saved.comment || '',
             error: saved.error || '',
             errorCode: saved.code || '',
             mcpServers: await listMcpServers()

@@ -50,7 +50,7 @@ assesses as lower-risk, and blocks the rest»).
 
 | # | Вопрос | Референс (факт кода/строк) | Было у нас | Действие | Статус |
 |---|---|---|---|---|---|
-| 1 | Права инструментов MCP | Claude: `McpToolPermission(server, tool)` + `McpSetAllToolsPermission(server)`; значения Ask/Always allow/Deny (+ Deny with comment); скоупы «Always allow for this project / session / task / website» | только грубая политика `toolExecutionPolicy` (preset AUTOPILOT) без поштучных прав | **Сделать как у них**: поштучные права с приоритетом tool > «все инструменты сервера» > политика; отказы deny/ask честные, проверка до соединения; UI «Права инструментов» + «Изменить права всех инструментов»; скоупы project/session/task/website | **реализовано в этом проходе** (§4); скоупы — **реализовано**: мост (приоритет task > session > tool > website > server > policy; session/task — память моста, website — только HTTP-origin) + Android-пикер скоупа с честными подписями (30 suites / 170 tests). «Deny with comment» — «требует проверки» (семантика комментария по коду не разобрана) |
+| 1 | Права инструментов MCP | Claude: `McpToolPermission(server, tool)` + `McpSetAllToolsPermission(server)`; значения Ask/Always allow/Deny (+ Deny with comment); скоупы «Always allow for this project / session / task / website» | только грубая политика `toolExecutionPolicy` (preset AUTOPILOT) без поштучных прав | **Сделать как у них**: поштучные права с приоритетом tool > «все инструменты сервера» > политика; отказы deny/ask честные, проверка до соединения; UI «Права инструментов» + «Изменить права всех инструментов»; скоупы project/session/task/website | **реализовано в этом проходе** (§4); скоупы — **реализовано**: мост (приоритет task > session > tool > website > server > policy; session/task — память моста, website — только HTTP-origin) + Android-пикер скоупа с честными подписями (30 suites / 170 tests). **Deny with comment — реализовано**: комментарий к запрету сохраняется с правом, показывается в отказе модели («Комментарий пользователя: «…»») и в UI; точная семантика их комментария — «требует проверки» |
 | 2 | Просмотр инструкций навыка | Claude: `ViewSkillInstructions`, `SkillDetail(id)`, `SkillEdit(id)`, «Skill name», «Delete skill?», «You already have a skill named /%1$s.» | превью 240 символов + обрезка 4000, без полного просмотра и редактирования | **Сделать как у них**: деталь навыка с полным текстом SKILL.md; редактирование/переименование/удаление с подтверждением | **реализовано** (просмотр + SkillEdit): мост `lib/skill-store.js` (update/rename со стабильным id и проверкой коллизий `skill_name_taken`, builtin — только чтение `skill_read_only`, удаление по фактической папке источника), Android — редактор SKILL.md + «Удалить навык?» с текстом референса (29 suites / 160 tests). Граница: «настройки только на claude.ai» не наблюдается в нашем контракте — «требует проверки» |
 | 3 | Деталь карточки каталога | Claude: `ConnectorDirectoryDetail`, `ConnectDirectoryEntryWebScreen`, `AddCustomConnectorWebScreen` | список каталога + «Установить», без detail-sheet | **Сделать как у них**: sheet-деталь позиции (издатель/источник/лицензия/блокер/сценарий) + «Установить» | **реализовано в этом проходе** (§4) |
 | 4 | Жизненный цикл MCP-входа | Claude: `McpAuthException$ StartFailed/ExchangeFailed/Cancelled/Denied/MissingCallbackParameters` + `AdditionalAccountsOffException` | наши статусы pending/authorized/denied/failed/expired/revoked/superseded (+safe-тексты ошибок) | расхождение тонкое: `MissingCallbackParameters` у нас — ветка `failed` с текстом; `AdditionalAccountsOff` (многоаккаунтность) — аналога нет | зафиксировано; код не менялся («требует проверки» продукта — многоаккаунтность) |
@@ -280,3 +280,24 @@ ChatGPT: субагентов нет; есть делегирование в Cod
   прослеженной навигации (уточнение SUBAGENTS_RECHECK_AND_FIX.md §4.0
   сохраняется).
 - Скриншоты Remote control относятся к Claude Code Remote, не к обычному чату.
+
+## 7. Дизайн-сверка (3 ноября 2026)
+
+Визуальные константы добыты из артефактов (не по впечатлениям), полный
+протокол — `EXTENSIONS_COMPATIBILITY.md` §22, токены —
+`app/src/main/java/com/google/antigravity/ui/design/DesignSystem.kt`:
+
+- **ChatGPT**: нейтрали тёмной темы `#0D0D0D`/`#212121`/`#303030`/`#414141`,
+  текст `#F3F3F3`/`#C4C3CB`/`#89888D`, акценты `#3566F0` (синий) и др.
+  (декодированы из декомпиляции `qdm0.h(<decimal ARGB>)`); шрифты **OpenAI
+  Sans** + **Söhne** (в APK).
+- **Claude**: тёплая бумага `#FAF9F5`/`#E7E6E1`, коралл `#D97757`/`#C6613F`,
+  шалфей `#7FA87F`, тёмное `#131313` (res/values/colors.xml); шрифты
+  **Google Sans**.
+- **Границы**: шрифты референсов не перераспространяются — в комплект не
+  включены, типографика приближена кеглями/весами системного шрифта
+  («требует проверки» визуального подобия на глаз); error-red ChatGPT не
+  декодирован (использован их коралл `#FF8066`); светлые темы референсов
+  существуют, тёмная база Antigravity сохранена.
+- **Применено**: листы прав/навыков/каталога и панели субагентов приведены к
+  токенам; чат/композитор — см. отчёт волны в §22.

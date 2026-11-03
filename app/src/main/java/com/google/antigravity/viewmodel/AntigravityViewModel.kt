@@ -2102,7 +2102,8 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
         id: String,
         tool: String,
         permission: String,
-        scope: McpToolPermissionScope = McpToolPermissionScope.PROJECT
+        scope: McpToolPermissionScope = McpToolPermissionScope.PROJECT,
+        comment: String = ""
     ) {
         viewModelScope.launch {
             val request = resolveMcpToolScope(scope, mcpScopeContext(id))
@@ -2114,12 +2115,16 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
             updateToolPermissionsState(id) { it.onLoading() }
             val (reply, error) = backendClient.setMcpToolPermission(
                 _settings.value.pcBridgeUrl, id, tool, permission,
-                scope = ready.scope, scopeId = ready.scopeId, origin = ready.origin
+                scope = ready.scope, scopeId = ready.scopeId, origin = ready.origin,
+                comment = comment
             )
             if (reply != null) {
                 updateToolPermissionsState(id) {
                     it.onToolPermissionChanged(
-                        tool, reply.permission.ifBlank { permission }, source = scope.rowSource
+                        tool, reply.permission.ifBlank { permission }, source = scope.rowSource,
+                        // Комментарий — только из подтверждения моста («Deny with
+                        // comment»): пустой ответ = «не записано», не выдумывается.
+                        comment = reply.comment
                     )
                 }
                 loadMcpToolPermissions(id)
@@ -2136,7 +2141,8 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     fun setAllMcpToolPermissions(
         id: String,
         permission: String,
-        scope: McpToolPermissionScope = McpToolPermissionScope.PROJECT
+        scope: McpToolPermissionScope = McpToolPermissionScope.PROJECT,
+        comment: String = ""
     ) {
         viewModelScope.launch {
             val request = resolveMcpToolScope(scope, mcpScopeContext(id))
@@ -2148,12 +2154,16 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
             updateToolPermissionsState(id) { it.onLoading() }
             val (reply, error) = backendClient.setAllMcpToolPermissions(
                 _settings.value.pcBridgeUrl, id, permission,
-                scope = ready.scope, scopeId = ready.scopeId, origin = ready.origin
+                scope = ready.scope, scopeId = ready.scopeId, origin = ready.origin,
+                comment = comment
             )
             if (reply != null) {
                 updateToolPermissionsState(id) {
                     it.onAllToolsPermissionChanged(
-                        reply.permission.ifBlank { permission }, source = scope.rowSource
+                        reply.permission.ifBlank { permission }, source = scope.rowSource,
+                        // Комментарий — только из подтверждения моста («Deny with
+                        // comment»); см. setMcpToolPermission.
+                        comment = reply.comment
                     )
                 }
                 loadMcpToolPermissions(id)

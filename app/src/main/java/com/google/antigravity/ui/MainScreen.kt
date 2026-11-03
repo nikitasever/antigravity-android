@@ -659,11 +659,11 @@ fun MainScreen(
                             onInstallCatalogItem = { item -> viewModel.installCatalogExtension(item) },
                             mcpToolPermissions = mcpToolPermissions,
                             onLoadMcpToolPermissions = { id -> viewModel.loadMcpToolPermissions(id) },
-                            onSetMcpToolPermission = { id, tool, permission, scope ->
-                                viewModel.setMcpToolPermission(id, tool, permission, scope)
+                            onSetMcpToolPermission = { id, tool, permission, scope, comment ->
+                                viewModel.setMcpToolPermission(id, tool, permission, scope, comment)
                             },
-                            onSetAllMcpToolPermissions = { id, permission, scope ->
-                                viewModel.setAllMcpToolPermissions(id, permission, scope)
+                            onSetAllMcpToolPermissions = { id, permission, scope, comment ->
+                                viewModel.setAllMcpToolPermissions(id, permission, scope, comment)
                             },
                             mcpScopeSessionId = settings.activeConversationId,
                             mcpScopeTaskId = viewModel.currentSubagentTaskId,

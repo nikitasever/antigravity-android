@@ -144,7 +144,7 @@ function createToolPermissions({ configPath } = {}) {
         return null;
     }
 
-    function setWebsitePermission(origin, toolName, permission) {
+    function setWebsitePermission(origin, toolName, permission, comment = '') {
         const value = normalize(permission);
         if (!value) return { ok: false, error: 'permission должен быть allow|ask|deny' };
         const sec = section();
@@ -152,8 +152,14 @@ function createToolPermissions({ configPath } = {}) {
         const server = { ...(sec[key] || {}) };
         if (toolName) {
             server.tools = { ...(server.tools || {}), [String(toolName)]: value };
+            if (value === 'deny' && String(comment || '').trim()) {
+                server.comments = { ...(server.comments || {}), [String(toolName)]: String(comment).trim().slice(0, 500) };
+            }
         } else {
             server.default = value;
+            if (value === 'deny' && String(comment || '').trim()) {
+                server.defaultComment = String(comment).trim().slice(0, 500);
+            }
         }
         sec[key] = server;
         const written = saveToolPermissionsSection(sec);
@@ -186,15 +192,21 @@ function createToolPermissions({ configPath } = {}) {
         return { permission: globalDefault(), source: 'policy' };
     }
 
-    function setToolPermission(serverId, toolName, permission, { scope = 'project', scopeId = '', origin = '' } = {}) {
+    function setToolPermission(serverId, toolName, permission, { scope = 'project', scopeId = '', origin = '', comment = '' } = {}) {
         const value = normalize(permission);
         if (!value) return { ok: false, error: 'permission должен быть allow|ask|deny' };
+        const cleanComment = String(comment || '').trim().slice(0, 500);
         const cleanScope = VALID_SCOPES.includes(String(scope)) ? String(scope) : 'project';
         if (cleanScope === 'session' || cleanScope === 'task') {
             if (!String(scopeId).trim()) {
                 return { ok: false, error: `Для скоупа «${cleanScope}» нужен ${cleanScope === 'session' ? 'sessionId' : 'taskId'} (скоуп действует только в памяти моста)` };
             }
-            return runtimeSet(cleanScope, String(scopeId), serverId, toolName, value);
+            const saved = runtimeSet(cleanScope, String(scopeId), serverId, toolName, value);
+            if (saved.ok && cleanComment) {
+                const srv = runtimeServerEntry(cleanScope, String(scopeId), serverId, true);
+                srv.comments = { ...(srv.comments || {}), [String(toolName || '__server__')]: cleanComment };
+            }
+            return saved;
         }
         if (cleanScope === 'website') {
             if (!String(origin).trim()) {
@@ -204,19 +216,56 @@ function createToolPermissions({ configPath } = {}) {
                     code: 'website_scope_requires_origin'
                 };
             }
-            return setWebsitePermission(String(origin), toolName, value);
+            return setWebsitePermission(String(origin), toolName, value, cleanComment);
         }
-        // project (persist) — прежняя поведение.
+        // project (persist) — прежняя поведение + комментарий «Deny with
+        // comment» (референс Claude: строка «Deny with comment» — отказ с
+        // пояснением пользователя; точная семантика их комментария «требует
+        // проверки», наша модель: комментарий хранится с правом и показывается
+        // в тексте отказа).
         const sec = section();
         const server = { ...(sec[String(serverId)] || {}) };
         if (toolName) {
             server.tools = { ...(server.tools || {}), [String(toolName)]: value };
+            if (value === 'deny' && cleanComment) {
+                server.comments = { ...(server.comments || {}), [String(toolName)]: cleanComment };
+            } else if (value === 'deny') {
+                if (server.comments) delete server.comments[String(toolName)];
+            }
         } else {
             server.default = value;
+            if (value === 'deny' && cleanComment) {
+                server.defaultComment = cleanComment;
+            } else if (value === 'deny') {
+                delete server.defaultComment;
+            }
         }
         sec[String(serverId)] = server;
         const written = saveToolPermissionsSection(sec);
-        return { ok: written, error: written ? '' : 'Не удалось записать permissions-config.json', permission: value, scope: 'project' };
+        return { ok: written, error: written ? '' : 'Не удалось записать permissions-config.json', permission: value, scope: 'project', comment: cleanComment };
+    }
+
+    // Комментарий к запрету («Deny with comment» референса) для источника
+    // права; пусто — комментария нет («не записано»).
+    function getDenyComment(serverId, toolName, { sessionId = '', taskId = '', origin = '' } = {}) {
+        const tool = String(toolName || '__server__');
+        if (taskId && runtimeGrants.task.has(String(taskId))) {
+            const srv = runtimeServerEntry('task', String(taskId), serverId, false);
+            if (srv && srv.comments && srv.comments[tool]) return srv.comments[tool];
+        }
+        if (sessionId && runtimeGrants.session.has(String(sessionId))) {
+            const srv = runtimeServerEntry('session', String(sessionId), serverId, false);
+            if (srv && srv.comments && srv.comments[tool]) return srv.comments[tool];
+        }
+        const server = section()[String(serverId)] || {};
+        if (server.comments && server.comments[tool]) return server.comments[tool];
+        if (origin) {
+            const w = section()[websiteKey(origin)] || {};
+            if (w.comments && w.comments[tool]) return w.comments[tool];
+            if (!toolName && w.defaultComment) return w.defaultComment;
+        }
+        if (!toolName && server.defaultComment) return server.defaultComment;
+        return '';
     }
 
     // Проверка перед tools/call. Возвращает либо { allow: true }, либо отказ
@@ -225,10 +274,11 @@ function createToolPermissions({ configPath } = {}) {
         const { permission, source } = getToolPermission(serverId, toolName, { sessionId, taskId, origin });
         const tool = String(toolName);
         if (permission === 'deny') {
+            const comment = getDenyComment(serverId, toolName, { sessionId, taskId, origin });
             return {
                 allow: false,
                 errorCode: 'tool_denied',
-                error: `Инструмент «${tool}» запрещён настройкой прав («Запретить»${source.includes('default') || source === 'server' ? ' для всех инструментов сервера' : ''}, скоуп: ${source}). Разрешите его в карточке подключения.`
+                error: `Инструмент «${tool}» запрещён настройкой прав («Запретить»${source.includes('default') || source === 'server' ? ' для всех инструментов сервера' : ''}, скоуп: ${source}).${comment ? ` Комментарий пользователя: «${comment}».` : ''} Разрешите его в карточке подключения.`
             };
         }
         if (permission === 'ask' && !userInitiated) {
@@ -252,6 +302,7 @@ function createToolPermissions({ configPath } = {}) {
         setToolPermission,
         setWebsitePermission,
         getWebsitePermission,
+        getDenyComment,
         checkToolCall
     };
 }

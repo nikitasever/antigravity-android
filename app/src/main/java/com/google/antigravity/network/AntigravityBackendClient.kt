@@ -22,6 +22,7 @@ import com.google.antigravity.model.GoogleDriveFileItem
 import com.google.antigravity.model.GoogleDriveStatus
 import com.google.antigravity.model.InstalledPluginItem
 import com.google.antigravity.model.McpToolPermissionEntry
+import com.google.antigravity.model.denyCommentForRequest
 import com.google.antigravity.model.MessageRole
 import com.google.antigravity.model.OpenRouterCategory
 import com.google.antigravity.model.OpenRouterModelItem
@@ -894,11 +895,13 @@ class AntigravityBackendClient(
         permission: String,
         scope: String = "project",
         scopeId: String? = null,
-        origin: String? = null
+        origin: String? = null,
+        comment: String = ""
     ): Pair<McpPermissionUpdateReply?, String?> {
         val payload = JSONObject().put("action", "set_tool_permission").put("name", name)
             .put("tool", tool).put("permission", permission)
         applyMcpToolScope(payload, scope, scopeId, origin)
+        applyMcpToolPermissionComment(payload, permission, comment)
         val (json, error) = postBridgeJson(
             pcBridgeUrl, "/api/mcp", payload,
             "Не удалось изменить право инструмента"
@@ -913,11 +916,13 @@ class AntigravityBackendClient(
         permission: String,
         scope: String = "project",
         scopeId: String? = null,
-        origin: String? = null
+        origin: String? = null,
+        comment: String = ""
     ): Pair<McpPermissionUpdateReply?, String?> {
         val payload = JSONObject().put("action", "set_all_tools_permissions").put("name", name)
             .put("permission", permission)
         applyMcpToolScope(payload, scope, scopeId, origin)
+        applyMcpToolPermissionComment(payload, permission, comment)
         val (json, error) = postBridgeJson(
             pcBridgeUrl, "/api/mcp", payload,
             "Не удалось изменить права всех инструментов"
@@ -939,6 +944,21 @@ class AntigravityBackendClient(
         payload.put("scope", scope.ifBlank { "project" })
         if (!scopeId.isNullOrBlank()) payload.put("scopeId", scopeId)
         if (!origin.isNullOrBlank()) payload.put("origin", origin)
+    }
+
+    /**
+     * Комментарий к запрету («Deny with comment») по контракту моста: поле
+     * comment отправляется только с permission=deny и только непустым;
+     * повторный deny без комментария НЕ отправляет поле — мост очищает
+     * прежний комментарий. У allow/ask комментарий не отправляется вовсе.
+     */
+    private fun applyMcpToolPermissionComment(
+        payload: JSONObject,
+        permission: String,
+        comment: String
+    ) {
+        val wire = denyCommentForRequest(permission, comment)
+        if (wire != null) payload.put("comment", wire)
     }
 
     /** Текущий режим разрешений (действие permission_mode /api/mcp). */
@@ -3548,7 +3568,9 @@ internal data class McpToolPermissionsReply(
 
 /**
  * Разбор ответа tool_permissions: tools[] — только из живого ответа моста
- * (может быть пустым, если probe не выполнялся).
+ * (может быть пустым, если probe не выполнялся). comment — комментарий к
+ * запрету («Deny with comment»): отсутствие поля — пустая строка «не
+ * записано», значения не выдумываются.
  */
 internal fun parseMcpToolPermissions(json: JSONObject): McpToolPermissionsReply {
     val defaultPermission =
@@ -3566,7 +3588,8 @@ internal fun parseMcpToolPermissions(json: JSONObject): McpToolPermissionsReply 
                 McpToolPermissionEntry(
                     tool = obj.optString("tool", ""),
                     permission = obj.optString("permission", ""),
-                    source = obj.optString("source", "")
+                    source = obj.optString("source", ""),
+                    comment = obj.optString("comment", "")
                 )
             )
         }
@@ -3584,7 +3607,12 @@ internal data class McpPermissionUpdateReply(
     val tool: String = "",
     val permission: String = "",
     /** Скоуп записанного правила (project/session/task/website); "" — «не записано». */
-    val scope: String = ""
+    val scope: String = "",
+    /**
+     * Комментарий к запрету, подтверждённый мостом («Deny with comment»);
+     * "" — «не записано» (мост не прислал / комментарий очищен).
+     */
+    val comment: String = ""
 )
 
 internal fun parseMcpPermissionUpdate(json: JSONObject): McpPermissionUpdateReply =
@@ -3592,7 +3620,8 @@ internal fun parseMcpPermissionUpdate(json: JSONObject): McpPermissionUpdateRepl
         server = json.optString("server", "").ifBlank { json.optString("name", "") },
         tool = json.optString("tool", ""),
         permission = json.optString("permission", ""),
-        scope = json.optString("scope", "")
+        scope = json.optString("scope", ""),
+        comment = json.optString("comment", "")
     )
 
 /**

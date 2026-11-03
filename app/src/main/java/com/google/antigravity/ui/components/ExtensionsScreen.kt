@@ -80,6 +80,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.google.antigravity.model.ComponentAdapterRecord
+import com.google.antigravity.model.DenyCommentDialogState
 import com.google.antigravity.model.ExtensionCatalogItem
 import com.google.antigravity.model.InstalledPluginItem
 import com.google.antigravity.model.McpPermissionMode
@@ -95,6 +96,8 @@ import com.google.antigravity.model.describeMcpPermissionSource
 import com.google.antigravity.model.describeMcpStatus
 import com.google.antigravity.model.describeToolPermission
 import com.google.antigravity.ui.TwoLineMenuCircleButton
+import com.google.antigravity.ui.design.DesignColors
+import com.google.antigravity.ui.design.DesignType
 
 // ---------------------------------------------------------------------------
 // Этап 6 (EXTENSIONS_INTEGRATION_PLAN.md): единый интерфейс расширений в
@@ -111,12 +114,17 @@ import com.google.antigravity.ui.TwoLineMenuCircleButton
 //    команды MCP и полные инструкции) вынесены в ModalBottomSheet по нажатию.
 // ---------------------------------------------------------------------------
 
-private val BgCharcoal = Color(0xFF0E0E10)
-private val CardBg = Color(0xFF18181B)
-private val BorderSubtle = Color(0xFF27272A)
-private val ActivePillBg = Color(0xFF27272A)
-private val SearchFieldBg = Color(0xFF141417)
-private val IconBoxBg = Color(0xFF121215)
+// Фоновые токены «как у них» — значения DesignColors (доказательства
+// референсов — см. DesignSystem.kt): экран → Bg (#0D0D0D), листы/диалоги →
+// Surface (#212121), карточки секций и повышенные элементы → SurfaceHigh
+// (#303030), рамки → Border (#414141). Имена сохранены как алиасы токенов,
+// чтобы не разъезжались места использования.
+private val BgCharcoal = DesignColors.Bg
+private val CardBg = DesignColors.Surface
+private val BorderSubtle = DesignColors.Border
+private val ActivePillBg = DesignColors.SurfaceHigh
+private val SearchFieldBg = DesignColors.SurfaceHigh
+private val IconBoxBg = DesignColors.SurfaceHigh
 
 private val WhiteBtnBg = Color(0xFFFFFFFF)
 private val WhiteBtnText = Color(0xFF09090B)
@@ -126,17 +134,13 @@ private val HeroSkillsBorder = Color(0xFF1F4D2B)
 private val HeroPluginsBg = Color(0xFF0D254C)
 private val HeroPluginsBorder = Color(0xFF1B3F7A)
 
-private val TextPrimary = Color(0xFFFFFFFF)
-private val TextSecondary = Color(0xFFA1A1AA)
-private val SubtleText = Color(0xFF71717A)
+// Текст и акценты — напрямую токенами DesignColors (DesignColors.TextPrimary #F3F3F3,
+// DesignColors.TextSecondary #C4C3CB, TextSubtle #89888D; DesignColors.AccentGreen #53B559,
+// DesignColors.AccentBlue #3566F0, AccentAmber #FFCC38, AccentCoral #FF8066 — их error-red
+// не декодирован, честно используем их коралл).
 
-private val AccentGreen = Color(0xFF10B981)
-private val AccentBlue = Color(0xFF60A5FA)
-private val WarningAmber = Color(0xFFF59E0B)
-private val DangerRed = Color(0xFFF87171)
-
-/** Приглушённый фон кнопки «Удалить» (тонированный DangerRed). */
-private val DangerBtnBg = Color(0x26F87171)
+/** Приглушённый фон кнопки «Удалить» (тонированный AccentCoral). */
+private val DangerBtnBg = Color(0x26FF8066)
 
 private enum class ExtensionsTab(val title: String) {
     CONNECTIONS("Подключения"),
@@ -196,8 +200,10 @@ fun ExtensionsScreen(
     onInstallCatalogItem: (ExtensionCatalogItem) -> Unit,
     mcpToolPermissions: Map<String, McpToolPermissionsState>,
     onLoadMcpToolPermissions: (String) -> Unit,
-    onSetMcpToolPermission: (String, String, String, McpToolPermissionScope) -> Unit,
-    onSetAllMcpToolPermissions: (String, String, McpToolPermissionScope) -> Unit,
+    /** tool, permission, scope, comment («Deny with comment»; "" — без комментария). */
+    onSetMcpToolPermission: (String, String, String, McpToolPermissionScope, String) -> Unit,
+    /** permission, scope, comment («Deny with comment»; "" — без комментария). */
+    onSetAllMcpToolPermissions: (String, String, McpToolPermissionScope, String) -> Unit,
     mcpScopeSessionId: String,
     mcpScopeTaskId: String,
     permissionModeState: McpPermissionModeState,
@@ -236,13 +242,13 @@ fun ExtensionsScreen(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "Расширения",
-                    color = TextPrimary,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
+                    color = DesignColors.TextPrimary,
+                    fontSize = DesignType.TITLE_SP.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
                 Text(
                     text = if (isLoading) "Синхронизация с рабочей станцией ПК…" else "Подключения, навыки и плагины",
-                    color = if (isLoading) AccentGreen else TextSecondary,
+                    color = if (isLoading) DesignColors.AccentGreen else DesignColors.TextSecondary,
                     fontSize = 12.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -279,10 +285,10 @@ fun ExtensionsScreen(
         if (!errorText.isNullOrBlank()) {
             Surface(
                 color = Color(0xFF2D1618),
-                shape = RoundedCornerShape(10.dp),
+                shape = RoundedCornerShape(12.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.dp, Color(0xFF5C2327), RoundedCornerShape(10.dp))
+                    .border(1.dp, Color(0xFF5C2327), RoundedCornerShape(12.dp))
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
@@ -330,7 +336,7 @@ fun ExtensionsScreen(
                     ) {
                         Text(
                             text = tab.title,
-                            color = if (isSelected) TextPrimary else TextSecondary,
+                            color = if (isSelected) DesignColors.TextPrimary else DesignColors.TextSecondary,
                             fontSize = 13.sp,
                             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                             maxLines = 1
@@ -346,7 +352,7 @@ fun ExtensionsScreen(
                 Icon(
                     imageVector = Icons.Default.Refresh,
                     contentDescription = "Обновить",
-                    tint = TextSecondary,
+                    tint = DesignColors.TextSecondary,
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -361,9 +367,9 @@ fun ExtensionsScreen(
             // читаются полностью, без обрезки за краем экрана.
             Row(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(CardBg)
-                    .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
+                    .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
                     .padding(2.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -563,7 +569,7 @@ fun ExtensionsScreen(
             onDismissRequest = { detailTarget = null },
             sheetState = sheetState,
             containerColor = CardBg,
-            contentColor = TextPrimary,
+            contentColor = DesignColors.TextPrimary,
             shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
         ) {
             when (target) {
@@ -574,11 +580,11 @@ fun ExtensionsScreen(
                             server = server,
                             permissions = mcpToolPermissions[server.id],
                             onLoadPermissions = { onLoadMcpToolPermissions(server.id) },
-                            onSetToolPermission = { tool, permission, scope ->
-                                onSetMcpToolPermission(server.id, tool, permission, scope)
+                            onSetToolPermission = { tool, permission, scope, comment ->
+                                onSetMcpToolPermission(server.id, tool, permission, scope, comment)
                             },
-                            onSetAllToolPermissions = { permission, scope ->
-                                onSetAllMcpToolPermissions(server.id, permission, scope)
+                            onSetAllToolPermissions = { permission, scope, comment ->
+                                onSetAllMcpToolPermissions(server.id, permission, scope, comment)
                             },
                             scopeSessionId = mcpScopeSessionId,
                             scopeTaskId = mcpScopeTaskId,
@@ -695,10 +701,10 @@ fun ExtensionsScreen(
         Dialog(onDismissRequest = { mcpToolCallServer = null; onDismissToolResult() }) {
             Surface(
                 color = CardBg,
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(12.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.dp, BorderSubtle, RoundedCornerShape(16.dp))
+                    .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
                     .heightIn(max = 520.dp)
             ) {
                 Column(
@@ -710,29 +716,29 @@ fun ExtensionsScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = "Инструменты ${liveServer.name}",
-                            color = TextPrimary,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
+                            color = DesignColors.TextPrimary,
+                            fontSize = DesignType.TITLE_SP.sp,
+                            fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.weight(1f)
                         )
                         IconButton(onClick = { mcpToolCallServer = null; onDismissToolResult() }) {
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = "Закрыть",
-                                tint = TextSecondary
+                                tint = DesignColors.TextSecondary
                             )
                         }
                     }
                     if (liveServer.tools.isEmpty()) {
                         Text(
                             text = "⚠ Список инструментов не получен: выполните «Проверить» (живое MCP-рукопожатие). Инструменты берутся только из живого tools/list.",
-                            color = WarningAmber,
+                            color = DesignColors.AccentAmber,
                             fontSize = 12.sp
                         )
                     } else {
                         Text(
                             text = "✓ Инструменты из живого tools/list (${liveServer.tools.size}):",
-                            color = AccentGreen,
+                            color = DesignColors.AccentGreen,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -744,19 +750,19 @@ fun ExtensionsScreen(
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = ActivePillBg,
-                                    contentColor = TextPrimary
+                                    contentColor = DesignColors.TextPrimary
                                 )
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.PlayArrow,
                                     contentDescription = null,
-                                    tint = AccentGreen,
+                                    tint = DesignColors.AccentGreen,
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = tool,
-                                    color = TextPrimary,
+                                    color = DesignColors.TextPrimary,
                                     fontSize = 13.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
@@ -769,7 +775,7 @@ fun ExtensionsScreen(
                         HorizontalDivider(thickness = 1.dp, color = BorderSubtle)
                         Text(
                             text = "Результат вызова:",
-                            color = AccentBlue,
+                            color = DesignColors.AccentBlue,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -881,12 +887,12 @@ private fun CompactStatusBadge(
 ) {
     val normalized = supportStatus.trim().lowercase()
     val (symbol, label, color) = when (normalized) {
-        "fully-supported", "verified", "connected" -> Triple("✓", "Готов", AccentGreen)
-        "partial" -> Triple("⚠", "Частично", WarningAmber)
-        "blocked", "failed" -> Triple("⚠", "Заблокирован", DangerRed)
-        "observation", "not-applicable" -> Triple("•", "Наблюдение", SubtleText)
-        else -> if (oauthRequired) Triple("⚠", "Требует OAuth", WarningAmber)
-        else Triple("⚠", "Требует проверки", WarningAmber)
+        "fully-supported", "verified", "connected" -> Triple("✓", "Готов", DesignColors.AccentGreen)
+        "partial" -> Triple("⚠", "Частично", DesignColors.AccentAmber)
+        "blocked", "failed" -> Triple("⚠", "Заблокирован", DesignColors.AccentCoral)
+        "observation", "not-applicable" -> Triple("•", "Наблюдение", DesignColors.TextSubtle)
+        else -> if (oauthRequired) Triple("⚠", "Требует OAuth", DesignColors.AccentAmber)
+        else Triple("⚠", "Требует проверки", DesignColors.AccentAmber)
     }
     Text(
         text = "$symbol $label",
@@ -917,7 +923,7 @@ private fun SegmentedScopeItem(
     ) {
         Text(
             text = title,
-            color = if (selected) TextPrimary else TextSecondary,
+            color = if (selected) DesignColors.TextPrimary else DesignColors.TextSecondary,
             fontSize = 12.5.sp,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
         )
@@ -934,16 +940,16 @@ private fun ClaudeSearchField(
         modifier = Modifier
             .fillMaxWidth()
             .height(38.dp)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(SearchFieldBg)
-            .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
+            .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = Icons.Default.Search,
             contentDescription = "Поиск",
-            tint = SubtleText,
+            tint = DesignColors.TextSubtle,
             modifier = Modifier.size(16.dp)
         )
         Spacer(modifier = Modifier.width(8.dp))
@@ -954,7 +960,7 @@ private fun ClaudeSearchField(
             if (value.isEmpty()) {
                 Text(
                     text = placeholder,
-                    color = SubtleText,
+                    color = DesignColors.TextSubtle,
                     fontSize = 13.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -964,8 +970,8 @@ private fun ClaudeSearchField(
                 value = value,
                 onValueChange = onValueChange,
                 singleLine = true,
-                textStyle = TextStyle(color = TextPrimary, fontSize = 13.sp),
-                cursorBrush = SolidColor(TextPrimary),
+                textStyle = TextStyle(color = DesignColors.TextPrimary, fontSize = 13.sp),
+                cursorBrush = SolidColor(DesignColors.TextPrimary),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                 modifier = Modifier.fillMaxWidth()
             )
@@ -978,7 +984,7 @@ private fun ClaudeSearchField(
                 Icon(
                     imageVector = Icons.Default.Close,
                     contentDescription = "Очистить поиск",
-                    tint = TextSecondary,
+                    tint = DesignColors.TextSecondary,
                     modifier = Modifier.size(14.dp)
                 )
             }
@@ -996,7 +1002,7 @@ private fun SectionHeaderRow(title: String) {
     ) {
         Text(
             text = title,
-            color = TextPrimary,
+            color = DesignColors.TextPrimary,
             fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.weight(1f)
@@ -1042,9 +1048,9 @@ private fun ClaudeHeroBanner(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(bgColor)
-            .border(1.dp, borderColor, RoundedCornerShape(14.dp))
+            .border(1.dp, borderColor, RoundedCornerShape(12.dp))
             .padding(18.dp)
     ) {
         Row(
@@ -1063,9 +1069,9 @@ private fun ClaudeHeroBanner(
                 )
                 Text(
                     text = headline,
-                    color = TextPrimary,
-                    fontSize = 21.sp,
-                    fontWeight = FontWeight.Bold
+                    color = DesignColors.TextPrimary,
+                    fontSize = DesignType.TITLE_SP.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
                 Text(
                     text = description,
@@ -1178,14 +1184,14 @@ private fun McpTableHeaderRow() {
         ) {
             Text(
                 text = "Подключение",
-                color = SubtleText,
+                color = DesignColors.TextSubtle,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier.weight(1f)
             )
             Text(
                 text = "Тип",
-                color = SubtleText,
+                color = DesignColors.TextSubtle,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
                 textAlign = TextAlign.Center,
@@ -1193,7 +1199,7 @@ private fun McpTableHeaderRow() {
             )
             Text(
                 text = "Статус",
-                color = SubtleText,
+                color = DesignColors.TextSubtle,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
                 textAlign = TextAlign.End,
@@ -1239,7 +1245,7 @@ private fun McpConnectionTableRow(
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
                     text = server.name,
-                    color = if (isDisabled) TextSecondary else TextPrimary,
+                    color = if (isDisabled) DesignColors.TextSecondary else DesignColors.TextPrimary,
                     fontSize = 13.5.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 3,
@@ -1254,7 +1260,7 @@ private fun McpConnectionTableRow(
             // Колонка 2: Тип Web/stdio одним токеном (по центру).
             Text(
                 text = if (server.transport.equals("stdio", ignoreCase = true)) "stdio" else "Web",
-                color = TextSecondary,
+                color = DesignColors.TextSecondary,
                 fontSize = 11.5.sp,
                 maxLines = 1,
                 textAlign = TextAlign.Center,
@@ -1275,9 +1281,9 @@ private fun McpConnectionTableRow(
                 Text(
                     text = subLabel,
                     color = when {
-                        isFailed -> WarningAmber
-                        isConnected -> AccentGreen
-                        else -> SubtleText
+                        isFailed -> DesignColors.AccentAmber
+                        isConnected -> DesignColors.AccentGreen
+                        else -> DesignColors.TextSubtle
                     },
                     fontSize = 10.5.sp,
                     lineHeight = 13.sp,
@@ -1294,7 +1300,7 @@ private fun McpConnectionTableRow(
                     isFailed -> {
                         Text(
                             text = "⚠",
-                            color = WarningAmber,
+                            color = DesignColors.AccentAmber,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -1320,7 +1326,7 @@ private fun McpConnectionTableRow(
                     isConnected -> {
                         Text(
                             text = "✓",
-                            color = AccentGreen,
+                            color = DesignColors.AccentGreen,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -1336,7 +1342,7 @@ private fun McpConnectionTableRow(
                             ) {
                                 Text(
                                     text = "Вызвать",
-                                    color = TextPrimary,
+                                    color = DesignColors.TextPrimary,
                                     fontSize = 11.5.sp,
                                     fontWeight = FontWeight.Medium,
                                     maxLines = 1
@@ -1353,7 +1359,7 @@ private fun McpConnectionTableRow(
                             ) {
                                 Text(
                                     text = "Проверить",
-                                    color = TextSecondary,
+                                    color = DesignColors.TextSecondary,
                                     fontSize = 11.5.sp,
                                     fontWeight = FontWeight.Medium,
                                     maxLines = 1
@@ -1374,7 +1380,7 @@ private fun McpConnectionTableRow(
                         ) {
                             Text(
                                 text = "Проверить",
-                                color = TextPrimary,
+                                color = DesignColors.TextPrimary,
                                 fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Medium,
                                 maxLines = 1
@@ -1419,7 +1425,7 @@ private fun McpCatalogTableRow(
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
                     text = item.name,
-                    color = TextPrimary,
+                    color = DesignColors.TextPrimary,
                     fontSize = 13.5.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 3,
@@ -1432,7 +1438,7 @@ private fun McpCatalogTableRow(
             // Колонка 2: Тип (Web / ПК).
             Text(
                 text = if (isLocal) "ПК" else "Web",
-                color = TextSecondary,
+                color = DesignColors.TextSecondary,
                 fontSize = 11.5.sp,
                 maxLines = 1,
                 textAlign = TextAlign.Center,
@@ -1461,9 +1467,9 @@ private fun ConnectorIcon32(
     isFailed: Boolean
 ) {
     val badgeColor = when {
-        isFailed -> WarningAmber
-        isConnected -> AccentGreen
-        else -> AccentBlue
+        isFailed -> DesignColors.AccentAmber
+        isConnected -> DesignColors.AccentGreen
+        else -> DesignColors.AccentBlue
     }
     val glyph = remember(name) {
         val clean = name.trim()
@@ -1500,7 +1506,7 @@ private fun ConnectorIcon32(
 @Composable
 private fun ShowcaseIcon42(
     categoryOrName: String,
-    accentColor: Color = TextPrimary
+    accentColor: Color = DesignColors.TextPrimary
 ) {
     val symbol = remember(categoryOrName) {
         val lower = categoryOrName.lowercase()
@@ -1515,9 +1521,9 @@ private fun ShowcaseIcon42(
     Box(
         modifier = Modifier
             .size(42.dp)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(IconBoxBg)
-            .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp)),
+            .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp)),
         contentAlignment = Alignment.Center
     ) {
         Text(
@@ -1553,7 +1559,7 @@ private fun SkillCard(
         ) {
             ShowcaseIcon42(
                 categoryOrName = "skill ${skill.name}",
-                accentColor = if (skill.enabled) AccentGreen else SubtleText
+                accentColor = if (skill.enabled) DesignColors.AccentGreen else DesignColors.TextSubtle
             )
             Spacer(modifier = Modifier.width(12.dp))
             Column(
@@ -1562,7 +1568,7 @@ private fun SkillCard(
             ) {
                 Text(
                     text = skill.name,
-                    color = TextPrimary,
+                    color = DesignColors.TextPrimary,
                     fontSize = 14.5.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 2,
@@ -1571,7 +1577,7 @@ private fun SkillCard(
                 )
                 Text(
                     text = skill.description.ifBlank { skill.instructionsPreview }.ifBlank { "Навык SKILL.md рабочей станции" },
-                    color = TextSecondary,
+                    color = DesignColors.TextSecondary,
                     fontSize = 12.sp,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -1584,13 +1590,13 @@ private fun SkillCard(
                 ) {
                     Text(
                         text = if (skill.enabled) "✓ Включён" else "• Отключён",
-                        color = if (skill.enabled) AccentGreen else SubtleText,
+                        color = if (skill.enabled) DesignColors.AccentGreen else DesignColors.TextSubtle,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium
                     )
                     Text(
                         text = "· ПК (SKILL.md)",
-                        color = SubtleText,
+                        color = DesignColors.TextSubtle,
                         fontSize = 11.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -1613,7 +1619,7 @@ private fun SkillCard(
                 ) {
                     Text(
                         text = "/ В чат",
-                        color = TextPrimary,
+                        color = DesignColors.TextPrimary,
                         fontSize = 10.5.sp,
                         fontWeight = FontWeight.Medium,
                         maxLines = 1
@@ -1630,7 +1636,7 @@ private fun SkillCard(
                 ) {
                     Text(
                         text = if (skill.enabled) "✓" else "○",
-                        color = if (skill.enabled) AccentGreen else SubtleText,
+                        color = if (skill.enabled) DesignColors.AccentGreen else DesignColors.TextSubtle,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -1664,7 +1670,7 @@ private fun PluginCard(
         ) {
             ShowcaseIcon42(
                 categoryOrName = "${plugin.category} ${plugin.name}",
-                accentColor = if (plugin.enabled) AccentBlue else SubtleText
+                accentColor = if (plugin.enabled) DesignColors.AccentBlue else DesignColors.TextSubtle
             )
             Spacer(modifier = Modifier.width(12.dp))
             Column(
@@ -1677,7 +1683,7 @@ private fun PluginCard(
                 ) {
                     Text(
                         text = plugin.name,
-                        color = TextPrimary,
+                        color = DesignColors.TextPrimary,
                         fontSize = 14.5.sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 2,
@@ -1687,14 +1693,14 @@ private fun PluginCard(
                     )
                     Text(
                         text = "v${plugin.version}",
-                        color = SubtleText,
+                        color = DesignColors.TextSubtle,
                         fontSize = 11.sp,
                         maxLines = 1
                     )
                 }
                 Text(
                     text = plugin.description.ifBlank { "Пакет плагина (${plugin.category})" },
-                    color = TextSecondary,
+                    color = DesignColors.TextSecondary,
                     fontSize = 12.sp,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -1707,7 +1713,7 @@ private fun PluginCard(
                 ) {
                     Text(
                         text = "by ${shortSourceName(plugin.source)}",
-                        color = SubtleText,
+                        color = DesignColors.TextSubtle,
                         fontSize = 11.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -1734,7 +1740,7 @@ private fun PluginCard(
                 ) {
                     Text(
                         text = "Обновить",
-                        color = TextPrimary,
+                        color = DesignColors.TextPrimary,
                         fontSize = 10.5.sp,
                         fontWeight = FontWeight.Medium,
                         maxLines = 1
@@ -1760,9 +1766,9 @@ private fun PluginCard(
                             else -> "○"
                         },
                         color = when {
-                            blocked -> DangerRed
-                            plugin.enabled -> AccentGreen
-                            else -> SubtleText
+                            blocked -> DesignColors.AccentCoral
+                            plugin.enabled -> DesignColors.AccentGreen
+                            else -> DesignColors.TextSubtle
                         },
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold
@@ -1802,7 +1808,7 @@ private fun CatalogCard(
         ) {
             ShowcaseIcon42(
                 categoryOrName = "${item.category} ${item.name}",
-                accentColor = if (item.installable) AccentGreen else TextSecondary
+                accentColor = if (item.installable) DesignColors.AccentGreen else DesignColors.TextSecondary
             )
             Spacer(modifier = Modifier.width(12.dp))
             Column(
@@ -1811,7 +1817,7 @@ private fun CatalogCard(
             ) {
                 Text(
                     text = item.name,
-                    color = TextPrimary,
+                    color = DesignColors.TextPrimary,
                     fontSize = 14.5.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 2,
@@ -1820,7 +1826,7 @@ private fun CatalogCard(
                 )
                 Text(
                     text = humanDescription,
-                    color = TextSecondary,
+                    color = DesignColors.TextSecondary,
                     fontSize = 12.sp,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -1835,7 +1841,7 @@ private fun CatalogCard(
                 ) {
                     Text(
                         text = "by ${shortSourceName(item.sourceProduct)}",
-                        color = SubtleText,
+                        color = DesignColors.TextSubtle,
                         fontSize = 11.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -1863,7 +1869,7 @@ private fun CatalogCard(
                 ) {
                     Text(
                         text = "Детали",
-                        color = TextPrimary,
+                        color = DesignColors.TextPrimary,
                         fontSize = 10.5.sp,
                         fontWeight = FontWeight.Medium,
                         maxLines = 1
@@ -1900,11 +1906,11 @@ private fun CatalogCard(
 private fun CompositionBadge(supportStatus: String, fullSupportAllowed: Boolean) {
     val normalized = supportStatus.trim().lowercase()
     val (prefixSymbol, label, color) = when (normalized) {
-        "fully-supported", "verified", "connected" -> Triple("✓", "полностью поддержан", AccentGreen)
-        "partial" -> Triple("⚠", "частично поддержан", WarningAmber)
-        "blocked", "failed" -> Triple("⚠", "заблокирован", DangerRed)
-        "observation", "not-applicable" -> Triple("•", "наблюдение", SubtleText)
-        else -> Triple("⚠", "требует проверки", WarningAmber)
+        "fully-supported", "verified", "connected" -> Triple("✓", "полностью поддержан", DesignColors.AccentGreen)
+        "partial" -> Triple("⚠", "частично поддержан", DesignColors.AccentAmber)
+        "blocked", "failed" -> Triple("⚠", "заблокирован", DesignColors.AccentCoral)
+        "observation", "not-applicable" -> Triple("•", "наблюдение", DesignColors.TextSubtle)
+        else -> Triple("⚠", "требует проверки", DesignColors.AccentAmber)
     }
     val displayLabel = if (fullSupportAllowed && prefixSymbol == "✓") {
         "✓ $label"
@@ -1925,10 +1931,10 @@ private fun CompositionBadge(supportStatus: String, fullSupportAllowed: Boolean)
 private fun ComponentRecordLine(record: ComponentAdapterRecord) {
     val normalized = record.status.trim().lowercase()
     val (symbol, statusColor) = when (normalized) {
-        "verified" -> "✓" to AccentGreen
-        "blocked" -> "⚠" to DangerRed
-        "not-applicable" -> "•" to SubtleText
-        else -> "⚠" to WarningAmber
+        "verified" -> "✓" to DesignColors.AccentGreen
+        "blocked" -> "⚠" to DesignColors.AccentCoral
+        "not-applicable" -> "•" to DesignColors.TextSubtle
+        else -> "⚠" to DesignColors.AccentAmber
     }
     Column(
         modifier = Modifier
@@ -1948,14 +1954,14 @@ private fun ComponentRecordLine(record: ComponentAdapterRecord) {
         if (record.blocker.isNotBlank()) {
             Text(
                 text = record.blocker,
-                color = TextSecondary,
+                color = DesignColors.TextSecondary,
                 fontSize = 11.sp
             )
         }
         if (record.verification.isNotBlank()) {
             Text(
                 text = "Проверка: ${record.verification}",
-                color = SubtleText,
+                color = DesignColors.TextSubtle,
                 fontSize = 10.5.sp
             )
         }
@@ -1977,13 +1983,13 @@ private fun EmptyExtensionsCard(title: String, subtitle: String) {
         ) {
             Text(
                 text = title,
-                color = TextPrimary,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold
+                color = DesignColors.TextPrimary,
+                fontSize = DesignType.TITLE_SP.sp,
+                fontWeight = FontWeight.SemiBold
             )
             Text(
                 text = subtitle,
-                color = TextSecondary,
+                color = DesignColors.TextSecondary,
                 fontSize = 12.5.sp,
                 lineHeight = 17.sp
             )
@@ -2000,8 +2006,10 @@ private fun McpDetailSheetContent(
     server: PcMcpServerItem,
     permissions: McpToolPermissionsState?,
     onLoadPermissions: () -> Unit,
-    onSetToolPermission: (String, String, McpToolPermissionScope) -> Unit,
-    onSetAllToolPermissions: (String, McpToolPermissionScope) -> Unit,
+    /** tool, permission, scope, comment («Deny with comment»; "" — без комментария). */
+    onSetToolPermission: (String, String, McpToolPermissionScope, String) -> Unit,
+    /** permission, scope, comment («Deny with comment»; "" — без комментария). */
+    onSetAllToolPermissions: (String, McpToolPermissionScope, String) -> Unit,
     /** Id текущего разговора для скоупа «Для этой сессии» (пусто — нет разговора). */
     scopeSessionId: String,
     /** Id пачки субагентов для скоупа «Для этой задачи» (пусто — «нет активной задачи»). */
@@ -2028,6 +2036,10 @@ private fun McpDetailSheetContent(
     var permissionPicker by remember { mutableStateOf<PermissionPickerTarget?>(null) }
     // Мини-пикер скоупа для «Всегда разрешать» (project/session/task/website).
     var scopePicker by remember { mutableStateOf<PermissionPickerTarget?>(null) }
+    // Диалог «Запретить с комментарием» («Deny with comment»): пояснение
+    // пользователя попадает в текст отказа модели; пустой комментарий
+    // допустим — это «просто Запретить».
+    var denyCommentDialog by remember { mutableStateOf<DenyCommentDialogState?>(null) }
 
     Column(
         modifier = Modifier
@@ -2043,23 +2055,23 @@ private fun McpDetailSheetContent(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = server.name,
-                    color = TextPrimary,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold
+                    color = DesignColors.TextPrimary,
+                    fontSize = DesignType.TITLE_SP.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
                 Text(
                     text = "${if (isConnected) "✓" else if (isFailed) "⚠" else "•"} ${describeMcpStatus(effectiveMcpStatus(server.status, server.error, server.errorCode))}",
                     color = when {
-                        isConnected -> AccentGreen
-                        isFailed -> DangerRed
-                        else -> WarningAmber
+                        isConnected -> DesignColors.AccentGreen
+                        isFailed -> DesignColors.AccentCoral
+                        else -> DesignColors.AccentAmber
                     },
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold
                 )
             }
             IconButton(onClick = onClose, modifier = Modifier.size(28.dp)) {
-                Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = TextSecondary)
+                Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = DesignColors.TextSecondary)
             }
         }
 
@@ -2069,22 +2081,22 @@ private fun McpDetailSheetContent(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(12.dp))
                 .background(IconBoxBg)
-                .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
+                .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
                 .padding(horizontal = 14.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = if (server.enabled) "Подключение включено" else "Подключение отключено",
-                    color = TextPrimary,
+                    color = DesignColors.TextPrimary,
                     fontSize = 13.5.sp,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
                     text = "Исполнитель: ПК (pc-bridge) • ${server.transport}",
-                    color = TextSecondary,
+                    color = DesignColors.TextSecondary,
                     fontSize = 11.5.sp
                 )
             }
@@ -2102,16 +2114,16 @@ private fun McpDetailSheetContent(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(12.dp))
                 .background(IconBoxBg)
-                .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
+                .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
                 .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Text(
                 text = "Технические параметры MCP",
-                color = TextPrimary,
-                fontSize = 13.sp,
+                color = DesignColors.TextPrimary,
+                fontSize = DesignType.SECTION_SP.sp,
                 fontWeight = FontWeight.SemiBold
             )
             DetailRowMonospace(label = "ID", value = server.id)
@@ -2126,7 +2138,7 @@ private fun McpDetailSheetContent(
             }
             Text(
                 text = "Права: инструменты ПК по списку разрешений (аннотации MCP сами по себе прав не расширяют).",
-                color = SubtleText,
+                color = DesignColors.TextSubtle,
                 fontSize = 11.sp
             )
         }
@@ -2136,25 +2148,25 @@ private fun McpDetailSheetContent(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(IconBoxBg)
-                    .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
+                    .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
                     .padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
                     text = "Авторизация (OAuth 2.1)",
-                    color = TextPrimary,
-                    fontSize = 13.sp,
+                    color = DesignColors.TextPrimary,
+                    fontSize = DesignType.SECTION_SP.sp,
                     fontWeight = FontWeight.SemiBold
                 )
                 // Требуется вход / Авторизован / Ошибка токена (+ уточнения).
                 Text(
                     text = describeMcpAuthStatus(server.authStatus),
                     color = when {
-                        server.oauthAuthorized -> AccentGreen
-                        server.authStatus == "failed" || server.authStatus == "expired" -> DangerRed
-                        else -> WarningAmber
+                        server.oauthAuthorized -> DesignColors.AccentGreen
+                        server.authStatus == "failed" || server.authStatus == "expired" -> DesignColors.AccentCoral
+                        else -> DesignColors.AccentAmber
                     },
                     fontSize = 12.5.sp,
                     fontWeight = FontWeight.SemiBold
@@ -2166,14 +2178,14 @@ private fun McpDetailSheetContent(
                         server.authStatus == "failed" -> "Ошибка токена: повторите вход."
                         else -> "Вход выполняется через системный браузер; статус обновляется при возврате в приложение или по кнопке «Проверить»."
                     },
-                    color = TextSecondary,
+                    color = DesignColors.TextSecondary,
                     fontSize = 11.5.sp
                 )
                 // Действие входа/выхода (revoke) прямо в деталях подключения.
                 Button(
                     onClick = { if (server.authStatus == "pending") onCheck() else onLogin() },
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (server.oauthAuthorized) DangerRed else WhiteBtnBg,
+                        containerColor = if (server.oauthAuthorized) DesignColors.AccentCoral else WhiteBtnBg,
                         contentColor = if (server.oauthAuthorized) Color.White else WhiteBtnText
                     ),
                     shape = RoundedCornerShape(8.dp),
@@ -2197,15 +2209,15 @@ private fun McpDetailSheetContent(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(Color(0xFF2D1618))
-                    .border(1.dp, Color(0xFF5C2327), RoundedCornerShape(10.dp))
+                    .border(1.dp, Color(0xFF5C2327), RoundedCornerShape(12.dp))
                     .padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
                     text = "⚠ Диагностика ошибки подключения",
-                    color = DangerRed,
+                    color = DesignColors.AccentCoral,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -2222,9 +2234,9 @@ private fun McpDetailSheetContent(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(12.dp))
                 .background(IconBoxBg)
-                .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
+                .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
                 .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
@@ -2234,21 +2246,21 @@ private fun McpDetailSheetContent(
                 } else {
                     "⚠ Инструменты не получены"
                 },
-                color = if (server.tools.isNotEmpty()) AccentGreen else WarningAmber,
+                color = if (server.tools.isNotEmpty()) DesignColors.AccentGreen else DesignColors.AccentAmber,
                 fontSize = 12.5.sp,
                 fontWeight = FontWeight.SemiBold
             )
             if (server.tools.isNotEmpty()) {
                 Text(
                     text = server.tools.joinToString(", "),
-                    color = TextSecondary,
+                    color = DesignColors.TextSecondary,
                     fontSize = 11.5.sp,
                     fontFamily = FontFamily.Monospace
                 )
             } else {
                 Text(
                     text = "Выполните живое рукопожатие «Проверить» (initialize → notifications/initialized → tools/list).",
-                    color = TextSecondary,
+                    color = DesignColors.TextSecondary,
                     fontSize = 11.5.sp
                 )
             }
@@ -2259,16 +2271,16 @@ private fun McpDetailSheetContent(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(12.dp))
                 .background(IconBoxBg)
-                .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
+                .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
                 .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Text(
                 text = "Режим разрешений",
-                color = TextPrimary,
-                fontSize = 13.sp,
+                color = DesignColors.TextPrimary,
+                fontSize = DesignType.SECTION_SP.sp,
                 fontWeight = FontWeight.SemiBold
             )
             when {
@@ -2276,7 +2288,7 @@ private fun McpDetailSheetContent(
                     (permissionModeState.loading && !permissionModeState.loaded) -> {
                     Text(
                         text = "Загрузка режима разрешений…",
-                        color = TextSecondary,
+                        color = DesignColors.TextSecondary,
                         fontSize = 11.5.sp
                     )
                 }
@@ -2284,7 +2296,7 @@ private fun McpDetailSheetContent(
                     // Отказ моста (включая неизвестный режим) — видимый текст.
                     Text(
                         text = "⚠ ${permissionModeState.error}",
-                        color = DangerRed,
+                        color = DesignColors.AccentCoral,
                         fontSize = 11.5.sp
                     )
                 }
@@ -2292,7 +2304,7 @@ private fun McpDetailSheetContent(
                     if (permissionModeState.mode == null) {
                         Text(
                             text = "Режим не записан мостом.",
-                            color = SubtleText,
+                            color = DesignColors.TextSubtle,
                             fontSize = 11.sp
                         )
                     }
@@ -2308,17 +2320,17 @@ private fun McpDetailSheetContent(
                                 selected = permissionModeState.mode == mode,
                                 onClick = { onSetPermissionMode(mode) },
                                 colors = RadioButtonDefaults.colors(
-                                    selectedColor = AccentGreen,
-                                    unselectedColor = SubtleText
+                                    selectedColor = DesignColors.AccentGreen,
+                                    unselectedColor = DesignColors.TextSubtle
                                 )
                             )
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = mode.label,
                                     color = if (permissionModeState.mode == mode) {
-                                        TextPrimary
+                                        DesignColors.TextPrimary
                                     } else {
-                                        TextSecondary
+                                        DesignColors.TextSecondary
                                     },
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Medium
@@ -2327,14 +2339,14 @@ private fun McpDetailSheetContent(
                                     // Честная граница нашего «Автоматически».
                                     Text(
                                         text = "Оценка риска — эвристика по именам инструментов и аргументам",
-                                        color = WarningAmber,
+                                        color = DesignColors.AccentAmber,
                                         fontSize = 10.5.sp,
                                         lineHeight = 14.sp
                                     )
                                 } else {
                                     Text(
                                         text = mode.hint,
-                                        color = SubtleText,
+                                        color = DesignColors.TextSubtle,
                                         fontSize = 10.5.sp,
                                         lineHeight = 14.sp
                                     )
@@ -2345,7 +2357,7 @@ private fun McpDetailSheetContent(
                     if (permissionModeState.loading) {
                         Text(
                             text = "Сохранение режима…",
-                            color = SubtleText,
+                            color = DesignColors.TextSubtle,
                             fontSize = 11.sp
                         )
                     }
@@ -2354,7 +2366,7 @@ private fun McpDetailSheetContent(
                         text = "Состав режимов — как в Claude (default/plan/auto/acceptEdits/dontAsk/bypassPermissions); " +
                             "точная семантика их Auto-режима (модельная оценка рисков и prompt injection) " +
                             "не воспроизводится — «требует проверки».",
-                        color = SubtleText,
+                        color = DesignColors.TextSubtle,
                         fontSize = 10.5.sp,
                         lineHeight = 14.sp
                     )
@@ -2367,52 +2379,52 @@ private fun McpDetailSheetContent(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(12.dp))
                 .background(IconBoxBg)
-                .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
+                .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
                 .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Text(
                 text = "Права инструментов",
-                color = TextPrimary,
-                fontSize = 13.sp,
+                color = DesignColors.TextPrimary,
+                fontSize = DesignType.SECTION_SP.sp,
                 fontWeight = FontWeight.SemiBold
             )
             when {
                 permissions == null || (permissions.loading && !permissions.loaded) -> {
                     Text(
                         text = "Загрузка прав инструментов…",
-                        color = TextSecondary,
-                        fontSize = 11.5.sp
+                        color = DesignColors.TextSecondary,
+                        fontSize = DesignType.CAPTION_SP.sp
                     )
                 }
                 permissions.error.isNotBlank() -> {
                     // Отказ сервера/связи — видимый текст, успех не выдумывается.
                     Text(
                         text = "⚠ ${permissions.error}",
-                        color = DangerRed,
-                        fontSize = 11.5.sp
+                        color = DesignColors.AccentCoral,
+                        fontSize = DesignType.CAPTION_SP.sp
                     )
                 }
                 permissions.tools.isEmpty() -> {
                     // Инструменты появляются только после живого рукопожатия.
                     Text(
                         text = "Список инструментов доступен после «Проверить».",
-                        color = TextSecondary,
-                        fontSize = 11.5.sp
+                        color = DesignColors.TextSecondary,
+                        fontSize = DesignType.CAPTION_SP.sp
                     )
                 }
                 else -> {
                     if (permissions.defaultPermission != null) {
                         Text(
                             text = "Право сервера по умолчанию: ${describeToolPermission(permissions.defaultPermission)}",
-                            color = SubtleText,
-                            fontSize = 11.sp
+                            color = DesignColors.TextSubtle,
+                            fontSize = DesignType.MICRO_SP.sp
                         )
                     }
                     permissions.tools.forEach { entry ->
-                        Row(
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(8.dp))
@@ -2420,30 +2432,45 @@ private fun McpDetailSheetContent(
                                     permissionPicker = PermissionPickerTarget.Tool(entry.tool)
                                 }
                                 .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
-                            Text(
-                                text = entry.tool.ifBlank { "не записано" },
-                                color = TextSecondary,
-                                fontSize = 11.5.sp,
-                                fontFamily = FontFamily.Monospace,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Text(
-                                text = describeToolPermission(entry.permission) + when (entry.source) {
-                                    "policy" -> " • по политике"
-                                    "session", "task", "website" ->
-                                        " • ${describeMcpPermissionSource(entry.source)}"
-                                    else -> ""
-                                },
-                                color = when (entry.permission) {
-                                    "allow" -> AccentGreen
-                                    "deny" -> DangerRed
-                                    else -> WarningAmber
-                                },
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = entry.tool.ifBlank { "не записано" },
+                                    color = DesignColors.TextSecondary,
+                                    fontSize = DesignType.CAPTION_SP.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Text(
+                                    text = describeToolPermission(entry.permission, entry.comment) + when (entry.source) {
+                                        "policy" -> " • по политике"
+                                        "session", "task", "website" ->
+                                            " • ${describeMcpPermissionSource(entry.source)}"
+                                        else -> ""
+                                    },
+                                    color = when (entry.permission) {
+                                        "allow" -> DesignColors.AccentGreen
+                                        "deny" -> DesignColors.AccentCoral
+                                        else -> DesignColors.AccentAmber
+                                    },
+                                    fontSize = DesignType.CAPTION_SP.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                            // «Deny with comment»: записанный комментарий
+                            // пользователя — второй строкой мелким шрифтом.
+                            if (entry.permission.trim().equals("deny", ignoreCase = true) &&
+                                entry.comment.isNotBlank()
+                            ) {
+                                Text(
+                                    text = "💬 ${entry.comment}",
+                                    color = DesignColors.TextSubtle,
+                                    fontSize = DesignType.MICRO_SP.sp,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                     Row(
@@ -2458,16 +2485,16 @@ private fun McpDetailSheetContent(
                     ) {
                         Text(
                             text = "Изменить права всех инструментов",
-                            color = AccentBlue,
-                            fontSize = 12.sp,
+                            color = DesignColors.AccentBlue,
+                            fontSize = DesignType.CAPTION_SP.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
                     if (permissions.loading) {
                         Text(
                             text = "Обновление прав…",
-                            color = SubtleText,
-                            fontSize = 11.sp
+                            color = DesignColors.TextSubtle,
+                            fontSize = DesignType.MICRO_SP.sp
                         )
                     }
                 }
@@ -2497,7 +2524,7 @@ private fun McpDetailSheetContent(
                 enabled = server.tools.isNotEmpty(),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = ActivePillBg,
-                    contentColor = TextPrimary
+                    contentColor = DesignColors.TextPrimary
                 ),
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.weight(1f)
@@ -2508,7 +2535,7 @@ private fun McpDetailSheetContent(
                 Icon(
                     imageVector = Icons.Default.Delete,
                     contentDescription = "Удалить подключение",
-                    tint = DangerRed
+                    tint = DesignColors.AccentCoral
                 )
             }
         }
@@ -2530,8 +2557,8 @@ private fun McpDetailSheetContent(
                         is PermissionPickerTarget.Tool -> "Право инструмента ${target.tool}"
                         PermissionPickerTarget.AllTools -> "Права всех инструментов"
                     },
-                    color = TextPrimary,
-                    fontSize = 15.sp,
+                    color = DesignColors.TextPrimary,
+                    fontSize = DesignType.TITLE_SP.sp,
                     fontWeight = FontWeight.SemiBold
                 )
             },
@@ -2544,20 +2571,34 @@ private fun McpDetailSheetContent(
                     ).forEach { (value, label) ->
                         TextButton(
                             onClick = {
-                                if (value == "allow") {
-                                    // «Всегда разрешать» — сначала мини-пикер скоупа
-                                    // («как у них»: Always allow for this project/…).
-                                    scopePicker = target
-                                } else {
-                                    when (target) {
-                                        is PermissionPickerTarget.Tool ->
-                                            onSetToolPermission(
-                                                target.tool, value, McpToolPermissionScope.PROJECT
-                                            )
-                                        PermissionPickerTarget.AllTools ->
-                                            onSetAllToolPermissions(
-                                                value, McpToolPermissionScope.PROJECT
-                                            )
+                                when {
+                                    value == "allow" -> {
+                                        // «Всегда разрешать» — сначала мини-пикер скоупа
+                                        // («как у них»: Always allow for this project/…).
+                                        scopePicker = target
+                                    }
+                                    value == "deny" -> {
+                                        // «Запретить» — диалог «Deny with comment»:
+                                        // комментарий необязателен (пустой = «просто
+                                        // Запретить»), но пояснение попадёт в текст
+                                        // отказа модели.
+                                        denyCommentDialog = DenyCommentDialogState(
+                                            tool = (target as? PermissionPickerTarget.Tool)?.tool.orEmpty(),
+                                            isAllTools = target is PermissionPickerTarget.AllTools
+                                        )
+                                    }
+                                    else -> {
+                                        when (target) {
+                                            is PermissionPickerTarget.Tool ->
+                                                onSetToolPermission(
+                                                    target.tool, value,
+                                                    McpToolPermissionScope.PROJECT, ""
+                                                )
+                                            PermissionPickerTarget.AllTools ->
+                                                onSetAllToolPermissions(
+                                                    value, McpToolPermissionScope.PROJECT, ""
+                                                )
+                                        }
                                     }
                                 }
                                 permissionPicker = null
@@ -2565,8 +2606,8 @@ private fun McpDetailSheetContent(
                         ) {
                             Text(
                                 text = if (currentPermission == value) "$label ✓" else label,
-                                color = if (currentPermission == value) AccentGreen else TextPrimary,
-                                fontSize = 14.sp
+                                color = if (currentPermission == value) DesignColors.AccentGreen else DesignColors.TextPrimary,
+                                fontSize = DesignType.BODY_SP.sp
                             )
                         }
                     }
@@ -2574,7 +2615,74 @@ private fun McpDetailSheetContent(
             },
             confirmButton = {
                 TextButton(onClick = { permissionPicker = null }) {
-                    Text("Отмена", color = TextSecondary)
+                    Text("Отмена", color = DesignColors.TextSecondary)
+                }
+            }
+        )
+    }
+
+    // Диалог «Запретить с комментарием» («Deny with comment»): пояснение
+    // пользователя необязательно и попадёт в текст отказа модели; пустой
+    // комментарий допустим — это «просто Запретить». Отправляется только с
+    // deny (контракт моста), повторный deny без комментария очищает прежний.
+    denyCommentDialog?.let { state ->
+        AlertDialog(
+            onDismissRequest = { denyCommentDialog = null },
+            containerColor = CardBg,
+            title = {
+                Text(
+                    text = if (state.isAllTools) {
+                        "Запретить все инструменты"
+                    } else {
+                        "Запретить ${state.tool.ifBlank { "не записано" }}"
+                    },
+                    color = DesignColors.TextPrimary,
+                    fontSize = DesignType.TITLE_SP.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    OutlinedTextField(
+                        value = state.comment,
+                        onValueChange = { denyCommentDialog = state.copy(comment = it) },
+                        label = { Text("Комментарий к запрету (необязательно)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = DesignColors.TextPrimary,
+                            unfocusedBorderColor = BorderSubtle,
+                            focusedTextColor = DesignColors.TextPrimary,
+                            unfocusedTextColor = DesignColors.TextPrimary,
+                            focusedLabelColor = DesignColors.TextSecondary,
+                            unfocusedLabelColor = DesignColors.TextSubtle
+                        )
+                    )
+                    Text(
+                        text = "Пояснение попадёт в текст отказа модели («Deny with comment»).",
+                        color = DesignColors.TextSubtle,
+                        fontSize = DesignType.MICRO_SP.sp
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (state.isAllTools) {
+                        onSetAllToolPermissions(
+                            "deny", McpToolPermissionScope.PROJECT, state.comment
+                        )
+                    } else {
+                        onSetToolPermission(
+                            state.tool, "deny", McpToolPermissionScope.PROJECT, state.comment
+                        )
+                    }
+                    denyCommentDialog = null
+                }) {
+                    Text(state.confirmLabel, color = DesignColors.AccentCoral, fontSize = DesignType.BODY_SP.sp)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { denyCommentDialog = null }) {
+                    Text("Отмена", color = DesignColors.TextSecondary, fontSize = DesignType.BODY_SP.sp)
                 }
             }
         )
@@ -2590,8 +2698,8 @@ private fun McpDetailSheetContent(
             title = {
                 Text(
                     text = "Скоуп правила «Всегда разрешать»",
-                    color = TextPrimary,
-                    fontSize = 15.sp,
+                    color = DesignColors.TextPrimary,
+                    fontSize = DesignType.TITLE_SP.sp,
                     fontWeight = FontWeight.SemiBold
                 )
             },
@@ -2611,10 +2719,10 @@ private fun McpDetailSheetContent(
                                     when (target) {
                                         is PermissionPickerTarget.Tool ->
                                             onSetToolPermission(
-                                                target.tool, "allow", scope
+                                                target.tool, "allow", scope, ""
                                             )
                                         PermissionPickerTarget.AllTools ->
-                                            onSetAllToolPermissions("allow", scope)
+                                            onSetAllToolPermissions("allow", scope, "")
                                     }
                                     scopePicker = null
                                 },
@@ -2622,15 +2730,15 @@ private fun McpDetailSheetContent(
                             ) {
                                 Text(
                                     text = scope.label,
-                                    color = if (unavailableReason.isBlank()) TextPrimary else SubtleText,
-                                    fontSize = 13.5.sp
+                                    color = if (unavailableReason.isBlank()) DesignColors.TextPrimary else DesignColors.TextSubtle,
+                                    fontSize = DesignType.BODY_SP.sp
                                 )
                             }
                             // Честная подсказка: границы скоупа и недоступность.
                             Text(
                                 text = unavailableReason.ifBlank { scope.hint },
-                                color = if (unavailableReason.isBlank()) SubtleText else WarningAmber,
-                                fontSize = 11.sp,
+                                color = if (unavailableReason.isBlank()) DesignColors.TextSubtle else DesignColors.AccentAmber,
+                                fontSize = DesignType.MICRO_SP.sp,
                                 lineHeight = 15.sp,
                                 modifier = Modifier.padding(start = 16.dp)
                             )
@@ -2639,15 +2747,15 @@ private fun McpDetailSheetContent(
                     HorizontalDivider(thickness = 1.dp, color = BorderSubtle)
                     Text(
                         text = "Скоупы — наша модель по мотивам Claude; точная семантика референса не подтверждена.",
-                        color = SubtleText,
-                        fontSize = 10.5.sp,
+                        color = DesignColors.TextSubtle,
+                        fontSize = DesignType.MICRO_SP.sp,
                         lineHeight = 14.sp
                     )
                 }
             },
             confirmButton = {
                 TextButton(onClick = { scopePicker = null }) {
-                    Text("Отмена", color = TextSecondary)
+                    Text("Отмена", color = DesignColors.TextSecondary)
                 }
             }
         )
@@ -2684,25 +2792,25 @@ private fun SkillDetailSheetContent(
         Row(verticalAlignment = Alignment.CenterVertically) {
             ShowcaseIcon42(
                 categoryOrName = "skill ${skill.name}",
-                accentColor = if (skill.enabled) AccentGreen else SubtleText
+                accentColor = if (skill.enabled) DesignColors.AccentGreen else DesignColors.TextSubtle
             )
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = skill.name,
-                    color = TextPrimary,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold
+                    color = DesignColors.TextPrimary,
+                    fontSize = DesignType.TITLE_SP.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
                 Text(
                     text = "Вызов в разговоре: /${skill.id.removePrefix("/")}",
-                    color = AccentGreen,
+                    color = DesignColors.AccentGreen,
                     fontSize = 12.sp,
                     fontFamily = FontFamily.Monospace
                 )
             }
             IconButton(onClick = onClose, modifier = Modifier.size(28.dp)) {
-                Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = TextSecondary)
+                Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = DesignColors.TextSecondary)
             }
         }
 
@@ -2711,22 +2819,22 @@ private fun SkillDetailSheetContent(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(12.dp))
                 .background(IconBoxBg)
-                .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
+                .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
                 .padding(horizontal = 14.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = if (skill.enabled) "Навык активен" else "Навык отключён",
-                    color = TextPrimary,
+                    color = DesignColors.TextPrimary,
                     fontSize = 13.5.sp,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
                     text = "Исполнитель: ПК • SKILL.md",
-                    color = TextSecondary,
+                    color = DesignColors.TextSecondary,
                     fontSize = 11.5.sp
                 )
             }
@@ -2744,14 +2852,14 @@ private fun SkillDetailSheetContent(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(IconBoxBg)
-                    .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
+                    .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
                     .padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Text("Описание", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                Text(skill.description, color = TextSecondary, fontSize = 12.5.sp, lineHeight = 17.sp)
+                Text("Описание", color = DesignColors.TextPrimary, fontSize = DesignType.SECTION_SP.sp, fontWeight = FontWeight.SemiBold)
+                Text(skill.description, color = DesignColors.TextSecondary, fontSize = 12.5.sp, lineHeight = 17.sp)
             }
         }
 
@@ -2759,7 +2867,7 @@ private fun SkillDetailSheetContent(
             // Ошибка загрузки SKILL.md показывается текстом, без маскировки.
             Text(
                 text = "⚠ ${detailState.error}",
-                color = DangerRed,
+                color = DesignColors.AccentCoral,
                 fontSize = 11.5.sp
             )
         }
@@ -2786,16 +2894,16 @@ private fun SkillDetailSheetContent(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(IconBoxBg)
-                    .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
+                    .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
                     .padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Text(blockTitle, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text(blockTitle, color = DesignColors.TextPrimary, fontSize = DesignType.SECTION_SP.sp, fontWeight = FontWeight.SemiBold)
                 Text(
                     text = blockText,
-                    color = TextSecondary,
+                    color = DesignColors.TextSecondary,
                     fontSize = 11.5.sp,
                     fontFamily = FontFamily.Monospace,
                     lineHeight = 16.sp
@@ -2806,9 +2914,9 @@ private fun SkillDetailSheetContent(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(12.dp))
                 .background(IconBoxBg)
-                .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
+                .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
                 .padding(14.dp)
         ) {
             DetailRowMonospace(
@@ -2846,7 +2954,7 @@ private fun SkillDetailSheetContent(
                 enabled = !isBuiltin,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = ActivePillBg,
-                    contentColor = TextPrimary
+                    contentColor = DesignColors.TextPrimary
                 ),
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.weight(1f)
@@ -2857,7 +2965,7 @@ private fun SkillDetailSheetContent(
                 // Честная пометка вместо «Удалить»: встроенный навык только читается.
                 Text(
                     text = "встроенный навык — только чтение",
-                    color = SubtleText,
+                    color = DesignColors.TextSubtle,
                     fontSize = 11.5.sp,
                     modifier = Modifier.weight(1f)
                 )
@@ -2866,7 +2974,7 @@ private fun SkillDetailSheetContent(
                     onClick = { showDeleteConfirm = true },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = DangerBtnBg,
-                        contentColor = DangerRed
+                        contentColor = DesignColors.AccentCoral
                     ),
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.weight(1f)
@@ -2886,15 +2994,15 @@ private fun SkillDetailSheetContent(
             title = {
                 Text(
                     text = "Удалить навык?",
-                    color = TextPrimary,
-                    fontSize = 15.sp,
+                    color = DesignColors.TextPrimary,
+                    fontSize = DesignType.TITLE_SP.sp,
                     fontWeight = FontWeight.SemiBold
                 )
             },
             text = {
                 Text(
                     text = "Навык и его история версий будут удалены навсегда.",
-                    color = TextSecondary,
+                    color = DesignColors.TextSecondary,
                     fontSize = 13.sp,
                     lineHeight = 18.sp
                 )
@@ -2904,12 +3012,12 @@ private fun SkillDetailSheetContent(
                     showDeleteConfirm = false
                     onDelete()
                 }) {
-                    Text("Удалить", color = DangerRed, fontWeight = FontWeight.SemiBold)
+                    Text("Удалить", color = DesignColors.AccentCoral, fontWeight = FontWeight.SemiBold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text("Отмена", color = TextSecondary)
+                    Text("Отмена", color = DesignColors.TextSecondary)
                 }
             }
         )
@@ -2945,13 +3053,13 @@ private fun SkillEditSheetContent(
     }
 
     val textFieldColors = OutlinedTextFieldDefaults.colors(
-        focusedBorderColor = TextPrimary,
+        focusedBorderColor = DesignColors.TextPrimary,
         unfocusedBorderColor = BorderSubtle,
-        focusedTextColor = TextPrimary,
-        unfocusedTextColor = TextPrimary,
-        cursorColor = TextPrimary,
-        focusedLabelColor = TextSecondary,
-        unfocusedLabelColor = SubtleText
+        focusedTextColor = DesignColors.TextPrimary,
+        unfocusedTextColor = DesignColors.TextPrimary,
+        cursorColor = DesignColors.TextPrimary,
+        focusedLabelColor = DesignColors.TextSecondary,
+        unfocusedLabelColor = DesignColors.TextSubtle
     )
 
     Column(
@@ -2966,19 +3074,19 @@ private fun SkillEditSheetContent(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "Редактирование навыка",
-                    color = TextPrimary,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold
+                    color = DesignColors.TextPrimary,
+                    fontSize = DesignType.TITLE_SP.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
                 Text(
                     text = "/${skillId.removePrefix("/")}",
-                    color = AccentGreen,
+                    color = DesignColors.AccentGreen,
                     fontSize = 12.sp,
                     fontFamily = FontFamily.Monospace
                 )
             }
             IconButton(onClick = onClose, modifier = Modifier.size(28.dp)) {
-                Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = TextSecondary)
+                Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = DesignColors.TextSecondary)
             }
         }
 
@@ -2989,7 +3097,7 @@ private fun SkillEditSheetContent(
             state.skillId != skillId || state.loading -> {
                 Text(
                     text = "Загрузка SKILL.md…",
-                    color = TextSecondary,
+                    color = DesignColors.TextSecondary,
                     fontSize = 12.5.sp
                 )
             }
@@ -2998,7 +3106,7 @@ private fun SkillEditSheetContent(
             !state.editorOpen -> {
                 Text(
                     text = "⚠ ${state.error.ifBlank { "SKILL.md не получен" }}",
-                    color = DangerRed,
+                    color = DesignColors.AccentCoral,
                     fontSize = 12.sp
                 )
                 Button(
@@ -3033,7 +3141,7 @@ private fun SkillEditSheetContent(
                         fontFamily = FontFamily.Monospace,
                         fontSize = 12.sp,
                         lineHeight = 17.sp,
-                        color = TextPrimary
+                        color = DesignColors.TextPrimary
                     ),
                     colors = textFieldColors,
                     modifier = Modifier
@@ -3043,7 +3151,7 @@ private fun SkillEditSheetContent(
                 if (state.readOnly) {
                     Text(
                         text = "встроенный навык — только чтение",
-                        color = SubtleText,
+                        color = DesignColors.TextSubtle,
                         fontSize = 11.5.sp
                     )
                 }
@@ -3052,7 +3160,7 @@ private fun SkillEditSheetContent(
                 if (state.error.isNotBlank()) {
                     Text(
                         text = "⚠ ${state.error}",
-                        color = DangerRed,
+                        color = DesignColors.AccentCoral,
                         fontSize = 12.sp,
                         lineHeight = 17.sp
                     )
@@ -3060,7 +3168,7 @@ private fun SkillEditSheetContent(
                     // Честная причина, почему сохранение недоступно.
                     Text(
                         text = state.saveBlockReason,
-                        color = WarningAmber,
+                        color = DesignColors.AccentAmber,
                         fontSize = 11.5.sp
                     )
                 }
@@ -3086,13 +3194,13 @@ private fun SkillEditSheetContent(
                         enabled = !state.saving,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("Отмена", color = TextSecondary, fontSize = 13.sp)
+                        Text("Отмена", color = DesignColors.TextSecondary, fontSize = 13.sp)
                     }
                 }
                 if (state.saving) {
                     Text(
                         text = "Сохранение…",
-                        color = TextSecondary,
+                        color = DesignColors.TextSecondary,
                         fontSize = 11.5.sp
                     )
                 }
@@ -3121,15 +3229,15 @@ private fun PluginDetailSheetContent(
         Row(verticalAlignment = Alignment.CenterVertically) {
             ShowcaseIcon42(
                 categoryOrName = "${plugin.category} ${plugin.name}",
-                accentColor = if (plugin.enabled) AccentBlue else SubtleText
+                accentColor = if (plugin.enabled) DesignColors.AccentBlue else DesignColors.TextSubtle
             )
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "${plugin.name} (v${plugin.version})",
-                    color = TextPrimary,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold
+                    color = DesignColors.TextPrimary,
+                    fontSize = DesignType.TITLE_SP.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
                 CompositionBadge(
                     supportStatus = composition.supportStatus,
@@ -3137,7 +3245,7 @@ private fun PluginDetailSheetContent(
                 )
             }
             IconButton(onClick = onClose, modifier = Modifier.size(28.dp)) {
-                Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = TextSecondary)
+                Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = DesignColors.TextSecondary)
             }
         }
 
@@ -3146,22 +3254,22 @@ private fun PluginDetailSheetContent(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(12.dp))
                 .background(IconBoxBg)
-                .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
+                .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
                 .padding(horizontal = 14.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = if (plugin.enabled) "Плагин включён" else "Плагин отключён",
-                    color = TextPrimary,
+                    color = DesignColors.TextPrimary,
                     fontSize = 13.5.sp,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
                     text = "${plugin.category} • Источник: ${plugin.source}",
-                    color = TextSecondary,
+                    color = DesignColors.TextSecondary,
                     fontSize = 11.5.sp
                 )
             }
@@ -3179,14 +3287,14 @@ private fun PluginDetailSheetContent(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(IconBoxBg)
-                    .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
+                    .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
                     .padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Text("Описание пакета", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                Text(plugin.description, color = TextSecondary, fontSize = 12.5.sp, lineHeight = 17.sp)
+                Text("Описание пакета", color = DesignColors.TextPrimary, fontSize = DesignType.SECTION_SP.sp, fontWeight = FontWeight.SemiBold)
+                Text(plugin.description, color = DesignColors.TextSecondary, fontSize = 12.5.sp, lineHeight = 17.sp)
             }
         }
 
@@ -3196,21 +3304,21 @@ private fun PluginDetailSheetContent(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(IconBoxBg)
-                    .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
+                    .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
                     .padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
                     text = "${if (isGranted) "✓" else "⚠"} Право распространения и лицензия",
-                    color = if (isGranted) AccentGreen else WarningAmber,
+                    color = if (isGranted) DesignColors.AccentGreen else DesignColors.AccentAmber,
                     fontSize = 12.5.sp,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
                     text = composition.licenseNote.ifBlank { "Статус права: ${composition.licenseRight}" },
-                    color = TextSecondary,
+                    color = DesignColors.TextSecondary,
                     fontSize = 12.sp
                 )
             }
@@ -3221,15 +3329,15 @@ private fun PluginDetailSheetContent(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(Color(0xFF2D1618))
-                    .border(1.dp, Color(0xFF5C2327), RoundedCornerShape(10.dp))
+                    .border(1.dp, Color(0xFF5C2327), RoundedCornerShape(12.dp))
                     .padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
                     text = "⚠ Блокеры совместимости (${composition.blockers.size})",
-                    color = DangerRed,
+                    color = DesignColors.AccentCoral,
                     fontSize = 12.5.sp,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -3252,8 +3360,8 @@ private fun PluginDetailSheetContent(
             ) {
                 Text(
                     text = "Состав адаптеров компонентов (${composition.records.size})",
-                    color = TextPrimary,
-                    fontSize = 13.sp,
+                    color = DesignColors.TextPrimary,
+                    fontSize = DesignType.SECTION_SP.sp,
                     fontWeight = FontWeight.SemiBold
                 )
                 composition.records.forEach { record ->
@@ -3289,7 +3397,7 @@ private fun PluginDetailSheetContent(
                 Icon(
                     imageVector = Icons.Default.Delete,
                     contentDescription = "Удалить плагин",
-                    tint = DangerRed
+                    tint = DesignColors.AccentCoral
                 )
             }
         }
@@ -3313,15 +3421,15 @@ private fun CatalogDetailSheetContent(
         Row(verticalAlignment = Alignment.CenterVertically) {
             ShowcaseIcon42(
                 categoryOrName = "${item.category} ${item.name}",
-                accentColor = if (item.installable) AccentGreen else TextSecondary
+                accentColor = if (item.installable) DesignColors.AccentGreen else DesignColors.TextSecondary
             )
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = item.name,
-                    color = TextPrimary,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold
+                    color = DesignColors.TextPrimary,
+                    fontSize = DesignType.TITLE_SP.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
                 CompositionBadge(
                     supportStatus = item.compatibility,
@@ -3329,7 +3437,7 @@ private fun CatalogDetailSheetContent(
                 )
             }
             IconButton(onClick = onClose, modifier = Modifier.size(28.dp)) {
-                Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = TextSecondary)
+                Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = DesignColors.TextSecondary)
             }
         }
 
@@ -3338,16 +3446,16 @@ private fun CatalogDetailSheetContent(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(12.dp))
                 .background(IconBoxBg)
-                .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
+                .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
                 .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Text(
                 text = "Паспорт позиции каталога",
-                color = TextPrimary,
-                fontSize = 13.sp,
+                color = DesignColors.TextPrimary,
+                fontSize = DesignType.SECTION_SP.sp,
                 fontWeight = FontWeight.SemiBold
             )
             DetailRowMonospace(label = "ID", value = item.id)
@@ -3365,15 +3473,15 @@ private fun CatalogDetailSheetContent(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(Color(0xFF2B2111))
-                    .border(1.dp, Color(0xFF57411D), RoundedCornerShape(10.dp))
+                    .border(1.dp, Color(0xFF57411D), RoundedCornerShape(12.dp))
                     .padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
                     text = "⚠ Статус совместимости и ограничения",
-                    color = WarningAmber,
+                    color = DesignColors.AccentAmber,
                     fontSize = 12.5.sp,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -3390,21 +3498,21 @@ private fun CatalogDetailSheetContent(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(IconBoxBg)
-                    .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
+                    .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
                     .padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
                     text = "Право распространения / Лицензия",
-                    color = TextPrimary,
+                    color = DesignColors.TextPrimary,
                     fontSize = 12.5.sp,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
                     text = item.licenseNote,
-                    color = TextSecondary,
+                    color = DesignColors.TextSecondary,
                     fontSize = 12.sp,
                     lineHeight = 16.sp
                 )
@@ -3415,21 +3523,21 @@ private fun CatalogDetailSheetContent(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(12.dp))
                 .background(IconBoxBg)
-                .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
+                .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
                 .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Text(
                 text = "Сценарий проверки",
-                color = TextPrimary,
+                color = DesignColors.TextPrimary,
                 fontSize = 12.5.sp,
                 fontWeight = FontWeight.SemiBold
             )
             Text(
                 text = item.testScenario.ifBlank { "не записано" },
-                color = TextSecondary,
+                color = DesignColors.TextSecondary,
                 fontSize = 12.sp,
                 lineHeight = 16.sp
             )
@@ -3457,7 +3565,7 @@ private fun CatalogDetailSheetContent(
         } else {
             Text(
                 text = "Установка недоступна: позиция каталога является наблюдением источника без проверенного переносимого пакета.",
-                color = SubtleText,
+                color = DesignColors.TextSubtle,
                 fontSize = 11.5.sp,
                 lineHeight = 16.sp
             )
@@ -3473,13 +3581,13 @@ private fun DetailRowMonospace(label: String, value: String) {
     ) {
         Text(
             text = "$label:",
-            color = SubtleText,
+            color = DesignColors.TextSubtle,
             fontSize = 11.5.sp,
             modifier = Modifier.width(132.dp)
         )
         Text(
             text = value,
-            color = TextSecondary,
+            color = DesignColors.TextSecondary,
             fontSize = 11.5.sp,
             fontFamily = FontFamily.Monospace,
             modifier = Modifier.weight(1f)
@@ -3510,22 +3618,22 @@ private fun AddExtensionDialog(
     var mcpArgs by remember { mutableStateOf("") }
 
     val textFieldColors = OutlinedTextFieldDefaults.colors(
-        focusedBorderColor = TextPrimary,
+        focusedBorderColor = DesignColors.TextPrimary,
         unfocusedBorderColor = BorderSubtle,
-        focusedTextColor = TextPrimary,
-        unfocusedTextColor = TextPrimary,
-        cursorColor = TextPrimary,
-        focusedLabelColor = TextSecondary,
-        unfocusedLabelColor = SubtleText
+        focusedTextColor = DesignColors.TextPrimary,
+        unfocusedTextColor = DesignColors.TextPrimary,
+        cursorColor = DesignColors.TextPrimary,
+        focusedLabelColor = DesignColors.TextSecondary,
+        unfocusedLabelColor = DesignColors.TextSubtle
     )
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             color = CardBg,
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(12.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .border(1.dp, BorderSubtle, RoundedCornerShape(16.dp))
+                .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
                 .heightIn(max = 560.dp)
         ) {
             Column(
@@ -3537,13 +3645,13 @@ private fun AddExtensionDialog(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = "Установить расширение",
-                        color = TextPrimary,
-                        fontSize = 16.sp,
+                        color = DesignColors.TextPrimary,
+                        fontSize = DesignType.TITLE_SP.sp,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.weight(1f)
                     )
                     IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
-                        Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = TextSecondary)
+                        Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = DesignColors.TextSecondary)
                     }
                 }
 
@@ -3551,9 +3659,9 @@ private fun AddExtensionDialog(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(12.dp))
                         .background(BgCharcoal)
-                        .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
+                        .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
                         .padding(2.dp),
                     horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
@@ -3570,7 +3678,7 @@ private fun AddExtensionDialog(
                         ) {
                             Text(
                                 text = label,
-                                color = if (selected) TextPrimary else TextSecondary,
+                                color = if (selected) DesignColors.TextPrimary else DesignColors.TextSecondary,
                                 fontSize = 12.sp,
                                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
                             )
@@ -3606,7 +3714,7 @@ private fun AddExtensionDialog(
                         )
                         Text(
                             text = "Инструменты появятся только после живого рукопожатия («Проверить»).",
-                            color = SubtleText,
+                            color = DesignColors.TextSubtle,
                             fontSize = 11.sp
                         )
                         Button(
@@ -3678,7 +3786,7 @@ private fun AddExtensionDialog(
                         )
                         Text(
                             text = "URL — установка с источника; локальное имя — создание нового пакета (без фиктивной установки).",
-                            color = SubtleText,
+                            color = DesignColors.TextSubtle,
                             fontSize = 11.sp
                         )
                         Button(

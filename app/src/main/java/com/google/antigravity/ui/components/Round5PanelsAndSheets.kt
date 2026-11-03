@@ -44,6 +44,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.CircularProgressIndicator
@@ -99,6 +100,8 @@ import com.google.antigravity.model.SlashMentionSuggestionItem
 import com.google.antigravity.model.SwarmAgentNode
 import com.google.antigravity.model.SubagentPanelState
 import com.google.antigravity.model.VirtualSandboxProject
+import com.google.antigravity.ui.design.DesignColors
+import com.google.antigravity.ui.design.DesignType
 import java.io.File
 import java.util.Locale
 
@@ -1567,9 +1570,9 @@ fun CodeBackgroundTasksEntryPoint(
                     .fillMaxWidth()
                     .padding(bottom = 6.dp)
                     .heightIn(max = 420.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Color(0xFF141414))
-                    .border(1.dp, Color(0xFF2A2A2A), RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(DesignColors.Surface)
+                    .border(1.dp, DesignColors.Border, RoundedCornerShape(12.dp))
                     .padding(12.dp)
             ) {
                 BackgroundTasksDetailContent(
@@ -1597,8 +1600,8 @@ fun CodeBackgroundTasksEntryPoint(
             Row(
                 modifier = Modifier
                     .clip(RoundedCornerShape(50))
-                    .background(Color(0xFF181818))
-                    .border(1.dp, Color(0xFF2E2E2E), RoundedCornerShape(50))
+                    .background(DesignColors.SurfaceHigh)
+                    .border(1.dp, DesignColors.Border, RoundedCornerShape(50))
                     .clickable { expandedInline = true }
                     .padding(horizontal = 10.dp, vertical = 5.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -1607,7 +1610,7 @@ fun CodeBackgroundTasksEntryPoint(
                     modifier = Modifier
                         .size(7.dp)
                         .clip(CircleShape)
-                        .background(if (activeCount > 0) Color(0xFF34D399) else Color(0xFF6B7280))
+                        .background(if (activeCount > 0) DesignColors.AccentGreen else DesignColors.TextSubtle)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 PhaseStatusPixelGrid(statuses = realPixelStatuses)
@@ -1618,8 +1621,8 @@ fun CodeBackgroundTasksEntryPoint(
                     } else {
                         "Фоновые задачи • ${agents.size} агентов"
                     },
-                    color = Color(0xFFE5E7EB),
-                    fontSize = 11.sp,
+                    color = DesignColors.TextPrimary,
+                    fontSize = DesignType.MICRO_SP.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     softWrap = false
@@ -1628,7 +1631,7 @@ fun CodeBackgroundTasksEntryPoint(
                 Icon(
                     imageVector = Icons.Default.KeyboardArrowUp,
                     contentDescription = "Фоновые задачи",
-                    tint = Color(0xFF9CA3AF),
+                    tint = DesignColors.TextSecondary,
                     modifier = Modifier.size(15.dp)
                 )
             }
@@ -1656,17 +1659,24 @@ private fun BackgroundTasksDetailContent(
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
-                Text("Фоновые задачи", color = Color.White, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Фоновые задачи",
+                    color = DesignColors.TextPrimary,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = DesignType.TITLE_SP.sp
+                )
                 // Счётчик «как у них» («%1$d running task(s)») с русскими формами;
                 // при отсутствии полей снимка — прежний вид без счётчика.
                 state.counterLabel?.let { counterText ->
-                    Text(counterText, color = Color(0xFF9E9E9E), fontSize = 11.sp)
+                    Text(counterText, color = DesignColors.TextSubtle, fontSize = DesignType.MICRO_SP.sp)
                 }
             }
-            TextButton(onClick = onClose) { Text("Закрыть") }
+            TextButton(onClick = onClose) {
+                Text("Закрыть", color = DesignColors.TextSecondary, fontSize = DesignType.BODY_SP.sp)
+            }
         }
         Text("Задачи текущего разговора. Исполнитель получает отдельное задание от ведущей модели; результаты возвращаются в переписку.",
-            color = Color(0xFF9E9E9E), fontSize = 13.sp)
+            color = DesignColors.TextSecondary, fontSize = DesignType.BODY_SP.sp)
         // Ввод задания для пачки субагентов — сразу под описанием, чтобы не
         // уезжал за пределы видимости при длинном списке агентов (находка
         // приёмки 3 ноября). Колбэки onDispatch* ранее были разведены по UI,
@@ -1679,15 +1689,15 @@ private fun BackgroundTasksDetailContent(
         OutlinedTextField(
             value = taskDraft,
             onValueChange = { taskDraft = it },
-            label = { Text("Задание для субагентов (исполнитель + рецензент)") },
+            label = { Text("Задание для субагентов (исполнитель + рецензент)", fontSize = DesignType.CAPTION_SP.sp) },
             modifier = Modifier.fillMaxWidth(),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Color(0xFF60A5FA),
-                unfocusedBorderColor = Color(0xFF2A2A2A),
-                focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White,
-                focusedLabelColor = Color(0xFF60A5FA),
-                unfocusedLabelColor = Color(0xFF8A8A8A)
+                focusedBorderColor = DesignColors.AccentBlue,
+                unfocusedBorderColor = DesignColors.Border,
+                focusedTextColor = DesignColors.TextPrimary,
+                unfocusedTextColor = DesignColors.TextPrimary,
+                focusedLabelColor = DesignColors.AccentBlue,
+                unfocusedLabelColor = DesignColors.TextSubtle
             )
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1698,7 +1708,9 @@ private fun BackgroundTasksDetailContent(
                     taskDraft = ""
                     onDispatchSwarmTask(t)
                 }
-            ) { Text("Запустить анализ") }
+            ) {
+                Text("Запустить анализ", color = DesignColors.AccentBlue, fontSize = DesignType.BODY_SP.sp)
+            }
             TextButton(
                 enabled = !dispatchLocked && taskDraft.isNotBlank(),
                 onClick = {
@@ -1706,12 +1718,14 @@ private fun BackgroundTasksDetailContent(
                     taskDraft = ""
                     onDispatchCodeTask(t)
                 }
-            ) { Text("Запустить код-задачу") }
+            ) {
+                Text("Запустить код-задачу", color = DesignColors.AccentBlue, fontSize = DesignType.BODY_SP.sp)
+            }
         }
         if (dispatchLocked) {
             Text(
                 "Предыдущая задача ещё выполняется — следующая пачка стартует после завершения.",
-                color = Color(0xFF8A8A8A), fontSize = 11.sp
+                color = DesignColors.TextSubtle, fontSize = DesignType.MICRO_SP.sp
             )
         }
         // Занятость «как у них» («Your computer is busy with other sessions…»):
@@ -1720,49 +1734,85 @@ private fun BackgroundTasksDetailContent(
         // «другими сессиями» для неё была бы неверной.
         if (!isOwnTaskActive) {
             state.effectiveBusyMessage?.let { busyText ->
-                Text("⚠ $busyText", color = Color(0xFFD6B25E), fontSize = 12.sp)
+                Text("⚠ $busyText", color = DesignColors.AccentAmber, fontSize = DesignType.CAPTION_SP.sp)
             }
         }
         // Пустое состояние «как у них» («No background tasks»).
-        if (agents.isEmpty()) Text("Нет фоновых задач", color = Color.Gray)
+        if (agents.isEmpty()) Text("Нет фоновых задач", color = DesignColors.TextSubtle, fontSize = DesignType.CAPTION_SP.sp)
         if (agents.isNotEmpty()) {
             // Честный заголовок исполнителей: категорий Teammates/Other sessions
             // у нас нет (сессионной модели нет) — ничего не выдумываем.
-            Text("Субагенты", color = Color(0xFFB0B0B0), fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+            Text(
+                "Субагенты",
+                color = DesignColors.TextPrimary,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = DesignType.SECTION_SP.sp
+            )
         }
         agents.forEach { agent ->
             var expanded by remember(agent.id) { mutableStateOf(false) }
-            Surface(color = Color(0xFF222222), shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
+            Surface(color = DesignColors.SurfaceHigh, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(agent.name, color = Color.White, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        agent.name,
+                        color = DesignColors.TextPrimary,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = DesignType.BODY_SP.sp
+                    )
                     Text(if (agent.isSettling && agent.status in setOf("failed", "cancelled")) "Завершение работы и сбор изменений"
                         else when (agent.status) {
                         "queued" -> "В очереди"; "running" -> "Выполняется"; "completed" -> "Завершено"
                         "failed" -> "Ошибка"; "cancelled" -> "Отменено"; else -> agent.status
-                    } + " • " + agent.model, color = Color(0xFF9E9E9E), fontSize = 12.sp)
+                    } + " • " + agent.model, color = DesignColors.TextSubtle, fontSize = DesignType.CAPTION_SP.sp)
                     // Режим рабочего каталога «как у них» («Running in the shared
                     // directory… consider worktree mode to isolate changes»).
                     state.hintFor(agent)?.let { hint ->
-                        Text(hint, color = Color(0xFF8A8A8A), fontSize = 10.sp)
+                        Text(hint, color = DesignColors.TextSubtle, fontSize = DesignType.MICRO_SP.sp)
                     }
-                    Text(agent.currentTask, color = Color(0xFFD0D0D0), maxLines = 3, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        agent.currentTask,
+                        color = DesignColors.TextSecondary,
+                        fontSize = DesignType.BODY_SP.sp,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis
+                    )
                     if (agent.changeReview.isNotBlank()) {
                         var showChanges by remember(agent.id) { mutableStateOf(false) }
                         TextButton(onClick = { showChanges = !showChanges }) {
-                            Text(if (showChanges) "Скрыть изменения" else "Просмотреть изменения")
+                            Text(
+                                if (showChanges) "Скрыть изменения" else "Просмотреть изменения",
+                                color = DesignColors.AccentBlue,
+                                fontSize = DesignType.BODY_SP.sp
+                            )
                         }
                         if (showChanges) CodeArtifactViewer(
                             code = agent.changeReview, language = "Изменения · ${agent.name}",
                             fileName = "changes.txt", onDismiss = { showChanges = false }, onSave = null)
                     }
                     if (agent.stepLogs.isNotEmpty()) {
-                        TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Скрыть результат" else "Показать результат") }
+                        TextButton(onClick = { expanded = !expanded }) {
+                            Text(
+                                if (expanded) "Скрыть результат" else "Показать результат",
+                                color = DesignColors.AccentBlue,
+                                fontSize = DesignType.BODY_SP.sp
+                            )
+                        }
                         if (expanded) ChatGptMarkdownText(agent.stepLogs.joinToString("\n"))
                     }
                 }
             }
         }
-        if (running) Button(onClick = onCancelTask) { Text("Остановить работу") }
+        if (running) {
+            Button(
+                onClick = onCancelTask,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = DesignColors.AccentBlue,
+                    contentColor = DesignColors.TextPrimary
+                )
+            ) {
+                Text("Остановить работу", fontSize = DesignType.BODY_SP.sp)
+            }
+        }
 
     }
 }
@@ -1783,8 +1833,8 @@ fun MultiAgentSwarmSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = Color(0xFF141414),
-        contentColor = Color.White
+        containerColor = DesignColors.Surface,
+        contentColor = DesignColors.TextPrimary
     ) {
         Column(
             modifier = Modifier
@@ -2837,8 +2887,8 @@ fun AiPermissionsSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = Color(0xFF111319),
-        contentColor = Color.White
+        containerColor = DesignColors.Surface,
+        contentColor = DesignColors.TextPrimary
     ) {
         Column(
             modifier = Modifier
@@ -2856,20 +2906,20 @@ fun AiPermissionsSheet(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Разрешения ИИ (AI Permissions 2.0)",
-                        color = Color.White,
-                        fontSize = 17.5.sp,
-                        fontWeight = FontWeight.Bold
+                        color = DesignColors.TextPrimary,
+                        fontSize = DesignType.TITLE_SP.sp,
+                        fontWeight = FontWeight.SemiBold
                     )
                     Text(
                         text = "Управление политиками Antigravity 2.0 для смартфона, песочницы и ПК",
-                        color = Color(0xFF9CA3AF),
-                        fontSize = 11.5.sp,
+                        color = DesignColors.TextSecondary,
+                        fontSize = DesignType.CAPTION_SP.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
                 IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = Color(0xFF9CA3AF))
+                    Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = DesignColors.TextSecondary)
                 }
             }
 
@@ -2904,9 +2954,9 @@ fun AiPermissionsSheet(
 
             Text(
                 text = "Глобальные политики Antigravity 2.0",
-                color = Color(0xFF93C5FD),
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold
+                color = DesignColors.TextPrimary,
+                fontSize = DesignType.SECTION_SP.sp,
+                fontWeight = FontWeight.SemiBold
             )
             Spacer(modifier = Modifier.height(6.dp))
 
@@ -2933,9 +2983,9 @@ fun AiPermissionsSheet(
 
             Text(
                 text = "Разрешения ИИ на смартфоне (Android)",
-                color = Color(0xFF4ADE80),
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold
+                color = DesignColors.TextPrimary,
+                fontSize = DesignType.SECTION_SP.sp,
+                fontWeight = FontWeight.SemiBold
             )
             Spacer(modifier = Modifier.height(6.dp))
 
@@ -2974,9 +3024,9 @@ fun AiPermissionsSheet(
 
             Text(
                 text = "Разрешения ИИ на рабочей станции (Мост ПК)",
-                color = Color(0xFFC084FC),
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold
+                color = DesignColors.TextPrimary,
+                fontSize = DesignType.SECTION_SP.sp,
+                fontWeight = FontWeight.SemiBold
             )
             Spacer(modifier = Modifier.height(6.dp))
 
@@ -3011,18 +3061,22 @@ private fun PresetChip(
 ) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(if (selected) Color(0xFF2563EB) else Color(0xFF1B1E28))
-            .border(1.dp, if (selected) Color(0xFF60A5FA) else Color(0xFF2D3242), RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (selected) DesignColors.AccentBlue else DesignColors.SurfaceHigh)
+            .border(
+                1.dp,
+                if (selected) DesignColors.AccentBlue else DesignColors.Border,
+                RoundedCornerShape(12.dp)
+            )
             .clickable { onClick() }
             .padding(vertical = 9.dp, horizontal = 6.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = title,
-            color = if (selected) Color.White else Color(0xFFD1D5DB),
-            fontSize = 11.5.sp,
-            fontWeight = FontWeight.Bold,
+            color = if (selected) DesignColors.TextPrimary else DesignColors.TextSecondary,
+            fontSize = DesignType.CAPTION_SP.sp,
+            fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
@@ -3041,24 +3095,24 @@ private fun PermissionToggleRow(
             .fillMaxWidth()
             .padding(vertical = 4.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF181B24))
-            .border(1.dp, Color(0xFF262B38), RoundedCornerShape(12.dp))
+            .background(DesignColors.SurfaceHigh)
+            .border(1.dp, DesignColors.Border, RoundedCornerShape(12.dp))
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                color = Color.White,
-                fontSize = 13.sp,
+                color = DesignColors.TextPrimary,
+                fontSize = DesignType.BODY_SP.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = subtitle,
-                color = Color(0xFF9CA3AF),
-                fontSize = 11.sp,
+                color = DesignColors.TextSecondary,
+                fontSize = DesignType.CAPTION_SP.sp,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
@@ -3068,10 +3122,10 @@ private fun PermissionToggleRow(
             checked = checked,
             onCheckedChange = onCheckedChange,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = Color(0xFF10A37F),
-                uncheckedThumbColor = Color(0xFF9CA3AF),
-                uncheckedTrackColor = Color(0xFF2A2E3B)
+                checkedThumbColor = DesignColors.TextPrimary,
+                checkedTrackColor = DesignColors.AccentBlue,
+                uncheckedThumbColor = DesignColors.TextSecondary,
+                uncheckedTrackColor = DesignColors.Border
             )
         )
     }

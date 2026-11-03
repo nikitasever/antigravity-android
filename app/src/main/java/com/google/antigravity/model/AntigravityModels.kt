@@ -178,11 +178,15 @@ data class PcSkillItem(
 /**
  * Запись права инструмента MCP (ответ tool_permissions моста, «как у них»):
  * permission — allow/ask/deny; source — уровень правила (tool/server/policy).
+ * comment — комментарий пользователя к запрету («Deny with comment»); пустая
+ * строка означает «не записано» (мост не прислал комментарий — ничего не
+ * выдумывается).
  */
 data class McpToolPermissionEntry(
     val tool: String = "",
     val permission: String = "",
-    val source: String = ""
+    val source: String = "",
+    val comment: String = ""
 )
 
 /**
@@ -218,15 +222,29 @@ data class McpToolPermissionsState(
     fun onError(message: String): McpToolPermissionsState =
         copy(loading = false, error = message)
 
-    /** Успешная смена права одного инструмента (set_tool_permission). */
+    /**
+     * Успешная смена права одного инструмента (set_tool_permission).
+     * comment — комментарий к запрету («Deny with comment»); у allow/ask он не
+     * действует и не хранится, а у deny без комментария прежний очищается
+     * (повторный deny без комментария = «не записано»).
+     */
     fun onToolPermissionChanged(
         tool: String,
         permission: String,
-        source: String = "tool"
+        source: String = "tool",
+        comment: String = ""
     ): McpToolPermissionsState =
         copy(
             tools = tools.map {
-                if (it.tool == tool) it.copy(permission = permission, source = source) else it
+                if (it.tool == tool) {
+                    it.copy(
+                        permission = permission,
+                        source = source,
+                        comment = toolPermissionComment(permission, comment)
+                    )
+                } else {
+                    it
+                }
             },
             error = ""
         )
@@ -234,16 +252,23 @@ data class McpToolPermissionsState(
     /**
      * Успешная смена прав всех инструментов (set_all_tools_permissions) —
      * уровень «все инструменты сервера». Инструменты с собственным правом
-     * (source = tool) сохраняют его: приоритет per-tool выше.
+     * (source = tool) сохраняют его: приоритет per-tool выше. comment
+     * действует только при deny («Deny with comment»), у остальных прав
+     * очищается вместе с правом.
      */
     fun onAllToolsPermissionChanged(
         permission: String,
-        source: String = "server"
+        source: String = "server",
+        comment: String = ""
     ): McpToolPermissionsState =
         copy(
             defaultPermission = permission,
             tools = tools.map {
-                if (it.source == "tool") it else it.copy(permission = permission, source = source)
+                if (it.source == "tool") it else it.copy(
+                    permission = permission,
+                    source = source,
+                    comment = toolPermissionComment(permission, comment)
+                )
             },
             error = ""
         )
@@ -466,6 +491,62 @@ fun describeToolPermission(permission: String): String = when (permission.trim()
     "deny" -> "Запретить"
     "" -> "не записано"
     else -> permission
+}
+
+/**
+ * Метка права с учётом комментария к запрету («Deny with comment»): у deny с
+ * записанным комментарием — честная подпись «Запретить с комментарием»; у
+ * остальных прав комментарий не приписывается (он действует только при deny).
+ */
+fun describeToolPermission(permission: String, comment: String): String =
+    if (permission.trim().lowercase() == "deny" && comment.isNotBlank()) {
+        "Запретить с комментарием"
+    } else {
+        describeToolPermission(permission)
+    }
+
+/**
+ * Подпись комментария к запрету («Deny with comment»): записанный текст — как
+ * есть; пустой/незаписанный — «не записано», ничего не выдумывается.
+ */
+fun describeDenyComment(comment: String): String =
+    comment.trim().ifBlank { "не записано" }
+
+/**
+ * Комментарий, сохраняемый в строке права («Deny with comment»): действует
+ * только при deny — у allow/ask он не применяется и не хранится. Пустой
+ * комментарий у deny допустим и означает «не записано» (повторный deny без
+ * комментария очищает прежний).
+ */
+fun toolPermissionComment(permission: String, comment: String): String =
+    if (permission.trim().lowercase() == "deny") comment else ""
+
+/**
+ * Комментарий для запроса мосту («Deny with comment»): отправляется только с
+ * deny и только непустым (контракт set_tool_permission /
+ * set_all_tools_permissions); null — поле comment не отправляется вовсе
+ * (в том числе повторный deny без комментария — мост очищает прежний).
+ */
+fun denyCommentForRequest(permission: String, comment: String): String? =
+    if (permission.trim().lowercase() == "deny" && comment.isNotBlank()) comment else null
+
+/**
+ * Состояние диалога «Запретить с комментарием» («Deny with comment»): цель
+ * запрета (инструмент либо «все инструменты») и текст комментария. Подпись
+ * кнопки подтверждения честно отражает действие: пустой комментарий —
+ * «просто Запретить», непустой — «Запретить с комментарием».
+ */
+data class DenyCommentDialogState(
+    /** Инструмент-цель; пусто при цели «все инструменты». */
+    val tool: String = "",
+    /** true — запрет для всех инструментов сервера (set_all_tools_permissions). */
+    val isAllTools: Boolean = false,
+    /** Текст комментария пользователя (может быть пустым — это допустимо). */
+    val comment: String = ""
+) {
+    /** Подпись кнопки подтверждения диалога. */
+    val confirmLabel: String
+        get() = if (comment.isBlank()) "Запретить" else "Запретить с комментарием"
 }
 
 /**

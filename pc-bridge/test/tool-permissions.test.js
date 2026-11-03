@@ -158,3 +158,40 @@ test('скоупы: checkToolCall сообщает источник скоупа
     assert.equal(denied.allow, false);
     assert.match(denied.error, /скоуп: session/);
 });
+
+// --- «Deny with comment» (референс Claude: отказ с комментарием пользователя) ---
+
+test('deny with comment: комментарий сохраняется и показывается в отказе', t => {
+    const { file, tp } = tmpConfig(t, { toolExecutionPolicy: 'always-proceed' });
+    const saved = tp.setToolPermission('srv', 'danger', 'deny', { comment: 'только чтение в этом проекте' });
+    assert.equal(saved.ok, true);
+    assert.equal(saved.comment, 'только чтение в этом проекте');
+    const denied = tp.checkToolCall('srv', 'danger', {});
+    assert.equal(denied.allow, false);
+    assert.match(denied.error, /Комментарий пользователя: «только чтение в этом проекте»/);
+    const back = JSON.parse(fs.readFileSync(file, 'utf8'));
+    assert.equal(back.toolPermissions.srv.comments.danger, 'только чтение в этом проекте', 'комментарий в permissions-config.json');
+});
+
+test('deny with comment: без комментария — «не записано», отказ без выдуманного пояснения', t => {
+    const { tp } = tmpConfig(t, { toolExecutionPolicy: 'always-proceed' });
+    tp.setToolPermission('srv', 'danger', 'deny');
+    assert.equal(tp.getDenyComment('srv', 'danger', {}), '', 'комментария нет — пусто, не выдумываем');
+    const denied = tp.checkToolCall('srv', 'danger', {});
+    assert.doesNotMatch(denied.error, /Комментарий пользователя/);
+});
+
+test('deny with comment: повторный deny без комментария очищает старый', t => {
+    const { tp } = tmpConfig(t, { toolExecutionPolicy: 'always-proceed' });
+    tp.setToolPermission('srv', 'danger', 'deny', { comment: 'старое пояснение' });
+    tp.setToolPermission('srv', 'danger', 'deny');
+    assert.equal(tp.getDenyComment('srv', 'danger', {}), '');
+});
+
+test('deny with comment: работает в session-скоупе', t => {
+    const { tp } = tmpConfig(t, { toolExecutionPolicy: 'always-proceed' });
+    tp.setToolPermission('srv', 'tool1', 'deny', { scope: 'session', scopeId: 'conv-1', comment: 'в этой сессии нельзя' });
+    const denied = tp.checkToolCall('srv', 'tool1', { sessionId: 'conv-1' });
+    assert.match(denied.error, /Комментарий пользователя: «в этой сессии нельзя»/);
+    assert.equal(tp.getDenyComment('srv', 'tool1', { sessionId: 'other' }), '', 'для другой сессии комментария нет');
+});
