@@ -5,6 +5,7 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -17,6 +18,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -54,14 +56,17 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.activity.compose.BackHandler
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
@@ -77,6 +82,7 @@ import com.google.antigravity.model.VoiceSessionStatus
 import com.google.antigravity.model.VoiceTransportMode
 import com.google.antigravity.model.VoiceVisualizerStyle
 import com.google.antigravity.voice.RealtimeVoiceEngine
+import com.google.antigravity.ui.design.DesignColors
 import java.util.Locale
 import kotlin.math.cos
 import kotlin.math.sin
@@ -98,7 +104,9 @@ fun OrbitVoiceOverlay(
     textDraft: String = "",
     onTextDraftChange: (String) -> Unit = {},
     onSendText: (String) -> Unit = {},
-    onAddAttachment: () -> Unit = {}
+    onAddAttachment: () -> Unit = {},
+    voiceLabel: String = "Системный",
+    onOpenVoiceSettings: () -> Unit = {}
 ) {
     val isCallActive by voiceEngine.isCallActive.collectAsState()
     val isExpanded by voiceEngine.isOverlayExpanded.collectAsState()
@@ -111,6 +119,8 @@ fun OrbitVoiceOverlay(
 
     var showCaptions by rememberSaveable { mutableStateOf(false) }
     var optionsOpen by remember { mutableStateOf(false) }
+    var sheetTopPx by remember { mutableStateOf<Float?>(null) }
+    var contentTopPx by remember { mutableStateOf(0f) }
     var shaderFailed by remember { mutableStateOf(false) }
     var shaderReady by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -118,6 +128,26 @@ fun OrbitVoiceOverlay(
         context.getSystemService(android.app.ActivityManager::class.java)
             ?.deviceConfigurationInfo?.reqGlEsVersion?.let { it >= 0x30000 } == true
     }
+    LaunchedEffect(isCallActive, isExpanded) {
+        if (!isCallActive || !isExpanded) {
+            optionsOpen = false
+            sheetTopPx = null
+            shaderReady = false
+        }
+        if (!isCallActive) shaderFailed = false
+    }
+    BackHandler(enabled = isCallActive && isExpanded && !optionsOpen) {
+        voiceEngine.setOverlayExpanded(false)
+    }
+    if (optionsOpen && isCallActive && isExpanded) VoiceConversationSettingsSheet(
+        voiceLabel = voiceLabel,
+        onOpenVoiceSettings = { optionsOpen = false; onOpenVoiceSettings() },
+        showCaptions = showCaptions,
+        onCaptionsChange = { showCaptions = it },
+        onCycleVisualizerStyle = onCycleVisualizerStyle,
+        onDismiss = { optionsOpen = false; sheetTopPx = null },
+        onSheetTopChanged = { sheetTopPx = it }
+    )
     LaunchedEffect(isCallActive, isExpanded, visualizerStyle, shaderReady) {
         if (isCallActive && isExpanded && supportsGles3 &&
             visualizerStyle == VoiceVisualizerStyle.ORBIT_ROSETTE && !shaderReady) {
@@ -137,16 +167,23 @@ fun OrbitVoiceOverlay(
             label = "smooth_audio"
         )
 
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color(0xFF000000))
                 .systemBarsPadding()
                 .imePadding()
                 .padding(horizontal = 16.dp, vertical = 12.dp)
+                .onGloballyPositioned { contentTopPx = it.boundsInWindow().top }
         ) {
+            val density = LocalDensity.current
+            val availableHeight = if (optionsOpen && sheetTopPx != null) {
+                with(density) { (sheetTopPx!! - contentTopPx).coerceAtLeast(0f).toDp() }
+                    .coerceIn(0.dp, maxHeight)
+            } else maxHeight
+            val voiceHeight by animateDpAsState(availableHeight, tween(220), label = "voiceAboveSettings")
             Column(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxWidth().height(voiceHeight),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
@@ -154,6 +191,7 @@ fun OrbitVoiceOverlay(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .alpha(if (optionsOpen) 0f else 1f)
                         .padding(top = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
@@ -161,9 +199,9 @@ fun OrbitVoiceOverlay(
                     Box(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier
-                            .size(44.dp)
+                            .size(48.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF1A1A1A))
+                            .background(Color(0xFF303030))
                             .clickable { voiceEngine.setOverlayExpanded(false) }
                     ) {
                         Icon(
@@ -174,15 +212,9 @@ fun OrbitVoiceOverlay(
                         )
                     }
                     Box {
-                        IconButton(onClick = { optionsOpen = true }) {
+                        IconButton(onClick = { optionsOpen = true }, modifier = Modifier.size(48.dp)
+                            .clip(CircleShape).background(Color(0xFF303030))) {
                             Icon(Icons.Default.Tune, "Настройки разговора", tint = Color.White)
-                        }
-                        DropdownMenu(expanded = optionsOpen, onDismissRequest = { optionsOpen = false },
-                            containerColor = Color(0xFF303030)) {
-                            DropdownMenuItem(text = { Text(if (showCaptions) "Скрыть субтитры" else "Показать субтитры") },
-                                onClick = { showCaptions = !showCaptions; optionsOpen = false })
-                            DropdownMenuItem(text = { Text("Изменить визуализацию") },
-                                onClick = { onCycleVisualizerStyle(); optionsOpen = false })
                         }
                     }
                 }
@@ -196,7 +228,7 @@ fun OrbitVoiceOverlay(
                     Box(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier
-                            .widthIn(max = 300.dp).fillMaxWidth().aspectRatio(1f)
+                            .widthIn(max = 330.dp).fillMaxWidth().aspectRatio(1f)
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null
@@ -218,8 +250,12 @@ fun OrbitVoiceOverlay(
                         if (supportsGles3 && !shaderFailed && visualizerStyle == VoiceVisualizerStyle.ORBIT_ROSETTE) {
                             ChatGptRealOpenGlOrbView(status, visualizerStyle, smoothAudio, spectrumBands,
                                 modifier = Modifier.fillMaxSize(), onRendererReady = {
-                                    shaderReady = it
-                                    shaderFailed = !it
+                                    // The exit animation still owns its surface briefly.
+                                    // A warm-up callback must not undo the collapse reset.
+                                    if (isCallActive && isExpanded) {
+                                        shaderReady = it
+                                        shaderFailed = !it
+                                    }
                                 })
                         }
                     }
@@ -237,7 +273,7 @@ fun OrbitVoiceOverlay(
                         modifier = Modifier.padding(top = 16.dp))
                 }
 
-                Row(Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                Row(Modifier.fillMaxWidth().alpha(if (optionsOpen) 0f else 1f).padding(bottom = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.Bottom) {
                     Surface(color = Color(0xFF303030), shape = RoundedCornerShape(30.dp),
@@ -298,12 +334,12 @@ fun FloatingVoiceCallPill(
             .padding(horizontal = 16.dp, vertical = 6.dp)
             .clickable { voiceEngine.setOverlayExpanded(true) },
         shape = RoundedCornerShape(26.dp),
-        color = Color(0xFF1E1E1E)
+        color = DesignColors.SurfaceHigh
     ) {
         Row(
             modifier = Modifier
-                .border(1.dp, Color(0xFF2E2E2E), RoundedCornerShape(26.dp))
-                .padding(horizontal = 16.dp, vertical = 10.dp),
+                .border(1.dp, DesignColors.Border, RoundedCornerShape(26.dp))
+                .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -315,30 +351,30 @@ fun FloatingVoiceCallPill(
                     modifier = Modifier
                         .size(10.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF3B82F6))
+                        .background(DesignColors.AccentBlue)
                 )
                 Spacer(modifier = Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                Text("Голосовой разговор · ${formatDuration(durationSec)}", color = DesignColors.TextPrimary,
+                    fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
-                    text = "Голосовой режим • ${formatDuration(durationSec)} • ${
+                    text =
                         when (status) {
                             VoiceSessionStatus.AI_SPEAKING -> "Говорит"
-                            VoiceSessionStatus.THINKING -> "Думает…"
-                            VoiceSessionStatus.MUTED -> "Выкл. микр."
-                            VoiceSessionStatus.RECONNECTING -> "Переподключение…"
-                            else -> "Слушает…"
-                        }
-                    }",
-                    color = Color.White,
+                            else -> status.labelRu
+                        },
+                    color = DesignColors.TextSecondary,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                }
             }
 
             IconButton(
                 onClick = onEndCall,
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier.size(48.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,

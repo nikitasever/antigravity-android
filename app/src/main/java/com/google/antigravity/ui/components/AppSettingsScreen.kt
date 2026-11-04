@@ -54,9 +54,10 @@ fun AppSettingsScreen(
     googleEmail: String, pcInstanceName: String,
     onUpdate: ((AntigravitySettings) -> AntigravitySettings) -> Unit,
     onOpenGoogleWeb: () -> Unit, onSignOut: () -> Unit, onBack: () -> Unit,
-    onOpenPermissions: () -> Unit, onOpenDrawer: () -> Unit = onBack
+    onOpenPermissions: () -> Unit, onOpenDrawer: () -> Unit = onBack,
+    initialPage: String = "Настройки"
 ) {
-    var page by rememberSaveable { mutableStateOf("Настройки") }
+    var page by rememberSaveable(initialPage) { mutableStateOf(initialPage) }
     var search by rememberSaveable { mutableStateOf("") }
     var searchVisible by rememberSaveable { mutableStateOf(false) }
     val root = page == "Настройки"

@@ -63,7 +63,15 @@ async function fixture(t, { redirectUri = REDIRECT_URI } = {}) {
     });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     origin = `http://127.0.0.1:${server.address().port}`;
-    t.after(() => { server.closeAllConnections(); server.close(); fs.rmSync(dir, { recursive: true, force: true }); });
+    t.after(async () => {
+        server.closeAllConnections();
+        await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+        assert.equal(path.dirname(path.resolve(dir)), path.resolve(os.tmpdir()));
+        assert.ok(path.basename(dir).startsWith('ag-oauth-'));
+        // Windows can briefly retain directory entries after closing file handles.
+        // Retry transient cleanup errors, but still fail if the directory cannot be removed.
+        await fs.promises.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    });
     const vault = new CredentialVault(dir);
     const oauth = new McpOAuth({ vault, allowLoopback: true, now: () => now });
     const cfg = { url: origin + '/mcp' };

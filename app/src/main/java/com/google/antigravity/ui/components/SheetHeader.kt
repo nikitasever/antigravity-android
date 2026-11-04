@@ -18,7 +18,8 @@ import com.google.antigravity.ui.design.DesignColors
 
 /** Symmetric title space keeps the heading centered independently of the close button. */
 @Composable
-fun SheetHeader(title: String, onClose: () -> Unit, modifier: Modifier = Modifier) {
+fun SheetHeader(title: String, onClose: () -> Unit, modifier: Modifier = Modifier,
+    trailingContent: @Composable (() -> Unit)? = null) {
     Box(modifier.fillMaxWidth().heightIn(min = 56.dp), contentAlignment = Alignment.Center) {
         Text(title, color = DesignColors.TextPrimary, fontSize = 18.sp,
             fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
@@ -27,5 +28,6 @@ fun SheetHeader(title: String, onClose: () -> Unit, modifier: Modifier = Modifie
         IconButton(onClick = onClose, modifier = Modifier.align(Alignment.CenterStart)) {
             Icon(Icons.Default.Close, "Закрыть", tint = DesignColors.TextPrimary)
         }
+        if (trailingContent != null) Box(Modifier.align(Alignment.CenterEnd)) { trailingContent() }
     }
 }

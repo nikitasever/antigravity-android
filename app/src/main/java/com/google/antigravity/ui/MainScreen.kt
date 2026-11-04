@@ -117,6 +117,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.LaunchedEffect
@@ -238,6 +239,7 @@ fun MainScreen(
     val pendingAttachments by viewModel.pendingAttachments.collectAsState()
     val pcBridgeStatus by viewModel.pcBridgeStatus.collectAsState()
     val drawerSection by viewModel.drawerSection.collectAsState()
+    var settingsEntryPage by rememberSaveable { mutableStateOf("Настройки") }
     val messages by viewModel.messages.collectAsState()
     val voiceOverlayActive by viewModel.voiceEngine.isCallActive.collectAsState()
     val voiceOverlayExpanded by viewModel.voiceEngine.isOverlayExpanded.collectAsState()
@@ -462,6 +464,7 @@ fun MainScreen(
                         scope.launch { drawerState.close() }
                     },
                     onProfileClick = {
+                        settingsEntryPage = "Настройки"
                         viewModel.selectDrawerSection(DrawerSection.SETTINGS)
                         scope.launch { drawerState.close() }
                     },
@@ -693,6 +696,7 @@ fun MainScreen(
 
                     DrawerSection.SETTINGS -> {
                         SettingsModalScreen(
+                            initialPage = settingsEntryPage,
                             viewModel = viewModel,
                             settings = settings,
                             googleEmail = googleProfile.email,
@@ -965,6 +969,16 @@ fun MainScreen(
         val voiceDraft by viewModel.composerDraft.collectAsState()
         OrbitVoiceOverlay(
             voiceEngine = viewModel.voiceEngine,
+            voiceLabel = when (settings.voiceProvider) {
+                VoiceProvider.ON_DEVICE -> "Системный"
+                VoiceProvider.NEURAL_BRIDGE -> "Через ПК"
+                else -> settings.voiceName
+            },
+            onOpenVoiceSettings = {
+                viewModel.voiceEngine.setOverlayExpanded(false)
+                settingsEntryPage = "Голос"
+                viewModel.selectDrawerSection(DrawerSection.SETTINGS)
+            },
             visualizerStyle = settings.voiceVisualizerStyle,
             transportMode = settings.voiceTransportMode,
             onCycleVisualizerStyle = { viewModel.cycleVisualizerStyle() },
@@ -3068,11 +3082,12 @@ private fun SettingsModalScreen(
     onOpenGoogleWeb: () -> Unit,
     onSignOut: () -> Unit,
     onBack: () -> Unit,
-    onOpenDrawer: () -> Unit
+    onOpenDrawer: () -> Unit,
+    initialPage: String = "Настройки"
 ) {
     com.google.antigravity.ui.components.AppSettingsScreen(
         viewModel, settings, googleEmail, pcInstanceName, onUpdate,
-        onOpenGoogleWeb, onSignOut, onBack, onOpenPermissions, onOpenDrawer
+        onOpenGoogleWeb, onSignOut, onBack, onOpenPermissions, onOpenDrawer, initialPage
     )
 }
 

@@ -9,6 +9,7 @@ import android.opengl.GLUtils
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -28,7 +29,7 @@ import kotlin.math.max
 import kotlin.math.sin
 
 /**
- * Настоящий OpenGL ES 3.0 рендерер голосового шара из оригинального APK OpenAI ChatGPT 1.2026.293:
+ * Android-обвязка для GLES 3.0 шейдеров из APK OpenAI ChatGPT 1.2026.293.
  *
  * Выполняет на GPU двухпроходный шейдерный конвейер OpenAI:
  * - Pass 1 (FBO 512x512): `res/raw/voice_vert.fsh` + `res/raw/voice_prepass.fsh` + `res/drawable-nodpi/noise_watercolor.webp`
@@ -46,8 +47,12 @@ fun ChatGptRealOpenGlOrbView(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val rendererAlive = remember { java.util.concurrent.atomic.AtomicBoolean(true) }
+    val readyCallback = rememberUpdatedState(onRendererReady)
     val renderer = remember { ChatGptVoiceGlRenderer(context.applicationContext) { ready ->
-        android.os.Handler(android.os.Looper.getMainLooper()).post { onRendererReady(ready) }
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            if (rendererAlive.get()) readyCallback.value(ready)
+        }
     } }
 
     renderer.updateLiveState(
@@ -71,6 +76,7 @@ fun ChatGptRealOpenGlOrbView(
     }
 
     DisposableEffect(glView, lifecycleOwner) {
+        rendererAlive.set(true)
         glView.onResume()
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) glView.onResume()
@@ -78,6 +84,7 @@ fun ChatGptRealOpenGlOrbView(
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
+            rendererAlive.set(false)
             lifecycleOwner.lifecycle.removeObserver(observer)
             glView.onPause()
         }
@@ -95,7 +102,7 @@ fun ChatGptRealOpenGlOrbView(
     )
 }
 
-private class ChatGptVoiceGlRenderer(
+internal class ChatGptVoiceGlRenderer(
     private val context: Context,
     private val onReady: (Boolean) -> Unit
 ) : GLSurfaceView.Renderer {
@@ -154,6 +161,27 @@ private class ChatGptVoiceGlRenderer(
     private var noiseWatercolorTex: Int = 0
     private var flowmapThinkingTex: Int = 0
 
+    /** Small readback for the device regression test; never runs in the animation loop. */
+    internal fun inspectFrame(): String {
+        fun pixel(): List<Int> {
+            val rgba = java.nio.ByteBuffer.allocateDirect(4)
+            GLES30.glReadPixels(surfaceWidth / 2, surfaceHeight / 2, 1, 1,
+                GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, rgba)
+            return (0..3).map { rgba.get(it).toInt() and 255 }
+        }
+        GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
+        val screen = pixel()
+        GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, prepassFbo)
+        val framebuffer = GLES30.glCheckFramebufferStatus(GLES30.GL_FRAMEBUFFER)
+        val prepass = pixel()
+        GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
+        val enabled = IntArray(1)
+        if (prepassProgram != 0) GLES30.glGetUniformiv(prepassProgram,
+            GLES30.glGetUniformLocation(prepassProgram, "isNewBloop"), enabled, 0)
+        return "screen=$screen prepass=$prepass framebuffer=$framebuffer programs=$prepassProgram/$mainProgram " +
+            "vao=$vaoId newBloop=${enabled[0]} error=${GLES30.glGetError()}"
+    }
+
     fun updateLiveState(
         status: VoiceSessionStatus,
         style: VoiceVisualizerStyle,
@@ -180,7 +208,14 @@ private class ChatGptVoiceGlRenderer(
         vaoId = vaos[0]
         GLES30.glBindVertexArray(vaoId)
 
-        val vertSrc = readRawShader(R.raw.voice_vert)
+        // SwiftShader 4 fails to rasterize the shipped constant-array vertex lookup
+        // even with a solid fragment shader (no GL error). The same full-screen
+        // triangle expressed arithmetically works. Keep UV orientation and resources.
+        val vertSrc = readRawShader(R.raw.voice_vert).replace(
+            "out_position = blitFullscreenTrianglePositions[gl_VertexID];",
+            "int vertex = gl_VertexID % 3;\n" +
+                "out_position = vec4(vertex == 1 ? 3.0 : -1.0, vertex == 2 ? 3.0 : -1.0, 0.0, 1.0);"
+        )
         val prepassFragSrc = readRawShader(R.raw.voice_prepass)
         // The shipped shader calls smoothstep(0, 0, dist) while not thinking.
         // That is undefined in GLSL and can produce invalid colors on drivers. Keep
@@ -191,7 +226,10 @@ private class ChatGptVoiceGlRenderer(
         )
         val orbitFragSrc = readRawShader(R.raw.orbit_animation_frag)
 
-        prepassProgram = buildShaderProgram(vertSrc, prepassFragSrc)
+        // FBO textures already have GL's bottom-left origin. Flipping twice made
+        // the blue hemisphere appear below the pale one in the final screen pass.
+        val fboVertexSrc = vertSrc.replace("out_uv.y = 1.0 - out_uv.y;", "")
+        prepassProgram = buildShaderProgram(fboVertexSrc, prepassFragSrc)
         mainProgram = buildShaderProgram(vertSrc, mainFragSrc)
         orbit3dProgram = buildShaderProgram(vertSrc, orbitFragSrc)
 
@@ -263,22 +301,22 @@ private class ChatGptVoiceGlRenderer(
 
         val useNewBloop = if (currentStyle == VoiceVisualizerStyle.ORBIT_ROSETTE) 1 else 0
 
-        // Палитра оригинального голубо-белого облачного шара ChatGPT Advanced Voice
-        val mainR = 0.89f
-        val mainG = 0.96f
-        val mainB = 1.00f
+        // APK fw9.e defaults; vml0 binds a/b/c/d to Main/Low/Mid/High.
+        val mainR = 220f / 255f
+        val mainG = 247f / 255f
+        val mainB = 1f
 
-        val lowR = 0.01f
-        val lowG = 0.69f
-        val lowB = 1.00f
+        val lowR = 1f / 255f
+        val lowG = 129f / 255f
+        val lowB = 254f / 255f
 
-        val midR = 0.27f
-        val midG = 0.47f
-        val midB = 1.00f
+        val midR = 164f / 255f
+        val midG = 239f / 255f
+        val midB = 1f
 
         val highR = 1.00f
-        val highG = 1.00f
-        val highB = 1.00f
+        val highG = 253f / 255f
+        val highB = 239f / 255f
 
         // =========================================================================
         // PASS 1: `voice_prepass.fsh` -> рендеринг акварельного FBM/Perlin облака в FBO 512x512
@@ -310,7 +348,7 @@ private class ChatGptVoiceGlRenderer(
             GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, noiseWatercolorTex)
             setUniform1i(prepassProgram, "noiseTexture", 0)
 
-            GLES30.glDrawArrays(GLES30.GL_TRIANGLES, 0, 6)
+            GLES30.glDrawArrays(GLES30.GL_TRIANGLES, 0, 3)
         }
 
         // =========================================================================
@@ -368,7 +406,7 @@ private class ChatGptVoiceGlRenderer(
             GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, flowmapThinkingTex)
             setUniform1i(mainProgram, "flowmapThinking", 1)
 
-            GLES30.glDrawArrays(GLES30.GL_TRIANGLES, 0, 6)
+            GLES30.glDrawArrays(GLES30.GL_TRIANGLES, 0, 3)
         }
         // Linked programs alone do not prove that the surface actually draws an orb.
         // Probe once after the initial fade, and let Compose keep its fallback until then.
@@ -406,7 +444,7 @@ private class ChatGptVoiceGlRenderer(
         setUniform3f(orbit3dProgram, "rotationX", cos(nowSec), 0f, sin(nowSec))
         setUniform3f(orbit3dProgram, "rotationY", 0f, 1f, 0f)
 
-        GLES30.glDrawArrays(GLES30.GL_TRIANGLES, 0, 6)
+        GLES30.glDrawArrays(GLES30.GL_TRIANGLES, 0, 3)
     }
 
     private fun setupPrepassFramebuffer() {

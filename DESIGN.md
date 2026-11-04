@@ -234,12 +234,21 @@ literal sans text, 16/24 sp, with a left gutter and a right-aligned neutral bubb
 The response-font preference applies to answers and reasoning summaries.
 
 OrbitVoiceOverlay follows the supplied ChatGPT 091536 screenshot: black canvas,
-responsive renderer canvas up to 300 dp, compact lower text composer, mute and white close
-button. Captions are opt-in through the options menu; transient reconnect failures
+responsive renderer canvas up to 330 dp, compact lower text composer, mute and white close
+button. VoiceConversationSettingsSheet owns the grouped voice/language/audio panel;
+captions and visualization choices are secondary controls under More. The measured
+sheet boundary constrains the voice column so the sphere stays above the panel.
+SheetHeader owns the optional trailing slot without moving the centered title.
+Captions are opt-in; transient reconnect failures
 remain visible. Text, attachment and mute buttons invoke existing real handlers.
 The default GLES3 visualization uses the supplied voice_prepass/voice_main assets;
 the existing Canvas is a fallback after shader failure or without GLES3 support.
 Renderer frame requests are limited to about 30 fps while the lifecycle is resumed.
+Disposed surfaces cannot deliver readiness callbacks into a later call. A device
+EGL test exercises both shader passes and checks visible center/transparent exterior.
+The vertex loader computes equivalent fullscreen coordinates to avoid the reproduced
+SwiftShader constant-array failure; raw APK resources remain intact. Shader colors
+use fw9.e defaults with the Main/Low/Mid/High mapping established in vml0.java.
 See REFERENCE_CONVERSATION_RECHECK.md for item-level evidence and limitations.
 
 ReferencePageHeader owns centered 22 sp serif titles for Settings, Projects and

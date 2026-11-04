@@ -996,23 +996,23 @@ enum class VoiceTransportMode(val title: String, val subtitle: String) {
 
 enum class VoiceProvider(val titleRu: String, val subtitleRu: String, val requiresApiKey: Boolean) {
     NEURAL_BRIDGE(
-        "Нейроголос без ключа (Edge Neural)",
-        "Живой русский голос Светлана / Дмитрий через мост ПК, задержка < 1 с",
+        "Голос через ПК",
+        "Озвучка через PC-Bridge; требуется подключение к ПК",
         false
     ),
     GEMINI_LIVE(
-        "Gemini Live (Прямой аудио-поток по ключу)",
-        "Двусторонний голосовой диалог с перебиванием и доступом к файлам телефона/ПК",
+        "Gemini Live",
+        "Двусторонний голосовой разговор через Gemini API",
         true
     ),
     GEMINI_TTS(
-        "Gemini 2.5 Flash TTS (По ключу)",
-        "Студийная озвучка ответов голосами Aoede, Kore, Puck, Charon, Fenrir",
+        "Gemini TTS",
+        "Озвучка ответов через Gemini API",
         true
     ),
     ON_DEVICE(
-        "Системный голос Android (Офлайн)",
-        "Локальный синтез речи Google с выбором нейросетевого пакета *-network",
+        "Голос Android",
+        "Озвучка средствами устройства",
         false
     )
 }
