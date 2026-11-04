@@ -205,3 +205,25 @@ the current continuation in the same chat; previous/next restores its prompt and
 reply. ChatMessageVersions owns the pure transition logic and ChatSessionStore
 persists the alternatives. Backend execution contexts and follow-up queues are
 separated by selected alternative. Navigation is blocked during streaming.
+
+## Populated conversation and voice verification — 2026-11-04
+
+Empty-home screenshots do not validate a conversation. ConversationHeader has an
+explicit populated variant: title, execution location/model, new chat and menu.
+The empty variant retains Chat/Work. ConversationActivity owns compact reasoning
+and tool rows and their Summary sheet; approval actions remain visible outside it.
+No synthetic reasoning steps, unconditional green success cards or per-token
+vibration. ProviderReasoning owns Gemini thought/answer separation and cumulative
+phone summaries. ChatSessionStore persists the actual supplied summary.
+
+MarkdownRenderer owns answer typography: normal prose 18/28 sp, code 13/20 sp,
+headings 18–25 sp, scaled by the existing reading preference. User prompts are
+literal sans text, 16/24 sp, with a left gutter and a right-aligned neutral bubble.
+The response-font preference applies to answers and reasoning summaries.
+
+OrbitVoiceOverlay follows the supplied ChatGPT 091536 screenshot: black canvas,
+responsive sphere up to 256 dp, compact lower text composer, mute and white close
+button. Captions are opt-in through the options menu; transient reconnect failures
+remain visible. Text, attachment and mute buttons invoke existing real handlers.
+The current Canvas is an adaptation, not a claim of original shader equivalence.
+See REFERENCE_CONVERSATION_RECHECK.md for item-level evidence and limitations.

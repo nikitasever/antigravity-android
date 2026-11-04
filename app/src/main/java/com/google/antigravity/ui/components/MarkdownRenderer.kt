@@ -176,8 +176,8 @@ fun ChatGptMarkdownText(
                     Text(
                         text = codeAnnotated,
                         color = Color(0xFFE0E0E0),
-                        fontSize = (12 * textSize.scale).sp,
-                        lineHeight = (18 * textSize.scale).sp,
+                        fontSize = (13 * textSize.scale).sp,
+                        lineHeight = (20 * textSize.scale).sp,
                         fontFamily = ChatGptMenloFontFamily,
                         softWrap = true,
                         modifier = Modifier
@@ -193,8 +193,8 @@ fun ChatGptMarkdownText(
                     text = annotated,
                     style = TextStyle(
                         color = textColor,
-                        fontSize = (15 * textSize.scale).sp,
-                        lineHeight = (22 * textSize.scale).sp,
+                        fontSize = (18 * textSize.scale).sp,
+                        lineHeight = (28 * textSize.scale).sp,
                         fontFamily = if (responseFont == ResponseFont.SERIF) FontFamily.Serif else FontFamily.Default
                     ),
                     onUrlClick = { url ->
@@ -278,31 +278,31 @@ fun parseInlineMarkdown(text: String, baseColor: Color, fontScale: Float = 1f): 
             val trimmed = rawLine.trimStart()
             val lineToParse = when {
                 trimmed.startsWith("##### ") -> {
-                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = (14.5 * fontScale).sp, color = Color.White)) {
+                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = (18 * fontScale).sp, color = Color.White)) {
                         appendInlineFormatted(trimmed.removePrefix("##### "))
                     }
                     null
                 }
                 trimmed.startsWith("#### ") -> {
-                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = (15.5 * fontScale).sp, color = Color.White)) {
+                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = (19 * fontScale).sp, color = Color.White)) {
                         appendInlineFormatted(trimmed.removePrefix("#### "))
                     }
                     null
                 }
                 trimmed.startsWith("### ") -> {
-                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = (16 * fontScale).sp, color = Color.White)) {
+                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = (20 * fontScale).sp, color = Color.White)) {
                         appendInlineFormatted(trimmed.removePrefix("### "))
                     }
                     null
                 }
                 trimmed.startsWith("## ") -> {
-                    withStyle(SpanStyle(fontWeight = FontWeight.ExtraBold, fontSize = (17 * fontScale).sp, color = Color.White)) {
+                    withStyle(SpanStyle(fontWeight = FontWeight.ExtraBold, fontSize = (22 * fontScale).sp, color = Color.White)) {
                         appendInlineFormatted(trimmed.removePrefix("## "))
                     }
                     null
                 }
                 trimmed.startsWith("# ") -> {
-                    withStyle(SpanStyle(fontWeight = FontWeight.ExtraBold, fontSize = (18 * fontScale).sp, color = Color.White)) {
+                    withStyle(SpanStyle(fontWeight = FontWeight.ExtraBold, fontSize = (25 * fontScale).sp, color = Color.White)) {
                         appendInlineFormatted(trimmed.removePrefix("# "))
                     }
                     null

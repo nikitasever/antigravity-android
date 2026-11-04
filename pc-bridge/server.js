@@ -575,17 +575,11 @@ function ensureTranscriptUpdated(conversationId, cleanUserPrompt, aiReply, think
 
 function cleanRussianThinkingParagraphs(rawText) {
     if (!rawText || typeof rawText !== 'string') return '';
-    const cleaned = rawText
+    // Provider summaries may be short, bulleted or in any language. Filtering
+    // by Cyrillic character counts silently erased genuine reasoning events.
+    return rawText
         .replace(/<truncated\s+\d+\s+bytes>/gi, '...')
-        .split(/\r?\n\r?\n+/)
-        .map(p => p.trim())
-        .filter(p => {
-            if (!p || p.startsWith('• ')) return false;
-            const cyrCount = (p.match(/[А-Яа-яЁё]/g) || []).length;
-            const latCount = (p.match(/[A-Za-z]/g) || []).length;
-            return cyrCount >= 8 && cyrCount >= latCount * 0.45;
-        });
-    return cleaned.join('\n\n').trim();
+        .trim();
 }
 
 function normalizeTranscriptThinkingTags(conversationId, fallbackThinking = '', elapsedSec = 2) {

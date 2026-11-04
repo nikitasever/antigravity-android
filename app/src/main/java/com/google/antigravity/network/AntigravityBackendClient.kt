@@ -2432,6 +2432,15 @@ class AntigravityBackendClient(
         if (unavailable != null) return AgentTurnResult(thinkingTrace = "", thinkingDurationSec = 0,
             responseMarkdown = unavailable, spokenSummaryRu = unavailable, updatedConversationId = conversationId, isError = true)
         val start = System.currentTimeMillis()
+        val reasoning = PhoneReasoningAccumulator()
+        fun reasoningSeconds() = if (reasoning.text.isBlank()) 0 else
+            ((System.currentTimeMillis() - start) / 1000L).toInt().coerceAtLeast(1)
+        suspend fun publishReasoning(summary: String, child: Boolean) {
+            if (child || summary.isBlank()) return
+            reasoning.accept(summary)
+            update(StreamingTurnUpdate(thinking = reasoning.text, thinkingDurationSec = reasoningSeconds(),
+                textDelta = "", fullText = "", toolCalls = emptyList()))
+        }
         val attachedContext = attachments.joinToString("\n") { "Вложение ${it.name}: ${it.textPreview.take(24000).ifBlank {
             "Текстовое превью недоступно. Содержимое изображения/аудио не передано в этот текстовый запрос; не утверждай, что изучил файл."
         }}" }
@@ -2439,7 +2448,8 @@ class AntigravityBackendClient(
             model = { request, child ->
                 currentCoroutineContext().ensureActive()
                 val modelHistory = if (child) emptyList() else history
-                if (route == com.google.antigravity.model.PhoneModelRoute.PC_CLI) {
+                if (!child) reasoning.beginStep()
+                val answer = if (route == com.google.antigravity.model.PhoneModelRoute.PC_CLI) {
                     val cliPrompt = buildString {
                         if (modelHistory.isNotEmpty()) {
                             appendLine("История текущей версии разговора (данные):")
@@ -2448,21 +2458,29 @@ class AntigravityBackendClient(
                         append(request)
                     }
                     // Independent CLI contexts prevent parent/child and edited-history leakage.
-                    callPcBridgeChatStreaming(bridgeUrl, cliPrompt, modelId,
+                    val response = callPcBridgeChatStreaming(bridgeUrl, cliPrompt, modelId,
                         java.util.UUID.randomUUID().toString(), emptyList(), emptyList(),
                         isPhoneMode = true, voiceMode = false, phoneContext = "",
                         phoneToolObservation = "", phoneStepIndex = 0, transientChat = true,
-                        onUpdate = {})?.reply
+                        onUpdate = { publishReasoning(it.thinking, child) })
                         ?: throw java.io.IOException("Не удалось получить ответ $modelId через мост ПК. Проверьте соединение с Antigravity на ПК. Действия телефона выполняются в Android-приложении.")
+                    publishReasoning(response.thinking, child)
+                    response.reply
                 } else if (route == com.google.antigravity.model.PhoneModelRoute.OPENROUTER_API) {
-                    callDirectOpenRouterApi(request, routerKey, modelHistory, modelId, conversationId,
-                        start, mutableListOf(), mutableListOf(), {})?.responseMarkdown
+                    val response = callDirectOpenRouterApi(request, routerKey, modelHistory, modelId, conversationId,
+                        start, mutableListOf(), mutableListOf(), { publishReasoning(it.thinking, child) })
                         ?: throw java.io.IOException("OpenRouter не вернул ответ. Проверьте ключ, модель и соединение.")
+                    publishReasoning(response.thinkingTrace, child)
+                    response.responseMarkdown
                 } else {
                     val raw = callGeminiRestApi(request, loadAssetSystemPrompt(), geminiKey, modelId, modelHistory)
                         ?: throw java.io.IOException("Gemini API не вернул ответ. Проверьте ключ, модель и соединение.")
-                    extractClientSideThinking(raw).first
+                    val (answer, taggedThinking) = extractClientSideThinking(raw.text)
+                    publishReasoning(raw.thinking.ifBlank { taggedThinking }, child)
+                    answer
                 }
+                if (!child) reasoning.finishStep()
+                answer
             },
             execute = { obj ->
                 val action = phoneController.executeSinglePhoneActionObject(obj)
@@ -2470,7 +2488,7 @@ class AntigravityBackendClient(
                 else com.google.antigravity.model.PhoneToolOutput(action.success, action.summaryRu,
                     action.outputOrDiff.ifBlank { action.targetPathOrCmd })
             },
-            publish = { tools -> update(StreamingTurnUpdate(thinking = "", thinkingDurationSec = 0,
+            publish = { tools -> update(StreamingTurnUpdate(thinking = reasoning.text, thinkingDurationSec = reasoningSeconds(),
                 textDelta = "", toolCalls = tools, fullText = "", isDone = false)) }
         )
         val reply = engine.run(buildString {
@@ -2479,9 +2497,9 @@ class AntigravityBackendClient(
             if (context.isNotBlank()) appendLine("Контекст пользователя:\n$context")
             if (attachedContext.isNotBlank()) appendLine("Текст вложений:\n$attachedContext")
         })
-        update(StreamingTurnUpdate(thinking = "", thinkingDurationSec = 0, textDelta = "",
+        update(StreamingTurnUpdate(thinking = reasoning.text, thinkingDurationSec = reasoningSeconds(), textDelta = "",
             fullText = reply.text, toolCalls = reply.tools, isDone = true))
-        return AgentTurnResult(thinkingTrace = "", thinkingDurationSec = 0, responseMarkdown = reply.text,
+        return AgentTurnResult(thinkingTrace = reasoning.text, thinkingDurationSec = reasoningSeconds(), responseMarkdown = reply.text,
             spokenSummaryRu = sanitizeSpokenSummary(reply.text), updatedConversationId = conversationId,
             toolCalls = reply.tools)
     }
@@ -2609,7 +2627,8 @@ class AntigravityBackendClient(
                 }
             }
             val rawReply = callGeminiRestApi(promptWithContext, unifiedSysPrompt, geminiApiKey, selectedModelId, sessionHistory) ?: return null
-            val (withoutThink, inlineThink) = extractClientSideThinking(rawReply)
+            val (withoutThink, taggedThink) = extractClientSideThinking(rawReply.text)
+            val inlineThink = rawReply.thinking.ifBlank { taggedThink }
             if (inlineThink.isNotBlank()) {
                 if (thinkingAcc.isNotEmpty()) thinkingAcc.append("\n\n")
                 thinkingAcc.append(inlineThink)
@@ -3220,7 +3239,7 @@ class AntigravityBackendClient(
         apiKey: String,
         selectedModelId: String,
         sessionHistory: List<ChatMessage>
-    ): String? {
+    ): ProviderReply? {
         val directModel = mapToDirectGeminiModelId(selectedModelId)
         val candidateModels = listOf(directModel)
         for (model in candidateModels) {
@@ -3228,6 +3247,10 @@ class AntigravityBackendClient(
                 val url =
                     "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey"
                 val payload = JSONObject().apply {
+                    if (Regex("^gemini-(2\\.5|[3-9])").containsMatchIn(model)) {
+                        put("generationConfig", JSONObject().put("thinkingConfig",
+                            JSONObject().put("includeThoughts", true)))
+                    }
                     if (systemPrompt.isNotBlank()) {
                         put("systemInstruction", JSONObject().apply {
                             put("parts", JSONArray().put(JSONObject().put("text", systemPrompt)))
@@ -3257,15 +3280,8 @@ class AntigravityBackendClient(
                 httpClient.newCall(req).useCancellable { resp ->
                     if (!resp.isSuccessful) return@useCancellable
                     val json = JSONObject(resp.body?.string() ?: return@useCancellable)
-                    val candidates = json.optJSONArray("candidates") ?: return@useCancellable
-                    if (candidates.length() == 0) return@useCancellable
-                    val parts = candidates.getJSONObject(0).optJSONObject("content")?.optJSONArray("parts") ?: return@useCancellable
-                    val sb = StringBuilder()
-                    for (i in 0 until parts.length()) {
-                        sb.append(parts.getJSONObject(i).optString("text", ""))
-                    }
-                    val text = sb.toString().trim()
-                    if (text.isNotBlank()) return text
+                    val reply = parseGeminiReply(json)
+                    if (reply.text.isNotBlank()) return reply
                 }
             } catch (failure: Throwable) {
                 if (failure is kotlinx.coroutines.CancellationException) throw failure;

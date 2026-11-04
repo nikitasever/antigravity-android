@@ -150,6 +150,7 @@ import com.google.antigravity.device.PhoneResourceController
 import com.google.antigravity.model.AVAILABLE_AGY_MODELS
 import com.google.antigravity.model.AVAILABLE_VOICE_NAMES
 import com.google.antigravity.model.AgentExecutionTarget
+import com.google.antigravity.model.matches
 import com.google.antigravity.model.AntigravityModelOption
 import com.google.antigravity.model.AntigravitySettings
 import com.google.antigravity.model.ApprovalDecision
@@ -955,12 +956,20 @@ fun MainScreen(
             )
         }
 
+        val voiceDraft by viewModel.composerDraft.collectAsState()
         OrbitVoiceOverlay(
             voiceEngine = viewModel.voiceEngine,
             visualizerStyle = settings.voiceVisualizerStyle,
             transportMode = settings.voiceTransportMode,
             onCycleVisualizerStyle = { viewModel.cycleVisualizerStyle() },
-            onEndCall = { viewModel.stopLiveVoiceCall() }
+            onEndCall = { viewModel.stopLiveVoiceCall() },
+            textDraft = voiceDraft,
+            onTextDraftChange = { viewModel.setComposerDraft(it) },
+            onSendText = { viewModel.sendUserPrompt(it) },
+            onAddAttachment = {
+                viewModel.voiceEngine.setOverlayExpanded(false)
+                showAttachmentSheet = true
+            }
         )
     }
 }
@@ -1111,6 +1120,15 @@ private fun ChatGptMainChatScreen(
     ) {
         com.google.antigravity.ui.components.ConversationHeader(
             workSelected = topModeTab == TopModeTab.WORK_SESSIONS,
+            hasConversation = messages.isNotEmpty(),
+            title = chatSettings.activeSessionTitle.ifBlank {
+                messages.firstOrNull { it.role == MessageRole.USER }?.content.orEmpty().take(80)
+            },
+            executionLabel = when (chatSettings.executionTarget) {
+                AgentExecutionTarget.PHONE_LOCAL_RESOURCES -> "Телефон"
+                AgentExecutionTarget.PC_REMOTE_SESSION -> "ПК"
+                AgentExecutionTarget.GOOGLE_WEB_CONSOLE -> "Веб"
+            },
             modelName = activeOrModel?.name
                 ?: availableModels.firstOrNull { it.id == selectedModelId }?.displayName
                 ?: selectedModelId.substringAfter('/'),
@@ -1402,13 +1420,7 @@ private fun ChatGptRemoteSessionsCodexScreen(
     }
     val filteredSessions = remember(sessions, selectedFilter, searchQuery) {
         sessions.filter { s ->
-            val matchesFilter = when (selectedFilter) {
-                RemoteEnvFilter.ALL -> true
-                RemoteEnvFilter.CLOUD -> true
-                RemoteEnvFilter.PC_CR05318 -> s.host.equals("cr05318", ignoreCase = true) || s.hostType == "PC"
-                RemoteEnvFilter.PC_WIN11 -> s.host.equals("WIN-11", ignoreCase = true) || s.hostType == "PC"
-                RemoteEnvFilter.PHONE_LOCAL -> s.hostType == "PHONE"
-            }
+            val matchesFilter = selectedFilter.matches(s)
             val matchesQuery = searchQuery.isBlank() ||
                 s.title.contains(searchQuery, ignoreCase = true) ||
                 s.environment.contains(searchQuery, ignoreCase = true)
@@ -2754,6 +2766,7 @@ private fun ChatGptMessageBubble(
                     color = DesignColors.UserBubble,
                     shape = RoundedCornerShape(22.dp),
                     modifier = Modifier
+                        .padding(start = 32.dp)
                         .clip(RoundedCornerShape(22.dp))
                         .combinedClickable(
                             onClick = {},
@@ -2761,28 +2774,14 @@ private fun ChatGptMessageBubble(
                         )
                 ) {
                     Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 11.dp)) {
-                        ChatGptMarkdownText(
-                            markdown = message.content,
-                            textColor = Color.White,
-                            responseFont = com.google.antigravity.model.ResponseFont.SYSTEM,
-                            textSize = readingTextSize,
-                            onSaveCodeToPhone = onSaveToPhone
-                        )
+                        Text(message.content, color = DesignColors.TextPrimary,
+                            fontSize = (16 * readingTextSize.scale).sp,
+                            lineHeight = (24 * readingTextSize.scale).sp)
                     }
                 }
             }
         }
     } else {
-        val view = LocalView.current
-        LaunchedEffect(message.content.length, message.thinking?.length, message.toolCalls.size) {
-            if (message.isStreaming && (message.content.isNotEmpty() || !message.thinking.isNullOrEmpty() || message.toolCalls.isNotEmpty())) {
-                try {
-                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                } catch (_: Throwable) {
-                }
-            }
-        }
-
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2791,200 +2790,14 @@ private fun ChatGptMessageBubble(
                     onLongClick = { showContextMenuSheet = true }
                 )
         ) {
-            val thinkingText = message.thinking?.trim().orEmpty()
-            val showThinkingHeader = thinkingText.isNotEmpty()
-            val isReceivingThinking = message.isStreaming && message.content.isBlank()
-
-            if (showThinkingHeader) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable(enabled = thinkingText.isNotEmpty()) { onToggleThinking() }
-                        .padding(vertical = 4.dp)
-                ) {
-                    if (message.isStreaming) {
-                        Box(
-                            modifier = Modifier
-                                .size(7.dp)
-                                .clip(CircleShape)
-                                .background(DesignColors.AccentBlue)
-                        )
-                        Spacer(modifier = Modifier.width(7.dp))
-                    }
-                    Text(
-                        text = if (isReceivingThinking) {
-                            "Думаю… ${message.thinkingDurationSec.coerceAtLeast(1)} с"
-                        } else {
-                            "Думал ${message.thinkingDurationSec.coerceAtLeast(1)} с"
-                        },
-                        color = if (message.isStreaming) Color(0xFFD4D4D4) else Color(0xFF9E9E9E),
-                        fontSize = 13.5.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                    if (thinkingText.isNotEmpty()) {
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Icon(
-                            imageVector = if (message.isThinkingExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                            contentDescription = if (message.isThinkingExpanded) "Свернуть размышление" else "Развернуть размышление",
-                            tint = Color(0xFF9E9E9E),
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-
-                // Раскрываем только данные размышления, полученные от провайдера.
-                AnimatedVisibility(visible = message.isThinkingExpanded && thinkingText.isNotEmpty()) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(IntrinsicSize.Min)
-                            .padding(top = 4.dp, bottom = 8.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .width(2.dp)
-                                .fillMaxHeight()
-                                .clip(RoundedCornerShape(1.dp))
-                                .background(if (message.isStreaming) DesignColors.AccentBlue else Color(0xFF383838))
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text(
-                                text = thinkingText,
-                                color = Color(0xFF9E9E9E),
-                                fontSize = 13.sp,
-                                lineHeight = 19.sp
-                            )
-                        }
-                    }
-                }
-            }
-
-            if (message.isStreaming && thinkingText.isEmpty() && message.content.isBlank() && message.toolCalls.isEmpty()) {
-                Text("Ожидание ответа…", color = Color(0xFF9E9E9E), fontSize = 13.sp,
-                    modifier = Modifier.padding(vertical = 4.dp))
-            }
-
-            if (message.toolCalls.isNotEmpty()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp, bottom = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    message.toolCalls.forEach { tc ->
-                        if (tc.leadingText.isNotBlank()) ChatGptMarkdownText(markdown = tc.leadingText,
-                            textSize = readingTextSize, responseFont = responseFont,
-                            textColor = Color(0xFFECECEC), onSaveCodeToPhone = onSaveToPhone)
-                        var detailsExpanded by remember(tc.id) { mutableStateOf(false) }
-                        val hasDetails = tc.details.isNotBlank() || !tc.unifiedDiff.isNullOrBlank()
-                        Surface(
-                            color = Color(0xFF161616),
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .border(0.5.dp, Color(0xFF2A2A2A), RoundedCornerShape(10.dp))
-                                .let { mod ->
-                                    if (hasDetails) mod.clickable { detailsExpanded = !detailsExpanded } else mod
-                                }
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 10.dp, vertical = 7.dp)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = when (tc.status) {
-                                            ToolCallStatus.COMPLETED -> Icons.Default.Check
-                                            ToolCallStatus.FAILED, ToolCallStatus.DENIED -> Icons.Default.Close
-                                            ToolCallStatus.RUNNING -> Icons.Default.Refresh
-                                            else -> Icons.Default.MoreHoriz
-                                        },
-                                        contentDescription = when (tc.status) {
-                                            ToolCallStatus.COMPLETED -> "Завершено"
-                                            ToolCallStatus.FAILED -> "Ошибка"
-                                            ToolCallStatus.CANCELLED -> "Остановлено"
-                                            ToolCallStatus.DENIED -> "Отклонено"
-                                            ToolCallStatus.RUNNING -> "Выполняется"
-                                            ToolCallStatus.AWAITING_APPROVAL -> "Ожидает разрешения"
-                                            ToolCallStatus.APPROVED -> "Разрешено"
-                                        },
-                                        tint = when (tc.status) {
-                                            ToolCallStatus.COMPLETED -> DesignColors.AccentGreen
-                                            ToolCallStatus.FAILED, ToolCallStatus.DENIED -> Color(0xFFFF6B6B)
-                                            else -> Color(0xFF9E9E9E)
-                                        },
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(7.dp))
-                                    Text(
-                                        text = "${tc.toolTitleRu}: ${tc.summary}",
-                                        color = Color(0xFFD4D4D4),
-                                        fontSize = 12.2.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    if (hasDetails) {
-                                        Icon(
-                                            imageVector = if (detailsExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                            contentDescription = "Детали инструмента",
-                                            tint = Color(0xFF8E8E8E),
-                                            modifier = Modifier.size(15.dp)
-                                        )
-                                    }
-                                }
-                                if (tc.requiresApproval && tc.approvalDecision == ApprovalDecision.PENDING) {
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Button(
-                                            onClick = { onDecideToolCall(tc.id, ApprovalDecision.APPROVED) },
-                                            colors = ButtonDefaults.buttonColors(containerColor = DesignColors.AccentBlue),
-                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                                            modifier = Modifier.height(30.dp)
-                                        ) {
-                                            Text("Разрешить", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                        }
-                                        OutlinedButton(
-                                            onClick = { onDecideToolCall(tc.id, ApprovalDecision.DENIED) },
-                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                                            modifier = Modifier.height(30.dp)
-                                        ) {
-                                            Text("Отклонить", color = Color(0xFFF87171), fontSize = 11.sp)
-                                        }
-                                    }
-                                }
-                                AnimatedVisibility(visible = detailsExpanded && hasDetails) {
-                                    Column(modifier = Modifier.padding(top = 6.dp)) {
-                                        if (tc.details.isNotBlank()) {
-                                            Text(
-                                                text = tc.details,
-                                                color = Color(0xFF9E9E9E),
-                                                fontSize = 11.5.sp,
-                                                fontFamily = FontFamily.Monospace,
-                                                lineHeight = 16.sp
-                                            )
-                                        }
-                                        if (!tc.unifiedDiff.isNullOrBlank()) {
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            ChatGptMarkdownText(
-                                                markdown = "```diff\n${tc.unifiedDiff}\n```",
-                                                textColor = Color(0xFFECECEC),
-                                                onSaveCodeToPhone = onSaveToPhone
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            com.google.antigravity.ui.components.ConversationActivity(
+                message = message,
+                responseFont = responseFont,
+                readingTextSize = readingTextSize,
+                onToggleThinking = onToggleThinking,
+                onDecideToolCall = onDecideToolCall,
+                onSaveCode = onSaveToPhone
+            )
 
             // Карточки созданных/изменённых файлов с diff (+added зелёный / -removed красный) (Раздел 5.2 и 11.5)
             if (message.createdDiffs.isNotEmpty()) {
@@ -3031,82 +2844,25 @@ private fun ChatGptMessageBubble(
                 }
             }
 
-            // Живая скорость генерации во время стриминга (Раздел 11.4)
-            if (message.isStreaming && message.tokensPerSecond > 0f) {
-                Text(
-                    text = "${String.format(Locale.US, "%.1f", message.tokensPerSecond)} ток/с • ${message.outputTokensCount} ток.",
-                    color = Color(0xFF34D399),
-                    fontSize = 11.2.sp,
-                    fontFamily = FontFamily.Monospace,
-                    modifier = Modifier.padding(top = 6.dp)
-                )
-            }
-
-            // Нижний ряд иконок действий 1:1 как в ChatGPT Android 1.2026.293 + скорость генерации ⚡ ток/с (Раздел 11.4)
             if (!message.isStreaming && message.content.isNotBlank()) {
-                val effectiveTps = if (message.tokensPerSecond > 0f) message.tokensPerSecond else 0f
-                val effectiveOutTokens = if (message.outputTokensCount > 0) message.outputTokensCount else (message.content.length / 4).coerceAtLeast(12)
-                val effectiveTtftSec = if (message.firstTokenLatencyMs > 0L) message.firstTokenLatencyMs / 1000.0 else 0.3
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(18.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (copiedToast) Icons.Default.Check else Icons.Default.ContentCopy,
-                            contentDescription = "Копировать",
-                            tint = if (copiedToast) DesignColors.AccentGreen else Color(0xFF9E9E9E),
-                            modifier = Modifier
-                                .size(18.dp)
-                                .clickable {
-                                    clipboard.setText(AnnotatedString(message.content))
-                                    copiedToast = true
-                                }
-                        )
-
-                        Icon(
-                            imageVector = if (isSpeakingAloud) Icons.Default.StopCircle else Icons.AutoMirrored.Filled.VolumeUp,
-                            contentDescription = "Прочитать вслух",
-                            tint = if (isSpeakingAloud) Color.White else Color(0xFF9E9E9E),
-                            modifier = Modifier
-                                .size(19.dp)
-                                .clickable { onSpeak() }
-                        )
-
-                        Icon(
-                            imageVector = Icons.Default.Share,
-                            contentDescription = "Поделиться",
-                            tint = Color(0xFF9E9E9E),
-                            modifier = Modifier
-                                .size(18.dp)
-                                .clickable { shareMessageText() }
-                        )
-
-                        Icon(
-                            imageVector = Icons.Default.MoreHoriz,
-                            contentDescription = "Другие действия",
-                            tint = Color(0xFF9E9E9E),
-                            modifier = Modifier
-                                .size(18.dp)
-                                .clickable { showContextMenuSheet = true }
-                        )
+                Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = {
+                        clipboard.setText(AnnotatedString(message.content))
+                        copiedToast = true
+                    }) { Icon(if (copiedToast) Icons.Default.Check else Icons.Default.ContentCopy,
+                        "Копировать", tint = DesignColors.TextSecondary, modifier = Modifier.size(20.dp)) }
+                    IconButton(onClick = onSpeak) {
+                        Icon(if (isSpeakingAloud) Icons.Default.StopCircle else Icons.AutoMirrored.Filled.VolumeUp,
+                            "Прочитать вслух", tint = DesignColors.TextSecondary, modifier = Modifier.size(22.dp))
                     }
-
-                    if (message.tokensPerSecond > 0f) Text(
-                        text = "${String.format(Locale.US, "%.1f", effectiveTps)} ток/с • $effectiveOutTokens ток.",
-                        color = Color(0xFF6B7280),
-                        fontSize = 11.sp,
-                        fontFamily = FontFamily.Monospace,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    IconButton(onClick = shareMessageText) {
+                        Icon(Icons.Default.Share, "Поделиться", tint = DesignColors.TextSecondary,
+                            modifier = Modifier.size(20.dp))
+                    }
+                    IconButton(onClick = { showContextMenuSheet = true }) {
+                        Icon(Icons.Default.MoreHoriz, "Другие действия", tint = DesignColors.TextSecondary,
+                            modifier = Modifier.size(22.dp))
+                    }
                 }
             }
         }

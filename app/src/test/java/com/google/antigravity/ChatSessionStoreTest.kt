@@ -12,6 +12,7 @@ class ChatSessionStoreTest {
             val user = ChatMessage(role = MessageRole.USER, content = "Проверь файл", timestamp = "10:00",
                 attachments = listOf(AttachedFileItem(name = "данные.txt", base64Data = "YWJj", textPreview = "abc")))
             val answer = ChatMessage(role = MessageRole.AGENT, content = "Готово", timestamp = "10:01",
+                thinking = "Check the actual file first.", thinkingDurationSec = 7,
                 isStreaming = true, toolCalls = listOf(ToolCallEvent(toolName = "read_file", summary = "Файл прочитан",
                     status = ToolCallStatus.COMPLETED, details = "abc")),
                 createdDiffs = listOf(FileDiffItem("notes.txt", 1, 0, "+abc")))
@@ -23,6 +24,9 @@ class ChatSessionStoreTest {
             assertEquals(user, restored.messages[0])
             assertEquals(answer.content, restored.messages[1].content)
             assertFalse(restored.messages[1].isStreaming)
+            assertEquals(answer.thinking, restored.messages[1].thinking)
+            assertEquals(7, restored.messages[1].thinkingDurationSec)
+            assertFalse(restored.messages[1].isThinkingExpanded)
             assertEquals(answer.toolCalls, restored.messages[1].toolCalls)
             assertEquals(answer.createdDiffs, restored.messages[1].createdDiffs)
             assertTrue(directory.listFiles()!!.all { it.parentFile == directory })

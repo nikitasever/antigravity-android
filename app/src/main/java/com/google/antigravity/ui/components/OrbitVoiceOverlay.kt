@@ -42,6 +42,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -65,10 +80,10 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * Полнодуплексный голосовой экран 1:1 в стиле ChatGPT Android:
+ * Голосовой экран по живому референсу ChatGPT (091536):
  * - Ровно ОДНА органичная голубая сфера по центру экрана, плавно реагирующая на голос пользователя и ИИ.
- * - Под сферой — живые субтитры речи пользователя и ответа ИИ на русском языке.
- * - Внизу — только две крупные круглые кнопки: микрофон (вкл/выкл) и закрытие (`✕`).
+ * - Субтитры включаются в меню, вместо постоянного крупного текста под сферой.
+ * - Внизу — ввод текста, микрофон и белая кнопка завершения разговора.
  * - Полное отсутствие любых технических/отладочных надписей.
  */
 @Composable
@@ -77,7 +92,11 @@ fun OrbitVoiceOverlay(
     visualizerStyle: VoiceVisualizerStyle,
     transportMode: VoiceTransportMode,
     onCycleVisualizerStyle: () -> Unit,
-    onEndCall: () -> Unit
+    onEndCall: () -> Unit,
+    textDraft: String = "",
+    onTextDraftChange: (String) -> Unit = {},
+    onSendText: (String) -> Unit = {},
+    onAddAttachment: () -> Unit = {}
 ) {
     val isCallActive by voiceEngine.isCallActive.collectAsState()
     val isExpanded by voiceEngine.isOverlayExpanded.collectAsState()
@@ -87,6 +106,9 @@ fun OrbitVoiceOverlay(
     val aiSubtitle by voiceEngine.liveAiSubtitle.collectAsState()
     val audioLevel by voiceEngine.audioLevel.collectAsState()
     val spectrumBands by voiceEngine.spectrumBands.collectAsState()
+
+    var showCaptions by rememberSaveable { mutableStateOf(false) }
+    var optionsOpen by remember { mutableStateOf(false) }
 
     AnimatedVisibility(
         visible = isCallActive && isExpanded,
@@ -104,7 +126,8 @@ fun OrbitVoiceOverlay(
                 .fillMaxSize()
                 .background(Color(0xFF000000))
                 .systemBarsPadding()
-                .padding(horizontal = 24.dp, vertical = 20.dp)
+                .imePadding()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
             Column(
                 modifier = Modifier.fillMaxSize(),
@@ -117,7 +140,7 @@ fun OrbitVoiceOverlay(
                         .fillMaxWidth()
                         .padding(top = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Start
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Box(
                         contentAlignment = Alignment.Center,
@@ -134,6 +157,18 @@ fun OrbitVoiceOverlay(
                             modifier = Modifier.size(24.dp)
                         )
                     }
+                    Box {
+                        IconButton(onClick = { optionsOpen = true }) {
+                            Icon(Icons.Default.Tune, "Настройки разговора", tint = Color.White)
+                        }
+                        DropdownMenu(expanded = optionsOpen, onDismissRequest = { optionsOpen = false },
+                            containerColor = Color(0xFF303030)) {
+                            DropdownMenuItem(text = { Text(if (showCaptions) "Скрыть субтитры" else "Показать субтитры") },
+                                onClick = { showCaptions = !showCaptions; optionsOpen = false })
+                            DropdownMenuItem(text = { Text("Изменить визуализацию") },
+                                onClick = { onCycleVisualizerStyle(); optionsOpen = false })
+                        }
+                    }
                 }
 
                 // Центральная область: ровно ОДНА органичная голубая сфера + живые субтитры
@@ -145,7 +180,7 @@ fun OrbitVoiceOverlay(
                     Box(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier
-                            .size(288.dp)
+                            .widthIn(max = 256.dp).fillMaxWidth().aspectRatio(1f)
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null
@@ -168,129 +203,53 @@ fun OrbitVoiceOverlay(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(28.dp))
+                    if (showCaptions) {
+                        val caption = partialUserText.takeIf { it.isNotBlank() && !isMuted }
+                            ?: aiSubtitle.takeIf { it.isNotBlank() }
+                        if (caption != null) Text(caption, color = Color(0xFFE0E0E0),
+                            fontSize = 16.sp, lineHeight = 24.sp, textAlign = TextAlign.Center,
+                            maxLines = 3, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(top = 24.dp))
+                    }
+                    if (status == VoiceSessionStatus.RECONNECTING) Text("Восстанавливаем соединение…",
+                        color = Color(0xFFC4C3CB), fontSize = 14.sp,
+                        modifier = Modifier.padding(top = 16.dp))
+                }
 
-                    // Живые субтитры пользователя (накапливают сегменты через паузы 2.2 с без обрыва на полуслове)
-                    if (partialUserText.isNotBlank() && !isMuted) {
-                        Text(
-                            text = "«$partialUserText»",
-                            color = Color(0xFFE0E0E0),
-                            fontSize = 15.sp,
-                            lineHeight = 21.sp,
-                            textAlign = TextAlign.Center,
-                            maxLines = 3,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 20.dp)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        if (status == VoiceSessionStatus.LISTENING || status == VoiceSessionStatus.USER_SPEAKING) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .background(Color(0xFF1F2937))
-                                    .clickable { voiceEngine.flushPendingVoiceUtteranceNow() }
-                                    .padding(horizontal = 14.dp, vertical = 6.dp)
-                            ) {
-                                Text(
-                                    text = "Отправить фразу ↑",
-                                    color = Color(0xFF60A5FA),
-                                    fontSize = 12.5.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    maxLines = 1
-                                )
+                Row(Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.Bottom) {
+                    Surface(color = Color(0xFF303030), shape = RoundedCornerShape(30.dp),
+                        modifier = Modifier.weight(1f)) {
+                        Row(Modifier.heightIn(min = 56.dp).padding(horizontal = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = onAddAttachment) {
+                                Icon(Icons.Default.Add, "Добавить вложение", tint = Color.White)
                             }
-                            Spacer(modifier = Modifier.height(8.dp))
+                            BasicTextField(value = textDraft, onValueChange = onTextDraftChange,
+                                modifier = Modifier.weight(1f).padding(vertical = 14.dp),
+                                maxLines = 3, textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
+                                cursorBrush = SolidColor(Color.White), decorationBox = { field ->
+                                    if (textDraft.isEmpty()) Text("Спросить…", color = Color(0xFFC4C3CB), fontSize = 16.sp)
+                                    field()
+                                })
+                            if (textDraft.isNotBlank()) IconButton(onClick = { onSendText(textDraft) }) {
+                                Icon(Icons.AutoMirrored.Filled.Send, "Отправить сообщение", tint = Color.White)
+                            }
+                            Spacer(Modifier.width(8.dp))
                         }
                     }
-
-                    val mainHeadline = when {
-                        isMuted -> "Микрофон выключен (Пауза)"
-                        status == VoiceSessionStatus.THINKING -> "Думаю…"
-                        status == VoiceSessionStatus.AI_SPEAKING && aiSubtitle.isNotBlank() -> aiSubtitle
-                        aiSubtitle.isNotBlank() -> aiSubtitle
-                        status == VoiceSessionStatus.USER_SPEAKING -> "Слушаю вас (говорите без спешки)…"
-                        else -> "Слушаю…"
+                    IconButton(onClick = { voiceEngine.toggleMute() }, modifier = Modifier.size(56.dp)
+                        .clip(CircleShape).background(Color(0xFF303030))) {
+                        Icon(if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
+                            if (isMuted) "Включить микрофон" else "Выключить микрофон", tint = Color.White)
                     }
-
-                    Text(
-                        text = mainHeadline,
-                        color = Color.White,
-                        fontSize = if (mainHeadline.length > 65) 16.sp else 19.sp,
-                        fontWeight = FontWeight.Medium,
-                        lineHeight = 25.sp,
-                        textAlign = TextAlign.Center,
-                        maxLines = 4,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    val subHint = when (status) {
-                        VoiceSessionStatus.AI_SPEAKING -> "Нажмите на сферу или начните говорить, чтобы прервать"
-                        VoiceSessionStatus.MUTED -> "Микрофон на паузе — нажмите внизу, чтобы продолжить"
-                        VoiceSessionStatus.THINKING -> "Формирую голосовой ответ…"
-                        VoiceSessionStatus.RECONNECTING -> "Соединение восстанавливается автоматически"
-                        else -> "Можно делать паузы на вдох — фраза отправится после 2.2 с тишины"
-                    }
-
-                    Text(
-                        text = subHint,
-                        color = Color(0xFF8E8E8E),
-                        fontSize = 12.5.sp,
-                        textAlign = TextAlign.Center,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                // Нижний ряд: ТОЛЬКО кнопка микрофона (вкл/выкл) и кнопка закрытия (✕)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 36.dp, vertical = 20.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Левая кнопка: Вкл/Выкл микрофон (68.dp)
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .size(68.dp)
-                            .clip(CircleShape)
-                            .background(if (isMuted) Color(0xFFEF4444) else Color(0xFF212121))
-                            .clickable { voiceEngine.toggleMute() }
-                    ) {
-                        Icon(
-                            imageVector = if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
-                            contentDescription = if (isMuted) "Включить микрофон" else "Выключить микрофон",
-                            tint = Color.White,
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
-
-                    // Правая кнопка: Завершить голосовой режим ✕ (68.dp)
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .size(68.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF212121))
-                            .clickable { onEndCall() }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Выйти из голосового режима",
-                            tint = Color.White,
-                            modifier = Modifier.size(28.dp)
-                        )
+                    IconButton(onClick = onEndCall, modifier = Modifier.size(56.dp)
+                        .clip(CircleShape).background(Color.White)) {
+                        Icon(Icons.Default.Close, "Завершить разговор", tint = Color.Black)
                     }
                 }
+
             }
         }
     }
