@@ -100,76 +100,10 @@ fun ChatGptStyleGoogleLoginScreen(
     onConnectPcSessionNow: () -> Unit,
     onStartPhoneLocalAgent: () -> Unit
 ) {
-    val onboardingPrompts = remember {
-        listOf(
-            "Давайте создавать",
-            "Давайте проектировать",
-            "Давайте изобретать",
-            "Давайте изучать",
-            "Давайте сотрудничать",
-            "Давайте приступим",
-            "Давайте узнавать"
-        )
-    }
-
-    var promptIndex by remember { mutableIntStateOf(0) }
-    var visibleChars by remember { mutableIntStateOf(onboardingPrompts[0].length) }
-
-    LaunchedEffect(Unit) {
-        delay(1400L)
-        while (true) {
-            val currentText = onboardingPrompts[promptIndex]
-            for (i in currentText.length downTo 0) {
-                visibleChars = i
-                delay(24L)
-            }
-            delay(180L)
-            promptIndex = (promptIndex + 1) % onboardingPrompts.size
-            val nextText = onboardingPrompts[promptIndex]
-            for (i in 1..nextText.length) {
-                visibleChars = i
-                delay(42L)
-            }
-            delay(1750L)
-        }
-    }
-
-    val infiniteTransition = rememberInfiniteTransition(label = "antigravity_login_anim")
-    val orbitAngle by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 16000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "orbit_angle"
-    )
-    val corePulse by infiniteTransition.animateFloat(
-        initialValue = 0.88f,
-        targetValue = 1.14f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2000),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "core_pulse"
-    )
-    val dotScale by infiniteTransition.animateFloat(
-        initialValue = 0.82f,
-        targetValue = 1.18f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 720),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "cursor_dot_scale"
-    )
-
-    val activePrompt = onboardingPrompts[promptIndex]
-    val displayedSubstring = activePrompt.take(visibleChars.coerceIn(0, activePrompt.length))
-
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF000000))
+            .background(com.google.antigravity.ui.design.DesignColors.Bg)
             .windowInsetsPadding(WindowInsets.systemBars),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
@@ -199,109 +133,14 @@ fun ChatGptStyleGoogleLoginScreen(
             )
         }
 
-        // Центральная сцена с анимацией сферы Antigravity и типографикой «Давайте создавать●»
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Box(
-                modifier = Modifier.size(190.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    val center = Offset(size.width / 2f, size.height / 2f)
-                    val baseR = size.minDimension * 0.34f
-
-                    // Внешнее мягкое свечение Antigravity
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                Color(0xFF10A37F).copy(alpha = 0.24f * corePulse),
-                                Color(0xFF38BDF8).copy(alpha = 0.10f),
-                                Color.Transparent
-                            ),
-                            center = center,
-                            radius = baseR * 2.2f
-                        ),
-                        radius = baseR * 2.2f,
-                        center = center
-                    )
-
-                    // 3 наклонных орбитальных кольца Antigravity
-                    val ringAngles = listOf(0f, 60f, 120f)
-                    ringAngles.forEachIndexed { idx, tilt ->
-                        rotate(degrees = tilt + orbitAngle * (if (idx % 2 == 0) 1f else -0.8f), pivot = center) {
-                            drawOval(
-                                color = Color.White.copy(alpha = 0.22f + idx * 0.08f),
-                                topLeft = Offset(center.x - baseR * 1.25f, center.y - baseR * 0.46f),
-                                size = Size(baseR * 2.5f, baseR * 0.92f),
-                                style = Stroke(width = 1.6.dp.toPx())
-                            )
-                        }
-                    }
-
-                    // Орбитальные спутники на кольцах
-                    for (i in 0 until 6) {
-                        val rad = ((orbitAngle * 1.5f + i * 60f) * PI / 180.0)
-                        val px = center.x + (baseR * 1.12f * cos(rad)).toFloat()
-                        val py = center.y + (baseR * 0.68f * sin(rad * 1.3)).toFloat()
-                        drawCircle(
-                            color = if (i % 2 == 0) Color.White else Color(0xFF38BDF8),
-                            radius = (2.8f + (i % 2) * 1.2f).dp.toPx(),
-                            center = Offset(px, py)
-                        )
-                    }
-
-                    // Центральное ядро сферы
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                Color.White,
-                                Color(0xFFE2E8F0),
-                                Color(0xFF10A37F).copy(alpha = 0.55f)
-                            ),
-                            center = center,
-                            radius = baseR * 0.42f * corePulse
-                        ),
-                        radius = baseR * 0.36f * corePulse,
-                        center = center
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(28.dp))
-
-            // Фирменная строка ChatGPT 1.2026.293 с пульсирующим кружком-курсором ●
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-            ) {
-                Text(
-                    text = displayedSubstring,
-                    color = Color.White,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Box(
-                    modifier = Modifier
-                        .size(18.dp)
-                        .scale(dotScale)
-                        .clip(CircleShape)
-                        .background(Color.White)
-                )
-            }
+        // Quiet welcome; no invented atom, orbit animation, or subscription claims.
+        Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 24.dp),
+            contentAlignment = Alignment.Center) {
+            Text("Чем займёмся?", color = Color.White, fontSize = 34.sp,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
+                textAlign = TextAlign.Center)
         }
 
-        // Нижняя шторка авторизации 1:1 по архитектуре ChatGPT Android 1.2026.293
         Surface(
             color = Color(0xFF171717),
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
@@ -348,7 +187,7 @@ fun ChatGptStyleGoogleLoginScreen(
                         .height(52.dp)
                 ) {
                     Text(
-                        text = "Войти через мост ПК (AI Pro)",
+                        text = "Продолжить с ПК",
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 16.sp,
                         color = Color.White
@@ -369,7 +208,7 @@ fun ChatGptStyleGoogleLoginScreen(
                         .height(52.dp)
                 ) {
                     Text(
-                        text = "Продолжить в гостевом режиме",
+                        text = "Продолжить без входа",
                         color = Color.White,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 16.sp

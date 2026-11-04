@@ -245,8 +245,8 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     private val _googleProfile = MutableStateFlow(
         GoogleAccountProfile(
             isSignedIn = prefs.getBoolean("is_signed_in_v2", false),
-            displayName = prefs.getString("user_name", "st811210") ?: "st811210",
-            email = prefs.getString("user_email", "st811210@gmail.com") ?: "st811210@gmail.com",
+            displayName = prefs.getString("user_name", "").orEmpty(),
+            email = prefs.getString("user_email", "").orEmpty(),
             pcInstanceName = "Рабочий компьютер"
         )
     )

@@ -1,6 +1,8 @@
 package com.google.antigravity.ui
 
 import com.google.antigravity.ui.design.DesignColors
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -1061,8 +1063,8 @@ private fun ChatGptMainChatScreen(
         when {
             isVideoModel -> "Опишите видео для генерации ($shortModelSubtitle)…"
             isImageModel -> "Опишите изображение для генерации ($shortModelSubtitle)…"
-            isOpenRouterModel -> "Спросить $shortModelSubtitle (/ скиллы, @ агенты)"
-            else -> "Спросить Antigravity (/ скиллы, @ агенты)"
+            isOpenRouterModel -> "Спросить $shortModelSubtitle"
+            else -> "Спросить Antigravity"
         }
     }
     val adaptiveModelModeHint = remember(isOpenRouterModel, isVideoModel, isImageModel, isReasoningModel, isVisionModel, shortModelSubtitle) {
@@ -1107,133 +1109,20 @@ private fun ChatGptMainChatScreen(
             .fillMaxSize()
             .background(DesignColors.Bg)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            TwoLineMenuCircleButton(onClick = onOpenDrawer)
-
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 6.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Surface(
-                    color = Color(0xFF212121),
-                    shape = RoundedCornerShape(24.dp),
-                    modifier = Modifier
-                        .width(196.dp)
-                        .height(40.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(3.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        val isChat = topModeTab == TopModeTab.CHAT
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight()
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(if (isChat) DesignColors.UserBubble else Color.Transparent)
-                                .clickable { onSelectTopTab(TopModeTab.CHAT) }
-                        ) {
-                            Text(
-                                text = "Чат",
-                                color = if (isChat) Color.White else Color(0xFF9E9E9E),
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight()
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(if (!isChat) DesignColors.UserBubble else Color.Transparent)
-                                .clickable { onSelectTopTab(TopModeTab.WORK_SESSIONS) }
-                        ) {
-                            Text(
-                                text = "Работа",
-                                color = if (!isChat) Color.White else Color(0xFF9E9E9E),
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(3.dp))
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .weight(1f, fill = false)
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable { onOpenModelPicker() }
-                            .padding(horizontal = 5.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = "Antigravity · " + (activeOrModel?.name
-                                ?: availableModels.firstOrNull { it.id == selectedModelId }?.displayName
-                                ?: selectedModelId.substringAfter('/')),
-                            color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false)
-                        )
-                        Spacer(modifier = Modifier.width(2.dp))
-                        Icon(
-                            imageVector = Icons.Default.KeyboardArrowDown,
-                            contentDescription = "Выбрать модель",
-                            tint = Color(0xFFB0B0B0),
-                            modifier = Modifier.size(15.dp)
-                        )
-                    }
-
-                    // Компактный индикатор контекста в подзаголовке (открывает сжатое Контекстное окно)
-                    Text(
-                        text = "• $compactContextLabel",
-                        color = Color(0xFF6B7280),
-                        fontSize = 11.sp,
-                        fontFamily = FontFamily.Monospace,
-                        maxLines = 1,
-                        softWrap = false,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .clickable { onOpenContextSheet() }
-                            .padding(horizontal = 3.dp, vertical = 1.dp)
-                    )
-                }
-            }
-
-            DashedBubbleCircleButton(onClick = onNewChat)
-            Box {
-                IconButton(onClick = { showChatMenu = true }) {
-                    Icon(Icons.Default.MoreHoriz, "Меню чата", tint = Color.White)
-                }
-                androidx.compose.material3.DropdownMenu(expanded = showChatMenu, onDismissRequest = { showChatMenu = false }) {
-                    androidx.compose.material3.DropdownMenuItem(text = { Text("Поиск в чате") }, onClick = {
-                        showSearch = true; showChatMenu = false
-                    })
-                    androidx.compose.material3.DropdownMenuItem(text = { Text("Содержание разговора") }, onClick = {
-                        showOutline = true; showChatMenu = false
-                    })
-                }
-            }
-        }
+        com.google.antigravity.ui.components.ConversationHeader(
+            workSelected = topModeTab == TopModeTab.WORK_SESSIONS,
+            modelName = activeOrModel?.name
+                ?: availableModels.firstOrNull { it.id == selectedModelId }?.displayName
+                ?: selectedModelId.substringAfter('/'),
+            contextLabel = compactContextLabel,
+            onDrawer = onOpenDrawer,
+            onSelectWork = { onSelectTopTab(if (it) TopModeTab.WORK_SESSIONS else TopModeTab.CHAT) },
+            onNewChat = onNewChat,
+            onModel = onOpenModelPicker,
+            onContext = onOpenContextSheet,
+            onSearch = { showSearch = true },
+            onOutline = { showOutline = true }
+        )
         if (showSearch) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(value = searchQuery, onValueChange = { searchQuery = it; searchPosition = 0 },
@@ -1321,35 +1210,8 @@ private fun ChatGptMainChatScreen(
                         )
                     }
                 }
-            } else {
-                // Пустое состояние 1:1 как в официальном ChatGPT Android 1.2026.293 (с адаптацией под выбранную модель)
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 24.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "Antigravity\nЧем я могу помочь?",
-                        fontFamily = if (chatSettings.responseFont == com.google.antigravity.model.ResponseFont.SERIF) androidx.compose.ui.text.font.FontFamily.Serif else androidx.compose.ui.text.font.FontFamily.Default,
-                        color = Color.White,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        textAlign = TextAlign.Center
-                    )
-                    if (adaptiveModelModeHint.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = adaptiveModelModeHint,
-                            color = Color(0xFF9CA3AF),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
             }
+            // The supplied ChatGPT empty conversation has no central headline or debug hints.
             if (messages.isNotEmpty() && !followLatest && listState.canScrollForward) {
                 androidx.compose.material3.FilledIconButton(
                     onClick = {
@@ -1964,7 +1826,7 @@ private fun ChatGptBottomInputPill(
         modifier = Modifier
             .fillMaxWidth()
             .background(DesignColors.Bg)
-            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
         currentQueue.forEach { queued ->
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -2169,33 +2031,34 @@ private fun ChatGptBottomInputPill(
         }
 
         Surface(
-            color = Color(0xFF212121),
-            shape = RoundedCornerShape(28.dp),
+            color = DesignColors.SurfaceHigh,
+            shape = RoundedCornerShape(32.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, DesignColors.Border),
             modifier = Modifier.fillMaxWidth()
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 12.dp, end = 8.dp, top = 7.dp, bottom = 7.dp),
+                    .heightIn(min = 56.dp)
+                    .padding(start = 4.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
-                        .size(34.dp)
+                        .size(40.dp)
                         .clip(CircleShape)
-                        .background(DesignColors.UserBubble)
                         .clickable { onPlusClick() }
                 ) {
                     Icon(
                         imageVector = Icons.Default.Add,
                         contentDescription = "Загрузить файлы или фото",
                         tint = Color.White,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(28.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(6.dp))
 
                 Box(
                     modifier = Modifier.weight(1f),
@@ -2205,7 +2068,7 @@ private fun ChatGptBottomInputPill(
                         Text(
                             text = if (pendingAttachments.isNotEmpty()) "Добавьте сообщение к файлу..." else if (isStreaming) "Сообщение в очередь…" else placeholderText,
                             color = Color(0xFF8E8E8E),
-                            fontSize = 15.sp,
+                            fontSize = 17.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -2228,7 +2091,7 @@ private fun ChatGptBottomInputPill(
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
-                        .size(32.dp)
+                        .size(40.dp)
                         .clip(CircleShape)
                         .background(if (isDictatingInline) Color(0xFFEF4444) else Color.Transparent)
                         .clickable {
@@ -2242,11 +2105,11 @@ private fun ChatGptBottomInputPill(
                         imageVector = Icons.Outlined.Mic,
                         contentDescription = "Голосовая диктовка в текст",
                         tint = Color.White,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(26.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.width(10.dp))
+                Spacer(modifier = Modifier.width(4.dp))
 
                 if (isStreaming) {
                     if (text.isNotBlank() || pendingAttachments.isNotEmpty()) IconButton(onClick = {
@@ -2377,7 +2240,7 @@ private fun ChatGptAttachmentPickerDialog(
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
-                            text = "Фишки упоминаний: субагент, навык, MCP, файл (как в ChatGPT, триггер «+»)",
+                            text = "Добавьте навык, подключение или файл",
                             color = Color(0xFF9E9E9E),
                             fontSize = 12.sp
                         )
@@ -2645,9 +2508,10 @@ internal fun TwoLineMenuCircleButton(onClick: () -> Unit) {
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
-            .size(46.dp)
+            .size(48.dp)
             .clip(CircleShape)
-            .background(Color(0xFF212121))
+            .background(DesignColors.SurfaceHigh)
+            .semantics { contentDescription = "Открыть меню" }
             .clickable(onClick = onClick)
     ) {
         Canvas(modifier = Modifier.size(20.dp)) {

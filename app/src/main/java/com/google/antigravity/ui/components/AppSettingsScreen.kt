@@ -20,7 +20,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.*
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -55,6 +58,7 @@ fun AppSettingsScreen(
 ) {
     var page by rememberSaveable { mutableStateOf("Настройки") }
     var search by rememberSaveable { mutableStateOf("") }
+    var searchVisible by rememberSaveable { mutableStateOf(false) }
     val root = page == "Настройки"
     val context = LocalContext.current
     val focus = LocalFocusManager.current
@@ -93,16 +97,21 @@ fun AppSettingsScreen(
                 Icon(if (root) Icons.Default.Close else Icons.AutoMirrored.Filled.ArrowBack,
                     if (root) "Закрыть настройки" else "Назад к настройкам", tint = Color.White)
             }
-            Text(if (page == "Аккаунт") "Профиль" else page, color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.SemiBold,
+            Text(if (page == "Аккаунт") "Профиль" else page, color = Color.White,
+                fontSize = if (root) 27.sp else 22.sp, fontFamily = FontFamily.Serif,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 56.dp))
+            if (root) IconButton(onClick = { searchVisible = !searchVisible; if (!searchVisible) search = "" },
+                modifier = Modifier.align(Alignment.CenterEnd)) {
+                Icon(Icons.Default.Search, "Поиск настроек", tint = DesignColors.TextPrimary)
+            }
         }
         key(page) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp).padding(top = 16.dp, bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 if (root) {
-                    OutlinedTextField(value = search, onValueChange = { search = it },
+                    if (searchVisible || search.isNotBlank()) OutlinedTextField(value = search, onValueChange = { search = it },
                         label = { Text("Поиск по настройкам") }, singleLine = true,
                         modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
                         trailingIcon = {
@@ -135,27 +144,38 @@ fun AppSettingsScreen(
                             }
                         }
                     } else {
-                    SettingsGroup("Аккаунт") {
-                        SettingsLink("Профиль", googleEmail.ifBlank { "Вход не выполнен" }) { page = "Профиль" }
+                    Surface(color = SettingsSurface, shape = RoundedCornerShape(20.dp),
+                        modifier = Modifier.fillMaxWidth().clickable { page = "Профиль" }) {
+                        Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Surface(shape = CircleShape, color = DesignColors.SurfaceHigh) {
+                                Icon(Icons.Default.PersonOutline, null, tint = DesignColors.TextPrimary,
+                                    modifier = Modifier.padding(12.dp).size(24.dp))
+                            }
+                            Column(Modifier.weight(1f).padding(start = 16.dp)) {
+                                Text(googleEmail.ifBlank { "Профиль" }, color = Color.White, fontSize = 18.sp,
+                                    maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                Text(if (googleEmail.isBlank()) "Вход не выполнен" else "Профиль",
+                                    color = SettingsMuted, fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp))
+                            }
+                        }
                     }
-                    SettingsGroup("Приложение") {
-                        SettingsLink("Внешний вид", "${settings.chatTextSize.titleRu} · ${settings.responseFont.titleRu}") { page = "Внешний вид" }
+                    SettingsGroup("") {
+                        SettingsLink("Внешний вид", "", icon = Icons.Default.Palette) { page = "Внешний вид" }
                         SettingsRule()
-                        SettingsLink("Голос", voiceTitle(settings.voiceProvider)) { page = "Голос" }
+                        SettingsLink("Голос", voiceTitle(settings.voiceProvider), icon = Icons.Default.MicNone) { page = "Голос" }
                         SettingsRule()
-                        SettingsLink("Уведомления", if (notificationsEnabled) "Включены в Android" else "Отключены в Android") { page = "Уведомления" }
-                        SettingsRule()
-                        SettingsLink("Модели и ключи", "Gemini API и работа через ПК") { page = "Модели и ключи" }
-                        SettingsRule()
-                        SettingsLink("Помощник Android", "Вызов из других приложений") { page = "Помощник Android" }
+                        SettingsLink("Уведомления", "", icon = Icons.Default.NotificationsNone) { page = "Уведомления" }
                     }
-                    SettingsGroup("Подключения") {
-                        SettingsLink("Подключение к ПК", connection) { page = "Подключение к ПК" }
+                    SettingsGroup("") {
+                        SettingsLink("Модели и ключи", "", icon = Icons.Default.Tune) { page = "Модели и ключи" }
+                        SettingsRule()
+                        SettingsLink("Подключение к ПК", if (bridge.connected) "Подключено" else "", icon = Icons.Default.Computer) { page = "Подключение к ПК" }
                     }
-                    SettingsGroup("Данные и доступ") {
-                        SettingsLink("Разрешения помощника", "Файлы, приложения и инструменты") { onOpenPermissions() }
+                    SettingsGroup("") {
+                        SettingsLink("Помощник Android", "", icon = Icons.Default.Android) { page = "Помощник Android" }
+                        SettingsRule()
+                        SettingsLink("Разрешения помощника", "", icon = Icons.Default.Security) { onOpenPermissions() }
                     }
-                    SettingsNote("Обычные чаты сохраняются на этом телефоне. Временные чаты остаются только до закрытия.")
                     Text("Antigravity · ${BuildConfig.VERSION_NAME}", color = SettingsMuted, fontSize = 12.sp,
                         modifier = Modifier.align(Alignment.CenterHorizontally))
                     }
@@ -317,17 +337,18 @@ private fun voiceDescription(provider: VoiceProvider) = when (provider) {
 }
 @Composable private fun SettingsGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(title, color = SettingsMuted, fontSize = 13.sp, modifier = Modifier.padding(start = 4.dp))
-        Surface(color = SettingsSurface, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) { Column(content = content) }
+        if (title.isNotBlank()) Text(title, color = SettingsMuted, fontSize = 13.sp, modifier = Modifier.padding(start = 4.dp))
+        Surface(color = SettingsSurface, shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) { Column(content = content) }
     }
 }
-@Composable private fun SettingsLink(title: String, detail: String, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+@Composable private fun SettingsLink(title: String, detail: String, icon: ImageVector? = null, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick).heightIn(min = 64.dp).padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (icon != null) Icon(icon, null, tint = DesignColors.TextPrimary, modifier = Modifier.padding(end = 16.dp).size(24.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, color = Color.White, fontSize = 16.sp)
-            Text(detail, color = SettingsMuted, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+            Text(title, color = Color.White, fontSize = 18.sp)
+            if (detail.isNotBlank()) Text(detail, color = SettingsMuted, fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp))
         }
-        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = SettingsMuted, modifier = Modifier.padding(start = 8.dp).size(20.dp))
+        if (icon == null) Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = SettingsMuted, modifier = Modifier.padding(start = 8.dp).size(20.dp))
     }
 }
 @Composable private fun SettingsToggle(title: String, detail: String, checked: Boolean, onChange: (Boolean) -> Unit) {

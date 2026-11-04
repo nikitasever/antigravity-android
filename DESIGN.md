@@ -63,13 +63,13 @@ Preserve existing rounded composer, controls, and sheets.
 ## Components
 
 SettingsModalScreen delegates to AppSettingsScreen, the single settings owner.
-Use grouped 16dp tonal surfaces, 16sp row labels and muted 13sp summaries. A fixed
+Use grouped 20dp tonal surfaces, 18sp row labels and muted 14sp summaries. A fixed
 header owns close/back; details have independent scroll positions. Root settings
 show account, app, connections, data access and version. Technical configuration
 belongs in detail pages. Existing permission and OpenRouter sheets remain owners
 for those features. Connection claims use pcBridgeStatus, never a constant label.
 API keys are masked by default, and key-check feedback belongs to the checked key.
-Root settings search navigates to existing detail pages or the permission sheet;
+Root settings search opens from the header and navigates to existing detail pages or the permission sheet;
 it searches labels and parameter keywords, never secret values. The live Claude
 settings evidence is recorded in CLAUDE_SETTINGS_REFERENCE.md.
 
@@ -79,7 +79,8 @@ ChatGptMessageBubble forwards text size to prompts and replies; response font
 affects assistant prose only. MarkdownRenderer scales prose, headings, tables
 and code while preserving monospaced code and link annotations. The default
 remains 15sp prose / 22sp line height. Assistant prose and greeting default to
-system serif; user messages and interface controls use sans. Explicitly saved
+system serif; user messages and interface controls use sans. The empty ChatGPT-style
+conversation stays blank instead of adding a two-line Antigravity headline. Explicitly saved
 font choices remain effective. Android accessibility font scaling uses sp units.
 `InlineMarkdownText` measures code chips as atomic inline items. Oversized tokens
 wrap within a full-width chip; original text and URL annotation offsets are kept.
@@ -90,6 +91,27 @@ Metadata and refresh actions remain below the heading. AppSettingsScreen owns
 Profile (existing Google session actions) and Notifications (actual Android
 permission status refreshed on resume, with navigation to system controls).
 These pages do not imply cloud profile editing or new notification delivery.
+
+## Visual correction after rejected palette-only pass
+
+The original live ChatGPT screenshot `Screenshot_20261104_091531_ChatGPT.jpg`
+governs main-screen density: three aligned header controls, 48dp circles, a
+48dp high segmented control (up to 190dp wide), and no model/context subtitle.
+`ConversationHeader` owns this geometry and shrinks the segment on narrow phones.
+The right control opens conversation actions, following the supplied Claude Code
+conversation-menu pattern; model, context, search and outline remain reachable.
+This is an explicit combined-product variant, not a claim of exact ChatGPT copying.
+
+The composer uses the ChatGPT #303030 surface, 1dp outline and 32dp rounding,
+56dp minimum height, a plain plus and larger microphone. Existing attachments,
+queue, draft, send, stop and voice handlers are preserved. Claude dark background
+and serif assistant responses remain the chosen combined-product treatment.
+
+The live Claude settings screenshot `Screenshot_20261104_090914_Claude.jpg`
+governs account-card and grouped-icon-row hierarchy; technical explanations stay
+inside detail pages. The Claude drawer screenshot `Screenshot_20261104_090907_Claude.jpg`
+governs the larger serif wordmark and bottom white New chat action. Search,
+archive, session actions and phone/PC tools remain functional in their owners.
 
 Canonical owners are `ChatGptMainChatScreen`, `ChatGptExactNavigationDrawer`, and
 the shared sheets in `ui/components/Round5PanelsAndSheets.kt`. Extend those owners

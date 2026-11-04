@@ -17,6 +17,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
+import com.google.antigravity.ui.design.DesignColors
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -60,30 +62,31 @@ fun ChatHistoryDrawer(
     }
     val muted = Color(0xFF9E9E9E)
     ModalDrawerSheet(
-        modifier = Modifier.widthIn(max = 340.dp).fillMaxWidth(0.88f),
-        drawerContainerColor = Color(0xFF171717), drawerContentColor = Color.White
+        modifier = Modifier.fillMaxWidth(0.92f).widthIn(max = 380.dp),
+        drawerContainerColor = Color(0xFF111111), drawerContentColor = Color.White
     ) {
-        Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 8.dp),
+        Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 12.dp, top = 16.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            Text("Antigravity", fontSize = 22.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Text("Antigravity", fontSize = 32.sp, fontFamily = FontFamily.Serif, modifier = Modifier.weight(1f))
             IconButton(onClick = onRefresh) { Icon(Icons.Default.Refresh, "Обновить историю") }
         }
         OutlinedTextField(
             value = query, onValueChange = { query = it }, singleLine = true,
-            placeholder = { Text("Поиск чатов, файлов и проектов", fontSize = 14.sp) },
+            placeholder = { Text("Поиск чатов", fontSize = 16.sp, maxLines = 1) },
             leadingIcon = { Icon(Icons.Default.Search, null) },
             trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) {
                 Icon(Icons.Default.Close, "Очистить поиск")
             } },
             colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White, unfocusedBorderColor = Color(0xFF383838)),
-            shape = RoundedCornerShape(16.dp),
+                unfocusedTextColor = Color.White,
+                focusedContainerColor = DesignColors.SurfaceHigh, unfocusedContainerColor = DesignColors.SurfaceHigh,
+                focusedBorderColor = DesignColors.Border, unfocusedBorderColor = Color.Transparent),
+            shape = RoundedCornerShape(32.dp),
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)
         )
         LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 16.dp)) {
             if (query.isBlank()) {
                 item {
-                    HistoryDestination(Icons.Default.Edit, "Новый чат", onNewChat)
                     HistoryDestination(Icons.Default.VisibilityOff, "Временный чат", onTemporaryChat)
                     HistoryDestination(Icons.Default.Folder, "Проекты") { onSection(DrawerSection.PROJECTS) }
                     HistoryDestination(Icons.Default.Description, "Библиотека") { onSection(DrawerSection.LIBRARY) }
@@ -169,14 +172,18 @@ fun ChatHistoryDrawer(
                 }
             }
         }
-        HorizontalDivider(color = Color(0xFF303030))
-        Row(Modifier.fillMaxWidth().clickable(onClick = onProfile).padding(16.dp),
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            Surface(shape = CircleShape, color = Color(0xFF303030)) {
-                Icon(Icons.Default.Person, null, Modifier.padding(10.dp).size(20.dp))
+            FilledIconButton(onClick = onProfile, modifier = Modifier.size(48.dp),
+                colors = IconButtonDefaults.filledIconButtonColors(containerColor = DesignColors.SurfaceHigh)) {
+                Icon(Icons.Default.PersonOutline, "Настройки", tint = DesignColors.TextPrimary)
             }
-            Text("Настройки", Modifier.weight(1f).padding(start = 12.dp), color = Color.White)
-            Icon(Icons.Default.ChevronRight, null, tint = muted)
+            Spacer(Modifier.weight(1f))
+            Button(onClick = onNewChat, shape = CircleShape, modifier = Modifier.heightIn(min = 48.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF9F9F7), contentColor = Color.Black)) {
+                Icon(Icons.Default.Add, null, modifier = Modifier.size(22.dp))
+                Text("Новый чат", fontSize = 16.sp, modifier = Modifier.padding(start = 8.dp))
+            }
         }
     }
     renameSession?.let { session ->
@@ -199,9 +206,9 @@ fun ChatHistoryDrawer(
 
 @Composable
 private fun HistoryDestination(icon: ImageVector, label: String, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 48.dp).padding(horizontal = 20.dp),
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 52.dp).padding(horizontal = 24.dp),
         verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, tint = Color(0xFFD0D0D0), modifier = Modifier.size(20.dp))
-        Text(label, color = Color.White, fontSize = 15.sp, modifier = Modifier.padding(start = 14.dp))
+        Icon(icon, null, tint = Color(0xFFC4C3BB), modifier = Modifier.size(24.dp))
+        Text(label, color = Color.White, fontSize = 18.sp, modifier = Modifier.padding(start = 16.dp))
     }
 }
