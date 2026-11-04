@@ -1,5 +1,6 @@
 package com.google.antigravity.ui
 
+import com.google.antigravity.ui.design.DesignColors
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -401,7 +402,7 @@ fun MainScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF000000))
+            .background(DesignColors.Bg)
             .windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.ime))
     ) {
         ModalNavigationDrawer(
@@ -471,7 +472,7 @@ fun MainScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0xFF000000))
+                    .background(DesignColors.Bg)
             ) {
                 FloatingVoiceCallPill(
                     voiceEngine = viewModel.voiceEngine,
@@ -1104,7 +1105,7 @@ private fun ChatGptMainChatScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF000000))
+            .background(DesignColors.Bg)
     ) {
         Row(
             modifier = Modifier
@@ -1141,7 +1142,7 @@ private fun ChatGptMainChatScreen(
                                 .weight(1f)
                                 .fillMaxHeight()
                                 .clip(RoundedCornerShape(20.dp))
-                                .background(if (isChat) Color(0xFF2F2F2F) else Color.Transparent)
+                                .background(if (isChat) DesignColors.UserBubble else Color.Transparent)
                                 .clickable { onSelectTopTab(TopModeTab.CHAT) }
                         ) {
                             Text(
@@ -1158,7 +1159,7 @@ private fun ChatGptMainChatScreen(
                                 .weight(1f)
                                 .fillMaxHeight()
                                 .clip(RoundedCornerShape(20.dp))
-                                .background(if (!isChat) Color(0xFF2F2F2F) else Color.Transparent)
+                                .background(if (!isChat) DesignColors.UserBubble else Color.Transparent)
                                 .clickable { onSelectTopTab(TopModeTab.WORK_SESSIONS) }
                         ) {
                             Text(
@@ -1186,9 +1187,9 @@ private fun ChatGptMainChatScreen(
                             .padding(horizontal = 5.dp, vertical = 2.dp)
                     ) {
                         Text(
-                            text = activeOrModel?.name
+                            text = "Antigravity · " + (activeOrModel?.name
                                 ?: availableModels.firstOrNull { it.id == selectedModelId }?.displayName
-                                ?: selectedModelId.substringAfter('/'),
+                                ?: selectedModelId.substringAfter('/')),
                             color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium,
                             maxLines = 1, overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false)
@@ -1255,7 +1256,7 @@ private fun ChatGptMainChatScreen(
         }
         if (showOutline) {
             ModalBottomSheet(onDismissRequest = { showOutline = false }, containerColor = Color(0xFF1C1C1E), contentColor = Color.White) {
-                Text("Содержание разговора", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(20.dp))
+                com.google.antigravity.ui.components.SheetHeader("Содержание разговора", { showOutline = false })
                 LazyColumn(Modifier.fillMaxWidth().heightIn(max = 480.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
                     val turns = messages.withIndex().filter { it.value.role == MessageRole.USER }
                     if (turns.isEmpty()) item { Text("В этом чате пока нет сообщений", color = Color.Gray, modifier = Modifier.padding(20.dp)) }
@@ -1330,7 +1331,8 @@ private fun ChatGptMainChatScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "Чем я могу помочь?",
+                        text = "Antigravity\nЧем я могу помочь?",
+                        fontFamily = if (chatSettings.responseFont == com.google.antigravity.model.ResponseFont.SERIF) androidx.compose.ui.text.font.FontFamily.Serif else androidx.compose.ui.text.font.FontFamily.Default,
                         color = Color.White,
                         fontSize = 24.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -1434,32 +1436,32 @@ private fun Round5QuickHubBar(
         )
 
         QuickHubPill(
-            text = "рџЊђ OpenRouter (${openRouterTotalCount.coerceAtLeast(452)})",
-            accentColor = Color(0xFF58A6FF),
+            text = "OpenRouter (${openRouterTotalCount.coerceAtLeast(452)})",
+            accentColor = DesignColors.AccentBlue,
             onClick = onOpenOpenRouterSheet
         )
 
         QuickHubPill(
             text = "Задачи ($swarmAgentsCount)",
-            accentColor = Color(0xFFF59E0B),
+            accentColor = DesignColors.AccentBlue,
             onClick = onOpenSwarmSheet
         )
 
         QuickHubPill(
-            text = "рџ’» Android CLI",
-            accentColor = Color(0xFF10B981),
+            text = "Android CLI",
+            accentColor = DesignColors.AccentBlue,
             onClick = { onOpenCliSandboxSheet(0) }
         )
 
         QuickHubPill(
             text = "🧪 Песочница",
-            accentColor = Color(0xFFA78BFA),
+            accentColor = DesignColors.AccentBlue,
             onClick = { onOpenCliSandboxSheet(1) }
         )
 
         QuickHubPill(
             text = "🛡️ Разрешения",
-            accentColor = Color(0xFF34D399),
+            accentColor = DesignColors.AccentBlue,
             onClick = onOpenPermissionsSheet
         )
     }
@@ -1555,7 +1557,7 @@ private fun ChatGptRemoteSessionsCodexScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF000000))
+            .background(DesignColors.Bg)
     ) {
         Row(
             modifier = Modifier
@@ -1586,7 +1588,7 @@ private fun ChatGptRemoteSessionsCodexScreen(
                             .weight(1f)
                             .fillMaxHeight()
                             .clip(RoundedCornerShape(20.dp))
-                            .background(if (isChat) Color(0xFF2F2F2F) else Color.Transparent)
+                            .background(if (isChat) DesignColors.UserBubble else Color.Transparent)
                             .clickable { onSelectTopTab(TopModeTab.CHAT) }
                     ) {
                         Text(
@@ -1603,7 +1605,7 @@ private fun ChatGptRemoteSessionsCodexScreen(
                             .weight(1f)
                             .fillMaxHeight()
                             .clip(RoundedCornerShape(20.dp))
-                            .background(if (!isChat) Color(0xFF2F2F2F) else Color.Transparent)
+                            .background(if (!isChat) DesignColors.UserBubble else Color.Transparent)
                             .clickable { onSelectTopTab(TopModeTab.WORK_SESSIONS) }
                     ) {
                         Text(
@@ -1683,7 +1685,7 @@ private fun ChatGptRemoteSessionsCodexScreen(
                                     modifier = Modifier
                                         .size(6.dp)
                                         .clip(CircleShape)
-                                        .background(Color(0xFF10A37F))
+                                        .background(DesignColors.AccentBlue)
                                 )
                                 Spacer(modifier = Modifier.width(7.dp))
                                 Icon(
@@ -1961,7 +1963,7 @@ private fun ChatGptBottomInputPill(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color(0xFF000000))
+            .background(DesignColors.Bg)
             .padding(horizontal = 16.dp, vertical = 10.dp)
     ) {
         currentQueue.forEach { queued ->
@@ -1992,7 +1994,7 @@ private fun ChatGptBottomInputPill(
                         onClick = { viewModel.toggleMcpConnectionSelected(id) },
                         contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
                     ) {
-                        Text("✕ $name", color = Color(0xFF60A5FA), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("✕ $name", color = DesignColors.AccentBlue, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
                 TextButton(
@@ -2133,7 +2135,7 @@ private fun ChatGptBottomInputPill(
                             Icon(
                                 imageVector = if (att.mimeType.startsWith("image/")) Icons.Default.Image else Icons.Default.Description,
                                 contentDescription = null,
-                                tint = Color(0xFF60A5FA),
+                                tint = DesignColors.AccentBlue,
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
@@ -2182,7 +2184,7 @@ private fun ChatGptBottomInputPill(
                     modifier = Modifier
                         .size(34.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF2F2F2F))
+                        .background(DesignColors.UserBubble)
                         .clickable { onPlusClick() }
                 ) {
                     Icon(
@@ -2313,7 +2315,7 @@ private fun ChatGptAttachmentPickerDialog(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = Color(0xFF1E1E1E),
+        containerColor = DesignColors.Bg,
         contentColor = Color.White,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     ) {
@@ -2323,6 +2325,7 @@ private fun ChatGptAttachmentPickerDialog(
                 .padding(horizontal = 20.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            com.google.antigravity.ui.components.SheetHeader("Добавление в чат", onDismiss)
             // 3 большие плитки сверху (Камера | Фотографии | Файлы), как в ChatGPT Android 1.2026.293
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -2362,7 +2365,7 @@ private fun ChatGptAttachmentPickerDialog(
                     Icon(
                         imageVector = Icons.Default.AlternateEmail,
                         contentDescription = null,
-                        tint = Color(0xFF60A5FA),
+                        tint = DesignColors.AccentBlue,
                         modifier = Modifier.size(22.dp)
                     )
                     Spacer(modifier = Modifier.width(12.dp))
@@ -2396,7 +2399,7 @@ private fun ChatGptAttachmentPickerDialog(
                     Icon(
                         imageVector = Icons.Default.Folder,
                         contentDescription = null,
-                        tint = Color(0xFF60A5FA),
+                        tint = DesignColors.AccentBlue,
                         modifier = Modifier.size(22.dp)
                     )
                     Spacer(modifier = Modifier.width(12.dp))
@@ -2494,7 +2497,7 @@ private fun ChatGptImagesScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF000000))
+            .background(DesignColors.Bg)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
@@ -2565,7 +2568,7 @@ private fun ChatGptScheduledScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF000000))
+            .background(DesignColors.Bg)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -2601,7 +2604,7 @@ private fun ChatGptScheduledScreen(
                             onAddTask(newTitle, newCron, newTitle)
                             newTitle = ""
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E5BF6))
+                        colors = ButtonDefaults.buttonColors(containerColor = DesignColors.AccentBlue)
                     ) {
                         Text("Добавить")
                     }
@@ -2629,7 +2632,7 @@ private fun ChatGptScheduledScreen(
                             Text(task.title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                             Text("Расписание: ${task.cronSchedule}", color = Color(0xFF8E8E8E), fontSize = 12.sp)
                         }
-                        Switch(checked = task.enabled, onCheckedChange = { onToggleTask(task.id) })
+                        Switch(colors = com.google.antigravity.ui.design.designSwitchColors(), checked = task.enabled, onCheckedChange = { onToggleTask(task.id) })
                     }
                 }
             }
@@ -2726,7 +2729,7 @@ private fun BlueVoiceWaveformCircleButton(onClick: () -> Unit) {
         modifier = Modifier
             .size(40.dp)
             .clip(CircleShape)
-            .background(Color(0xFF2E5BF6))
+            .background(DesignColors.AccentBlue)
             .clickable(onClick = onClick)
     ) {
         Canvas(modifier = Modifier.size(20.dp)) {
@@ -2775,7 +2778,7 @@ private fun EnvironmentMiniIcon() {
 private fun ChatGptMessageBubble(
     message: ChatMessage,
     readingTextSize: com.google.antigravity.model.ChatTextSize = com.google.antigravity.model.ChatTextSize.NORMAL,
-    responseFont: com.google.antigravity.model.ResponseFont = com.google.antigravity.model.ResponseFont.SYSTEM,
+    responseFont: com.google.antigravity.model.ResponseFont = com.google.antigravity.model.ResponseFont.SERIF,
     isSpeakingAloud: Boolean = false,
     onToggleThinking: () -> Unit,
     onSpeak: () -> Unit,
@@ -2824,7 +2827,7 @@ private fun ChatGptMessageBubble(
             shape = RoundedCornerShape(16.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .border(1.dp, Color(0xFF10B981).copy(alpha = 0.55f), RoundedCornerShape(16.dp))
+                .border(1.dp, DesignColors.AccentBlue.copy(alpha = 0.55f), RoundedCornerShape(16.dp))
         ) {
             Column(
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
@@ -2865,7 +2868,7 @@ private fun ChatGptMessageBubble(
                             Icon(
                                 imageVector = if (att.mimeType.startsWith("image/")) Icons.Default.Image else Icons.Default.Description,
                                 contentDescription = null,
-                                tint = Color(0xFF60A5FA),
+                                tint = DesignColors.AccentBlue,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
@@ -2935,7 +2938,7 @@ private fun ChatGptMessageBubble(
             } else {
                 // Пузырь сообщения пользователя 1:1 как в ChatGPT Android 1.2026.293 (#2F2F2F, с поддержкой кликабельных ссылок)
                 Surface(
-                    color = Color(0xFF2F2F2F),
+                    color = DesignColors.UserBubble,
                     shape = RoundedCornerShape(22.dp),
                     modifier = Modifier
                         .clip(RoundedCornerShape(22.dp))
@@ -2948,6 +2951,7 @@ private fun ChatGptMessageBubble(
                         ChatGptMarkdownText(
                             markdown = message.content,
                             textColor = Color.White,
+                            responseFont = com.google.antigravity.model.ResponseFont.SYSTEM,
                             textSize = readingTextSize,
                             onSaveCodeToPhone = onSaveToPhone
                         )
@@ -2991,7 +2995,7 @@ private fun ChatGptMessageBubble(
                             modifier = Modifier
                                 .size(7.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFF10A37F))
+                                .background(DesignColors.AccentBlue)
                         )
                         Spacer(modifier = Modifier.width(7.dp))
                     }
@@ -3029,7 +3033,7 @@ private fun ChatGptMessageBubble(
                                 .width(2.dp)
                                 .fillMaxHeight()
                                 .clip(RoundedCornerShape(1.dp))
-                                .background(if (message.isStreaming) Color(0xFF10A37F) else Color(0xFF383838))
+                                .background(if (message.isStreaming) DesignColors.AccentBlue else Color(0xFF383838))
                         )
                         Spacer(modifier = Modifier.width(12.dp))
                         Column(
@@ -3098,7 +3102,7 @@ private fun ChatGptMessageBubble(
                                             ToolCallStatus.APPROVED -> "Разрешено"
                                         },
                                         tint = when (tc.status) {
-                                            ToolCallStatus.COMPLETED -> Color(0xFF10A37F)
+                                            ToolCallStatus.COMPLETED -> DesignColors.AccentGreen
                                             ToolCallStatus.FAILED, ToolCallStatus.DENIED -> Color(0xFFFF6B6B)
                                             else -> Color(0xFF9E9E9E)
                                         },
@@ -3127,7 +3131,7 @@ private fun ChatGptMessageBubble(
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         Button(
                                             onClick = { onDecideToolCall(tc.id, ApprovalDecision.APPROVED) },
-                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10A37F)),
+                                            colors = ButtonDefaults.buttonColors(containerColor = DesignColors.AccentBlue),
                                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                                             modifier = Modifier.height(30.dp)
                                         ) {
@@ -3244,7 +3248,7 @@ private fun ChatGptMessageBubble(
                         Icon(
                             imageVector = if (copiedToast) Icons.Default.Check else Icons.Default.ContentCopy,
                             contentDescription = "Копировать",
-                            tint = if (copiedToast) Color(0xFF10A37F) else Color(0xFF9E9E9E),
+                            tint = if (copiedToast) DesignColors.AccentGreen else Color(0xFF9E9E9E),
                             modifier = Modifier
                                 .size(18.dp)
                                 .clickable {
@@ -3510,7 +3514,7 @@ private fun ModelAndModeSelectorDialog(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = Color(0xFF1E1E1E),
+        containerColor = DesignColors.Bg,
         contentColor = Color.White,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     ) {
@@ -3522,12 +3526,7 @@ private fun ModelAndModeSelectorDialog(
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             // Заголовок и подзаголовок из строковых ресурсов ChatGPT 1.2026.293 (0x7f130fab, 0x7f130fa9)
-            Text(
-                text = "Выбрать модель",
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontSize = 19.sp
-            )
+            com.google.antigravity.ui.components.SheetHeader("Выбрать модель", onDismiss)
             Text(
                 text = "Переключайтесь между рекомендуемыми нами моделями",
                 color = Color(0xFF9E9E9E),

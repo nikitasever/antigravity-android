@@ -30,6 +30,7 @@ hs_err_pid*.log
 replay_pid*.log
 *.keystore
 *.jks
+keystore.properties
 .private/
 app/src/main/assets/pc_sessions_snapshot.json
 

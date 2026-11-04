@@ -10,6 +10,6 @@ enum class ChatTextSize(val titleRu: String, val scale: Float) {
 enum class ResponseFont(val titleRu: String) {
     SYSTEM("Как в интерфейсе"), SERIF("С засечками");
     companion object {
-        fun restore(value: String?) = entries.find { it.name == value } ?: SYSTEM
+        fun restore(value: String?) = entries.find { it.name == value } ?: SERIF
     }
 }

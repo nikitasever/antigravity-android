@@ -3,8 +3,9 @@ version: alpha
 name: Antigravity Android
 description: Native Android chat informed by the user's ChatGPT and Claude references.
 colors:
-  background: "#000000"
-  surface: "#212121"
+  background: "#151515"
+  surface: "#20201E"
+  primary: "#3566EF"
   text: "#FFFFFF"
   secondary: "#9E9E9E"
 typography:
@@ -33,9 +34,12 @@ Russian is the current UI language. No new visual identity is introduced here.
 
 ## Colors
 
-Existing runtime values in `ui/MainScreen.kt` own the palette. This document
-records those values; it does not generate another theme. Keep chat backgrounds
-black, text white, and secondary labels muted. Do not add decorative accent panels.
+`ui/design/DesignSystem.kt` owns runtime tokens. The 2026-11-04 live references
+and the user's combined design specify Claude's #151515 background and #20201E
+cards, #2F2F2F user bubbles, and ChatGPT's #3566EF primary action blue.
+Semantic success/error, syntax highlighting and provider identity retain their
+distinct roles. Material switches use blue tracks and white thumbs through
+`designSwitchColors()`. Do not add decorative accent panels.
 
 ## Typography
 
@@ -74,8 +78,18 @@ AppSettingsScreen owns Appearance controls and a real Markdown preview.
 ChatGptMessageBubble forwards text size to prompts and replies; response font
 affects assistant prose only. MarkdownRenderer scales prose, headings, tables
 and code while preserving monospaced code and link annotations. The default
-remains 15sp prose / 22sp line height and the system font. Android accessibility
-font scaling is respected through sp units.
+remains 15sp prose / 22sp line height. Assistant prose and greeting default to
+system serif; user messages and interface controls use sans. Explicitly saved
+font choices remain effective. Android accessibility font scaling uses sp units.
+`InlineMarkdownText` measures code chips as atomic inline items. Oversized tokens
+wrap within a full-width chip; original text and URL annotation offsets are kept.
+Fenced code wraps and retains existing diff colors and copy/save controls.
+
+`SheetHeader` owns modal headings: centered title, close on the left, 48dp button.
+Metadata and refresh actions remain below the heading. AppSettingsScreen owns
+Profile (existing Google session actions) and Notifications (actual Android
+permission status refreshed on resume, with navigation to system controls).
+These pages do not imply cloud profile editing or new notification delivery.
 
 Canonical owners are `ChatGptMainChatScreen`, `ChatGptExactNavigationDrawer`, and
 the shared sheets in `ui/components/Round5PanelsAndSheets.kt`. Extend those owners

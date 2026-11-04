@@ -187,7 +187,7 @@ fun SlashAndMentionPopup(
                             ) {
                                 Text(
                                     text = item.categoryBadge,
-                                    color = if (item.categoryBadge.contains("ЛИДЕР")) Color(0xFFFBBF24) else Color(0xFF60A5FA),
+                                    color = if (item.categoryBadge.contains("ЛИДЕР")) Color(0xFFFBBF24) else DesignColors.AccentBlue,
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     maxLines = 1
@@ -437,7 +437,7 @@ fun ReferenceDiffCard(
                             .weight(1f)
                             .clip(RoundedCornerShape(7.dp))
                             .background(Color(0xFF172554))
-                            .border(1.dp, Color(0xFF2563EB), RoundedCornerShape(7.dp))
+                            .border(1.dp, DesignColors.AccentBlue, RoundedCornerShape(7.dp))
                             .clickable {
                                 onSaveToGoogleDrive(shortName, diff.diffPatch)
                                 Toast.makeText(context, "Запрос на сохранение отправлен", Toast.LENGTH_SHORT).show()
@@ -574,7 +574,7 @@ fun GeneratedMediaCard(
                         style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f)
                     )
                     drawCircle(
-                        color = Color(0xFF60A5FA),
+                        color = DesignColors.AccentBlue,
                         radius = 30f,
                         center = androidx.compose.ui.geometry.Offset(cx, cy)
                     )
@@ -858,35 +858,10 @@ fun ContextWindowSheet(
                 .padding(bottom = 20.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Контекстное окно",
-                    color = Color.White,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "$usedCompact из $maxCompact токенов ($pctInt%)",
-                        color = Color(0xFF9CA3AF),
-                        fontSize = 12.sp,
-                        fontFamily = FontFamily.Monospace
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = "Закрыть",
-                            tint = Color(0xFF9CA3AF),
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-            }
+            SheetHeader(title = "Контекстное окно", onClose = onDismiss)
+            Text("$usedCompact из $maxCompact токенов ($pctInt%)",
+                color = DesignColors.TextSecondary, fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace)
 
             LinearProgressIndicator(
                 progress = { progress },
@@ -894,7 +869,7 @@ fun ContextWindowSheet(
                     .fillMaxWidth()
                     .height(4.dp)
                     .clip(RoundedCornerShape(2.dp)),
-                color = Color(0xFF3B82F6),
+                color = DesignColors.AccentBlue,
                 trackColor = Color(0xFF262626)
             )
 
@@ -1033,7 +1008,7 @@ fun OpenRouterHubSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = Color(0xFF111319),
+        containerColor = DesignColors.Bg,
         contentColor = Color.White
     ) {
         Column(
@@ -1043,25 +1018,12 @@ fun OpenRouterHubSheet(
                 .padding(horizontal = 16.dp)
         ) {
             // Top Header (Clean text "Openrouter", no icons or numbers on tabs/functions)
+            SheetHeader(title = "Openrouter", onClose = onDismiss)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Openrouter",
-                            color = Color.White,
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false)
-                        )
-                    }
                     Text(
                         text = cacheStatusText.replace("⚡ ", ""),
                         color = Color(0xFF34D399),
@@ -1076,19 +1038,17 @@ fun OpenRouterHubSheet(
                         CircularProgressIndicator(
                             modifier = Modifier.size(18.dp),
                             strokeWidth = 2.dp,
-                            color = Color(0xFF60A5FA)
+                            color = DesignColors.AccentBlue
                         )
                     } else {
                         Icon(
                             imageVector = Icons.Default.Refresh,
                             contentDescription = "Синхронизировать с OpenRouter",
-                            tint = Color(0xFF60A5FA)
+                            tint = DesignColors.AccentBlue
                         )
                     }
                 }
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = Color(0xFF9CA3AF))
-                }
+
             }
 
             Spacer(modifier = Modifier.height(6.dp))
@@ -1120,7 +1080,7 @@ fun OpenRouterHubSheet(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(10.dp))
-                        .background(if (showApiKeyPanel) Color(0xFF2563EB) else Color(0xFF1E2028))
+                        .background(if (showApiKeyPanel) DesignColors.AccentBlue else Color(0xFF1E2028))
                         .border(1.dp, Color(0xFF323644), RoundedCornerShape(10.dp))
                         .clickable { showApiKeyPanel = !showApiKeyPanel }
                         .padding(vertical = 7.dp, horizontal = 12.dp),
@@ -1158,7 +1118,7 @@ fun OpenRouterHubSheet(
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = Color.White,
                                 unfocusedTextColor = Color.White,
-                                focusedBorderColor = Color(0xFF3B82F6),
+                                focusedBorderColor = DesignColors.AccentBlue,
                                 unfocusedBorderColor = Color(0xFF343946)
                             ),
                             modifier = Modifier.weight(1f)
@@ -1167,7 +1127,7 @@ fun OpenRouterHubSheet(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0xFF10A37F))
+                                .background(DesignColors.AccentBlue)
                                 .clickable { onSaveApiKey(apiKeyDraft) }
                                 .padding(horizontal = 12.dp, vertical = 12.dp)
                         ) {
@@ -1183,7 +1143,7 @@ fun OpenRouterHubSheet(
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = Color.White,
                                 unfocusedTextColor = Color.White,
-                                focusedBorderColor = Color(0xFF3B82F6),
+                                focusedBorderColor = DesignColors.AccentBlue,
                                 unfocusedBorderColor = Color(0xFF343946)
                             ),
                             modifier = Modifier.weight(1f)
@@ -1192,7 +1152,7 @@ fun OpenRouterHubSheet(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0xFF2563EB))
+                                .background(DesignColors.AccentBlue)
                                 .clickable {
                                     if (customModelDraft.isNotBlank()) {
                                         onSelectCustomModel(customModelDraft)
@@ -1230,10 +1190,10 @@ fun OpenRouterHubSheet(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(50))
-                            .background(if (selected) Color(0xFF2563EB) else Color(0xFF1C1F29))
+                            .background(if (selected) DesignColors.AccentBlue else Color(0xFF1C1F29))
                             .border(
                                 1.dp,
-                                if (selected) Color(0xFF60A5FA) else Color(0xFF2D3242),
+                                if (selected) DesignColors.AccentBlue else Color(0xFF2D3242),
                                 RoundedCornerShape(50)
                             )
                             .clickable { selectedCategory = cat }
@@ -1271,7 +1231,7 @@ fun OpenRouterHubSheet(
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedTextColor = Color.White,
                     unfocusedTextColor = Color.White,
-                    focusedBorderColor = Color(0xFF3B82F6),
+                    focusedBorderColor = DesignColors.AccentBlue,
                     unfocusedBorderColor = Color(0xFF2B303C)
                 ),
                 modifier = Modifier.fillMaxWidth()
@@ -1299,7 +1259,7 @@ fun OpenRouterHubSheet(
                             .background(if (isSelected) Color(0xFF17233B) else Color(0xFF181A22))
                             .border(
                                 1.dp,
-                                if (isSelected) Color(0xFF3B82F6) else Color(0xFF272B38),
+                                if (isSelected) DesignColors.AccentBlue else Color(0xFF272B38),
                                 RoundedCornerShape(12.dp)
                             )
                             .clickable {
@@ -1362,7 +1322,7 @@ fun OpenRouterHubSheet(
                         ) {
                             Text(
                                 text = item.id,
-                                color = Color(0xFF60A5FA),
+                                color = DesignColors.AccentBlue,
                                 fontSize = 11.5.sp,
                                 fontFamily = FontFamily.Monospace,
                                 maxLines = 1,
@@ -1429,7 +1389,7 @@ fun OpenRouterHubSheet(
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(7.dp))
-                                    .background(if (isSelected) Color(0xFF10A37F) else Color(0xFF2563EB))
+                                    .background(if (isSelected) DesignColors.AccentBlue else DesignColors.AccentBlue)
                                     .clickable {
                                         onSelectModel(item)
                                         onDismiss()
@@ -1657,7 +1617,10 @@ private fun BackgroundTasksDetailContent(
     val running = agents.any { it.isInProgress }
     val state = panelState ?: SubagentPanelState(agents = agents)
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        if (!isCompactInline) {
+            SheetHeader("Фоновые задачи", onClose)
+            state.counterLabel?.let { Text(it, color = DesignColors.TextSubtle, fontSize = DesignType.MICRO_SP.sp) }
+        } else Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     "Фоновые задачи",
@@ -1899,20 +1862,13 @@ fun GoogleDriveSheet(
                 .padding(horizontal = 16.dp)
         ) {
             // Header
+            SheetHeader(title = "Файлы рабочего пространства", onClose = onDismiss)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "Файлы рабочего пространства",
-                            color = Color.White,
-                            fontSize = 16.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
                     }
                     Text(
                         text = "Локальное хранилище • ${files.size} файлов • Google Диск не подключён",
@@ -1924,14 +1880,12 @@ fun GoogleDriveSheet(
                 }
                 IconButton(onClick = onRefresh) {
                     if (isSyncing) {
-                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Color(0xFF60A5FA))
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = DesignColors.AccentBlue)
                     } else {
-                        Icon(Icons.Default.Refresh, contentDescription = "Обновить Google Диск", tint = Color(0xFF60A5FA))
+                        Icon(Icons.Default.Refresh, contentDescription = "Обновить Google Диск", tint = DesignColors.AccentBlue)
                     }
                 }
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = Color(0xFF9CA3AF))
-                }
+
             }
 
             Spacer(modifier = Modifier.height(6.dp))
@@ -1964,7 +1918,7 @@ fun GoogleDriveSheet(
                             .weight(1f)
                             .clip(RoundedCornerShape(8.dp))
                             .background(if (isGemini) Color(0xFF1D4ED8) else Color(0xFF1F2430))
-                            .border(1.dp, if (isGemini) Color(0xFF60A5FA) else Color(0xFF32394A), RoundedCornerShape(8.dp))
+                            .border(1.dp, if (isGemini) DesignColors.AccentBlue else Color(0xFF32394A), RoundedCornerShape(8.dp))
                             .clickable { selectedEngine = "gemini" }
                             .padding(vertical = 6.dp),
                         contentAlignment = Alignment.Center
@@ -1982,7 +1936,7 @@ fun GoogleDriveSheet(
                             .weight(1f)
                             .clip(RoundedCornerShape(8.dp))
                             .background(if (!isGemini) Color(0xFF0D9488) else Color(0xFF1F2430))
-                            .border(1.dp, if (!isGemini) Color(0xFF34D399) else Color(0xFF32394A), RoundedCornerShape(8.dp))
+                            .border(1.dp, if (!isGemini) DesignColors.AccentBlue else Color(0xFF32394A), RoundedCornerShape(8.dp))
                             .clickable { selectedEngine = "openrouter" }
                             .padding(vertical = 6.dp),
                         contentAlignment = Alignment.Center
@@ -2018,7 +1972,7 @@ fun GoogleDriveSheet(
                         onValueChange = { fileNameDraft = it },
                         singleLine = true,
                         textStyle = TextStyle(color = Color.White, fontSize = 12.sp, fontFamily = FontFamily.Monospace),
-                        cursorBrush = SolidColor(Color(0xFF60A5FA)),
+                        cursorBrush = SolidColor(DesignColors.AccentBlue),
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -2037,14 +1991,14 @@ fun GoogleDriveSheet(
                         onValueChange = { fileContentDraft = it },
                         maxLines = 2,
                         textStyle = TextStyle(color = Color(0xFFD1D5DB), fontSize = 11.5.sp),
-                        cursorBrush = SolidColor(Color(0xFF60A5FA)),
+                        cursorBrush = SolidColor(DesignColors.AccentBlue),
                         modifier = Modifier.weight(1f)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0xFF2563EB))
+                            .background(DesignColors.AccentBlue)
                             .clickable {
                                 onCreateFile(fileNameDraft, fileContentDraft, "", selectedEngine)
                                 Toast.makeText(context, "Запрос на сохранение отправлен", Toast.LENGTH_SHORT).show()
@@ -2167,7 +2121,7 @@ fun GoogleDriveSheet(
                                         modifier = Modifier
                                             .weight(1f)
                                             .clip(RoundedCornerShape(7.dp))
-                                            .background(Color(0xFF2563EB))
+                                            .background(DesignColors.AccentBlue)
                                             .clickable {
                                                 onInsertInChat("@gdrive:${item.name} ")
                                                 onDismiss()
@@ -2263,20 +2217,13 @@ fun AndroidCliAndSandboxSheet(
                 .fillMaxHeight(0.92f)
                 .padding(horizontal = 16.dp)
         ) {
+            SheetHeader(title = "ANDROID CLI и Виртуальная песочница", onClose = onDismiss)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "ANDROID CLI и Виртуальная песочница",
-                        color = Color.White,
-                        fontSize = 17.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
                     Text(
                         text = "Локальная консоль смартфона и изолированная среда тестирования ИИ",
                         color = Color(0xFF9CA3AF),
@@ -2285,9 +2232,7 @@ fun AndroidCliAndSandboxSheet(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = Color(0xFF9CA3AF))
-                }
+
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -2304,8 +2249,8 @@ fun AndroidCliAndSandboxSheet(
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(10.dp))
-                            .background(if (active) Color(0xFF2563EB) else Color(0xFF1B1E28))
-                            .border(1.dp, if (active) Color(0xFF60A5FA) else Color(0xFF2C3140), RoundedCornerShape(10.dp))
+                            .background(if (active) DesignColors.AccentBlue else Color(0xFF1B1E28))
+                            .border(1.dp, if (active) DesignColors.AccentBlue else Color(0xFF2C3140), RoundedCornerShape(10.dp))
                             .clickable { selectedTab = idx }
                             .padding(vertical = 8.dp, horizontal = 4.dp),
                         contentAlignment = Alignment.Center
@@ -2377,7 +2322,7 @@ fun AndroidCliAndSandboxSheet(
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = Color(0xFF4ADE80),
                                 unfocusedTextColor = Color(0xFF4ADE80),
-                                focusedBorderColor = Color(0xFF10A37F),
+                                focusedBorderColor = DesignColors.AccentBlue,
                                 unfocusedBorderColor = Color(0xFF2D3342)
                             ),
                             modifier = Modifier.weight(1f)
@@ -2386,7 +2331,7 @@ fun AndroidCliAndSandboxSheet(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(Color(0xFF10A37F))
+                                .background(DesignColors.AccentBlue)
                                 .clickable(enabled = !isRunningCli) {
                                     if (cliInput.isNotBlank()) {
                                         onRunCliCommand(cliInput)
@@ -2427,7 +2372,7 @@ fun AndroidCliAndSandboxSheet(
                                     )
                                     Text(
                                         text = "exit=${entry.exitCode} • ${entry.durationMs}ms",
-                                        color = if (entry.exitCode == 0) Color(0xFF60A5FA) else Color(0xFFF87171),
+                                        color = if (entry.exitCode == 0) DesignColors.AccentBlue else Color(0xFFF87171),
                                         fontSize = 10.5.sp,
                                         fontFamily = FontFamily.Monospace
                                     )
@@ -2517,7 +2462,7 @@ fun AndroidCliAndSandboxSheet(
                                     modifier = Modifier
                                         .weight(1f)
                                         .clip(RoundedCornerShape(8.dp))
-                                        .background(Color(0xFF10A37F))
+                                        .background(DesignColors.AccentBlue)
                                         .clickable { onRunSandboxTests() }
                                         .padding(vertical = 9.dp),
                                     contentAlignment = Alignment.Center
@@ -2534,7 +2479,7 @@ fun AndroidCliAndSandboxSheet(
                                     modifier = Modifier
                                         .weight(1f)
                                         .clip(RoundedCornerShape(8.dp))
-                                        .background(Color(0xFF2563EB))
+                                        .background(DesignColors.AccentBlue)
                                         .clickable { onCreateSnapshot() }
                                         .padding(vertical = 9.dp),
                                     contentAlignment = Alignment.Center
@@ -2578,7 +2523,7 @@ fun AndroidCliAndSandboxSheet(
                             ) {
                                 Text(
                                     text = "Вывод тест-раннера песочницы:",
-                                    color = Color(0xFF60A5FA),
+                                    color = DesignColors.AccentBlue,
                                     fontSize = 11.5.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -2678,7 +2623,7 @@ fun AndroidCliAndSandboxSheet(
                             }
                             Text(
                                 text = "index.html • v2.0",
-                                color = Color(0xFF60A5FA),
+                                color = DesignColors.AccentBlue,
                                 fontSize = 11.sp,
                                 fontFamily = FontFamily.Monospace,
                                 maxLines = 1,
@@ -2808,7 +2753,7 @@ fun AndroidCliAndSandboxSheet(
                                 modifier = Modifier
                                     .weight(1f)
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(Color(0xFF2563EB))
+                                    .background(DesignColors.AccentBlue)
                                     .clickable {
                                         orbitPhase += 0.6f
                                         onRunSandboxTests()
@@ -2898,18 +2843,13 @@ fun AiPermissionsSheet(
                 .padding(horizontal = 16.dp)
                 .padding(bottom = 28.dp)
         ) {
+            SheetHeader(title = "Разрешения ИИ (AI Permissions 2.0)", onClose = onDismiss)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Разрешения ИИ (AI Permissions 2.0)",
-                        color = DesignColors.TextPrimary,
-                        fontSize = DesignType.TITLE_SP.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
                     Text(
                         text = "Управление политиками Antigravity 2.0 для смартфона, песочницы и ПК",
                         color = DesignColors.TextSecondary,
@@ -2918,9 +2858,7 @@ fun AiPermissionsSheet(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = DesignColors.TextSecondary)
-                }
+
             }
 
             Spacer(modifier = Modifier.height(10.dp))
@@ -3121,12 +3059,7 @@ private fun PermissionToggleRow(
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = DesignColors.TextPrimary,
-                checkedTrackColor = DesignColors.AccentBlue,
-                uncheckedThumbColor = DesignColors.TextSecondary,
-                uncheckedTrackColor = DesignColors.Border
-            )
+            colors = com.google.antigravity.ui.design.designSwitchColors()
         )
     }
 }

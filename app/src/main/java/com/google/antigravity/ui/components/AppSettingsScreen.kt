@@ -3,6 +3,11 @@ package com.google.antigravity.ui.components
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import androidx.core.app.NotificationManagerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.google.antigravity.ui.design.DesignColors
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -38,7 +43,7 @@ import com.google.antigravity.model.*
 import com.google.antigravity.viewmodel.AntigravityViewModel
 
 private val SettingsMuted = Color(0xFF9E9E9E)
-private val SettingsSurface = Color(0xFF212121)
+private val SettingsSurface = DesignColors.Surface
 
 @Composable
 fun AppSettingsScreen(
@@ -53,6 +58,17 @@ fun AppSettingsScreen(
     val root = page == "Настройки"
     val context = LocalContext.current
     val focus = LocalFocusManager.current
+    var notificationsEnabled by remember { mutableStateOf(NotificationManagerCompat.from(context).areNotificationsEnabled()) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, context) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                notificationsEnabled = NotificationManagerCompat.from(context).areNotificationsEnabled()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     val bridge by viewModel.pcBridgeStatus.collectAsState()
     val verifying by viewModel.isVerifyingApiKey.collectAsState()
     val verification by viewModel.apiKeyVerificationMessage.collectAsState()
@@ -71,14 +87,15 @@ fun AppSettingsScreen(
         bridge.connected -> "Подключено · ${bridge.instanceName.ifBlank { pcInstanceName }}"
         else -> "Нет подключения"
     }
-    Column(Modifier.fillMaxSize().background(Color.Black).systemBarsPadding()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = back) {
+    Column(Modifier.fillMaxSize().background(DesignColors.Bg).systemBarsPadding()) {
+        Box(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
+            IconButton(onClick = back, modifier = Modifier.align(Alignment.CenterStart)) {
                 Icon(if (root) Icons.Default.Close else Icons.AutoMirrored.Filled.ArrowBack,
                     if (root) "Закрыть настройки" else "Назад к настройкам", tint = Color.White)
             }
-            Text(page, color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.weight(1f).padding(start = 8.dp))
+            Text(if (page == "Аккаунт") "Профиль" else page, color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.SemiBold,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 56.dp))
         }
         key(page) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState())
@@ -96,7 +113,8 @@ fun AppSettingsScreen(
                     if (search.isNotBlank()) {
                         val entries = listOf(
                             Triple("Внешний вид", "Размер текста и шрифт ответов", "размер текст шрифт чтение крупный мелкий font appearance"),
-                            Triple("Аккаунт", "Google и веб-сессия", "профиль вход почта account google"),
+                            Triple("Профиль", "Google и веб-сессия", "профиль вход почта account google"),
+                            Triple("Уведомления", "Фоновые задачи и разрешения Android", "notifications оповещения уведомления задачи"),
                             Triple("Голос", "Источник, тембр и микрофон", "voice микрофон звук озвучка речь перебивать live tts"),
                             Triple("Модели и ключи", "Gemini API и работа через ПК", "gemini api ключ модель argon flash"),
                             Triple("Подключение к ПК", "Адрес моста и соединение", "bridge мост адрес туннель интернет https компьютер"),
@@ -118,12 +136,14 @@ fun AppSettingsScreen(
                         }
                     } else {
                     SettingsGroup("Аккаунт") {
-                        SettingsLink("Google", googleEmail.ifBlank { "Вход не выполнен" }) { page = "Аккаунт" }
+                        SettingsLink("Профиль", googleEmail.ifBlank { "Вход не выполнен" }) { page = "Профиль" }
                     }
                     SettingsGroup("Приложение") {
                         SettingsLink("Внешний вид", "${settings.chatTextSize.titleRu} · ${settings.responseFont.titleRu}") { page = "Внешний вид" }
                         SettingsRule()
                         SettingsLink("Голос", voiceTitle(settings.voiceProvider)) { page = "Голос" }
+                        SettingsRule()
+                        SettingsLink("Уведомления", if (notificationsEnabled) "Включены в Android" else "Отключены в Android") { page = "Уведомления" }
                         SettingsRule()
                         SettingsLink("Модели и ключи", "Gemini API и работа через ПК") { page = "Модели и ключи" }
                         SettingsRule()
@@ -254,10 +274,29 @@ fun AppSettingsScreen(
                             .onFailure { android.widget.Toast.makeText(context, "Откройте раздел приложений по умолчанию в настройках Android", android.widget.Toast.LENGTH_LONG).show() }
                     }, modifier = Modifier.fillMaxWidth()) { Text("Открыть настройки Android") }
                 }
-                if (page == "Аккаунт") {
+                if (page == "Профиль" || page == "Аккаунт") {
                     SettingsGroup("Google") { Text(googleEmail.ifBlank { "Вход не выполнен" }, color = Color.White, modifier = Modifier.padding(16.dp)) }
                     OutlinedButton(onClick = onOpenGoogleWeb, modifier = Modifier.fillMaxWidth()) { Text("Открыть веб-сессию") }
                     TextButton(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) { Text("Сменить аккаунт") }
+                    SettingsGroup("На этом устройстве") {
+                        Text("Antigravity · ${BuildConfig.VERSION_NAME}", color = DesignColors.TextPrimary, modifier = Modifier.padding(16.dp))
+                    }
+                    SettingsNote("История обычных чатов сохраняется на телефоне. Настройки чтения и голоса сохраняются автоматически.")
+                }
+                if (page == "Уведомления") {
+                    SettingsGroup("Статус") {
+                        Text(if (notificationsEnabled) "Уведомления разрешены" else "Уведомления отключены",
+                            color = DesignColors.TextPrimary, modifier = Modifier.padding(16.dp))
+                    }
+                    SettingsNote("Antigravity сообщает о выполнении фоновых задач. Звук, показ на экране блокировки и отдельные категории настраиваются в Android.")
+                    Button(onClick = {
+                        runCatching {
+                            context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
+                        }.onFailure {
+                            android.widget.Toast.makeText(context, "Не удалось открыть настройки уведомлений", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    }, modifier = Modifier.fillMaxWidth()) { Text("Настроить уведомления в Android") }
                 }
             }
         }
@@ -297,7 +336,7 @@ private fun voiceDescription(provider: VoiceProvider) = when (provider) {
             Text(title, color = Color.White, fontSize = 16.sp)
             Text(detail, color = SettingsMuted, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
         }
-        Switch(checked = checked, onCheckedChange = onChange, modifier = Modifier.semantics { contentDescription = title })
+        Switch(colors = com.google.antigravity.ui.design.designSwitchColors(), checked = checked, onCheckedChange = onChange, modifier = Modifier.semantics { contentDescription = title })
     }
 }
 @Composable private fun SettingsRule() { HorizontalDivider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp)) }

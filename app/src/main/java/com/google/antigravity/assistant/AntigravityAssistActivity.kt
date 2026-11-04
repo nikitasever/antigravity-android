@@ -369,10 +369,7 @@ private fun AssistOverlaySheetContent(
                         Switch(
                             checked = includeScreenContext,
                             onCheckedChange = { includeScreenContext = it },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = Color(0xFF2563EB)
-                            )
+                            colors = com.google.antigravity.ui.design.designSwitchColors()
                         )
                     }
                 }

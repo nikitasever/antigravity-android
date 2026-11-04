@@ -1,6 +1,8 @@
 package com.google.antigravity.ui.design
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.Composable
+import androidx.compose.material3.SwitchDefaults
 
 // Дизайн-токены «как у них» — сверка с референсами (3 ноября 2026,
 // доказательства — декомпиляция/ресурсы APK, не ощущения):
@@ -30,19 +32,22 @@ import androidx.compose.ui.graphics.Color
 // тёплая светлая тема Claude (#FAF9F5) существуют в референсах; наша
 // тёмная база сохранена как базовая тема Antigravity.
 
-/** Цветовые токены поверхности (тёмная база по нейтралям ChatGPT). */
+/** Runtime palette: Claude dark surfaces + ChatGPT blue, live references 2026-11-04.
+ * Historical APK extraction above records provenance, not the current UI contract.
+ */
 object DesignColors {
-    // Нейрали ChatGPT (декодированы из декомпиляции — см. шапку файла).
-    val Bg = Color(0xFF0D0D0D)
-    val Surface = Color(0xFF212121)
+    // Combined runtime surfaces; see DESIGN.md and live references.
+    val Bg = Color(0xFF151515)
+    val Surface = Color(0xFF20201E)
+    val UserBubble = Color(0xFF2F2F2F)
     val SurfaceHigh = Color(0xFF303030)
     val Border = Color(0xFF414141)
     val TextPrimary = Color(0xFFF3F3F3)
     val TextSecondary = Color(0xFFC4C3CB)
     val TextSubtle = Color(0xFF89888D)
 
-    // Акценты ChatGPT.
-    val AccentBlue = Color(0xFF3566F0)
+    // Primary action blue; the other roles are semantic status colors.
+    val AccentBlue = Color(0xFF3566EF)
     val AccentTeal = Color(0xFF04BB9F)
     val AccentGreen = Color(0xFF53B559)
     val AccentAmber = Color(0xFFFFCC38)
@@ -71,3 +76,15 @@ object DesignType {
     const val CAPTION_SP = 12f
     const val MICRO_SP = 11f
 }
+
+@Composable
+fun designSwitchColors() = SwitchDefaults.colors(
+    checkedThumbColor = Color.White,
+    checkedTrackColor = DesignColors.AccentBlue,
+    checkedBorderColor = Color.Transparent,
+    uncheckedThumbColor = Color.White,
+    uncheckedTrackColor = DesignColors.Border,
+    uncheckedBorderColor = Color.Transparent,
+    disabledCheckedThumbColor = DesignColors.TextSubtle,
+    disabledCheckedTrackColor = DesignColors.AccentBlue.copy(alpha = 0.35f)
+)

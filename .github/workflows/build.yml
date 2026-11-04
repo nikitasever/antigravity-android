@@ -32,20 +32,20 @@ jobs:
           node-version: "22"
 
       - name: Test PC Bridge
-        run: node --test pc-bridge/test/*.test.js
+        run: npm --prefix pc-bridge test
 
       - name: Run unit tests & build Debug APK
         run: |
           chmod +x ./gradlew
           ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --no-daemon
-          cp app/build/outputs/apk/debug/app-debug.apk Antigravity-Android-2.0.4.apk
+          cp app/build/outputs/apk/debug/app-debug.apk Antigravity-Android.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Antigravity-Android-2.0.4-apk
+          name: Antigravity-Android-apk
           path: |
-            Antigravity-Android-2.0.4.apk
+            Antigravity-Android.apk
             app/build/outputs/apk/debug/app-debug.apk
 
       - name: Publish GitHub Release
@@ -53,8 +53,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            Antigravity-Android-2.0.4.apk
+            Antigravity-Android.apk
             app/build/outputs/apk/debug/app-debug.apk
           name: "Google Antigravity Android ${{ github.ref_name }}"
-          body_path: RELEASE_NOTES_2.0.4.md
           generate_release_notes: true

@@ -2049,16 +2049,11 @@ private fun McpDetailSheetContent(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        SheetHeader(title = server.name, onClose = onClose)
         Row(verticalAlignment = Alignment.CenterVertically) {
             ConnectorIcon32(name = server.name, isConnected = isConnected, isFailed = isFailed)
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = server.name,
-                    color = DesignColors.TextPrimary,
-                    fontSize = DesignType.TITLE_SP.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
                 Text(
                     text = "${if (isConnected) "✓" else if (isFailed) "⚠" else "•"} ${describeMcpStatus(effectiveMcpStatus(server.status, server.error, server.errorCode))}",
                     color = when {
@@ -2070,9 +2065,7 @@ private fun McpDetailSheetContent(
                     fontWeight = FontWeight.SemiBold
                 )
             }
-            IconButton(onClick = onClose, modifier = Modifier.size(28.dp)) {
-                Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = DesignColors.TextSecondary)
-            }
+
         }
 
         HorizontalDivider(thickness = 1.dp, color = BorderSubtle)
@@ -2103,10 +2096,7 @@ private fun McpDetailSheetContent(
             Switch(
                 checked = server.enabled,
                 onCheckedChange = { onToggle() },
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = WhiteBtnText,
-                    checkedTrackColor = WhiteBtnBg
-                )
+                colors = com.google.antigravity.ui.design.designSwitchColors()
             )
         }
 
@@ -2789,6 +2779,7 @@ private fun SkillDetailSheetContent(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        SheetHeader(title = skill.name, onClose = onClose)
         Row(verticalAlignment = Alignment.CenterVertically) {
             ShowcaseIcon42(
                 categoryOrName = "skill ${skill.name}",
@@ -2797,21 +2788,13 @@ private fun SkillDetailSheetContent(
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = skill.name,
-                    color = DesignColors.TextPrimary,
-                    fontSize = DesignType.TITLE_SP.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
                     text = "Вызов в разговоре: /${skill.id.removePrefix("/")}",
                     color = DesignColors.AccentGreen,
                     fontSize = 12.sp,
                     fontFamily = FontFamily.Monospace
                 )
             }
-            IconButton(onClick = onClose, modifier = Modifier.size(28.dp)) {
-                Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = DesignColors.TextSecondary)
-            }
+
         }
 
         HorizontalDivider(thickness = 1.dp, color = BorderSubtle)
@@ -2841,10 +2824,7 @@ private fun SkillDetailSheetContent(
             Switch(
                 checked = skill.enabled,
                 onCheckedChange = { onToggle() },
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = WhiteBtnText,
-                    checkedTrackColor = WhiteBtnBg
-                )
+                colors = com.google.antigravity.ui.design.designSwitchColors()
             )
         }
 
@@ -3070,14 +3050,9 @@ private fun SkillEditSheetContent(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        SheetHeader(title = "Редактирование навыка", onClose = onClose)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Редактирование навыка",
-                    color = DesignColors.TextPrimary,
-                    fontSize = DesignType.TITLE_SP.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
                 Text(
                     text = "/${skillId.removePrefix("/")}",
                     color = DesignColors.AccentGreen,
@@ -3085,9 +3060,7 @@ private fun SkillEditSheetContent(
                     fontFamily = FontFamily.Monospace
                 )
             }
-            IconButton(onClick = onClose, modifier = Modifier.size(28.dp)) {
-                Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = DesignColors.TextSecondary)
-            }
+
         }
 
         HorizontalDivider(thickness = 1.dp, color = BorderSubtle)
@@ -3226,6 +3199,7 @@ private fun PluginDetailSheetContent(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        SheetHeader(title = "${plugin.name} (v${plugin.version})", onClose = onClose)
         Row(verticalAlignment = Alignment.CenterVertically) {
             ShowcaseIcon42(
                 categoryOrName = "${plugin.category} ${plugin.name}",
@@ -3233,20 +3207,12 @@ private fun PluginDetailSheetContent(
             )
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "${plugin.name} (v${plugin.version})",
-                    color = DesignColors.TextPrimary,
-                    fontSize = DesignType.TITLE_SP.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
                 CompositionBadge(
                     supportStatus = composition.supportStatus,
                     fullSupportAllowed = composition.fullSupportAllowed
                 )
             }
-            IconButton(onClick = onClose, modifier = Modifier.size(28.dp)) {
-                Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = DesignColors.TextSecondary)
-            }
+
         }
 
         HorizontalDivider(thickness = 1.dp, color = BorderSubtle)
@@ -3276,10 +3242,7 @@ private fun PluginDetailSheetContent(
             Switch(
                 checked = plugin.enabled,
                 onCheckedChange = { onToggle() },
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = WhiteBtnText,
-                    checkedTrackColor = WhiteBtnBg
-                )
+                colors = com.google.antigravity.ui.design.designSwitchColors()
             )
         }
 
@@ -3418,6 +3381,7 @@ private fun CatalogDetailSheetContent(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        SheetHeader(title = item.name, onClose = onClose)
         Row(verticalAlignment = Alignment.CenterVertically) {
             ShowcaseIcon42(
                 categoryOrName = "${item.category} ${item.name}",
@@ -3425,20 +3389,12 @@ private fun CatalogDetailSheetContent(
             )
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = item.name,
-                    color = DesignColors.TextPrimary,
-                    fontSize = DesignType.TITLE_SP.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
                 CompositionBadge(
                     supportStatus = item.compatibility,
                     fullSupportAllowed = item.compatibility == "fully-supported"
                 )
             }
-            IconButton(onClick = onClose, modifier = Modifier.size(28.dp)) {
-                Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = DesignColors.TextSecondary)
-            }
+
         }
 
         HorizontalDivider(thickness = 1.dp, color = BorderSubtle)

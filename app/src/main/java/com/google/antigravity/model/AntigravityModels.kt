@@ -1356,7 +1356,7 @@ data class AntigravitySettings(
     val antigravityGatewayUrl: String = "https://antigravity.google.com",
     val forcePublicTunnelOnly: Boolean = false,
     val chatTextSize: ChatTextSize = ChatTextSize.NORMAL,
-    val responseFont: ResponseFont = ResponseFont.SYSTEM
+    val responseFont: ResponseFont = ResponseFont.SERIF
 ) {
     val selectedModelDisplay: String
         get() = AVAILABLE_AGY_MODELS.find { it.id == selectedModelId }?.displayName

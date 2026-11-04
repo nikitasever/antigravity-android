@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import com.google.antigravity.model.DrawerSection
+import com.google.antigravity.ui.design.DesignColors
 import com.google.antigravity.ui.MainScreen
 import com.google.antigravity.viewmodel.AntigravityViewModel
 
@@ -48,15 +49,16 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val colorScheme = darkColorScheme(
-                primary = Color(0xFF10A37F),
-                secondary = Color(0xFF38BDF8),
-                tertiary = Color(0xFF34D399),
-                background = Color(0xFF000000),
-                surface = Color(0xFF171717),
+                primary = DesignColors.AccentBlue,
+                secondary = DesignColors.AccentBlue,
+                tertiary = DesignColors.AccentBlue,
+                background = DesignColors.Bg,
+                surface = DesignColors.Surface,
                 onPrimary = Color.White,
                 onSecondary = Color.White,
                 onBackground = Color(0xFFECECEC),
-                onSurface = Color(0xFFECECEC)
+                onSurface = Color(0xFFECECEC),
+                error = DesignColors.AccentCoral
             )
 
             val permissionLauncher = rememberLauncherForActivityResult(

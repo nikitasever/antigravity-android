@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material3.Text
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -53,7 +52,7 @@ import com.google.antigravity.R
 import com.google.antigravity.model.ChatTextSize
 import com.google.antigravity.model.ResponseFont
 
-private val ChatGptMenloFontFamily = FontFamily(
+internal val ChatGptMenloFontFamily = FontFamily(
     Font(R.font.menlo_regular, FontWeight.Normal),
     Font(R.font.menlo_bold, FontWeight.Bold)
 )
@@ -102,7 +101,7 @@ fun ChatGptMarkdownText(
     onSaveCodeToPhone: ((suggestedFileName: String, code: String) -> Unit)? = null,
     onUrlClick: ((String) -> Unit)? = null,
     textSize: ChatTextSize = ChatTextSize.NORMAL,
-    responseFont: ResponseFont = ResponseFont.SYSTEM
+    responseFont: ResponseFont = ResponseFont.SERIF
 ) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
@@ -190,8 +189,7 @@ fun ChatGptMarkdownText(
                 val annotated = remember(seg.text, textColor, textSize) {
                     parseInlineMarkdown(seg.text, textColor, textSize.scale)
                 }
-                @Suppress("DEPRECATION")
-                ClickableText(
+                InlineMarkdownText(
                     text = annotated,
                     style = TextStyle(
                         color = textColor,
@@ -199,16 +197,12 @@ fun ChatGptMarkdownText(
                         lineHeight = (22 * textSize.scale).sp,
                         fontFamily = if (responseFont == ResponseFont.SERIF) FontFamily.Serif else FontFamily.Default
                     ),
-                    onClick = { offset ->
-                        annotated.getStringAnnotations(tag = "URL", start = offset, end = offset)
-                            .firstOrNull()
-                            ?.let { ann ->
-                                if (onUrlClick != null) {
-                                    onUrlClick(ann.item)
-                                } else {
-                                    openClickableLink(context, clipboard, ann.item)
-                                }
-                            }
+                    onUrlClick = { url ->
+                        if (onUrlClick != null) {
+                            onUrlClick(url)
+                        } else {
+                            openClickableLink(context, clipboard, url)
+                        }
                     }
                 )
             }
@@ -420,6 +414,7 @@ private fun AnnotatedString.Builder.appendInlineFormatted(input: String) {
                 }
             }
             token.startsWith("`") && token.endsWith("`") && token.length > 2 -> {
+                pushStringAnnotation("CODE", token.substring(1, token.length - 1))
                 withStyle(
                     SpanStyle(
                         fontFamily = ChatGptMenloFontFamily,
@@ -427,8 +422,9 @@ private fun AnnotatedString.Builder.appendInlineFormatted(input: String) {
                         color = Color(0xFF93C5FD)
                     )
                 ) {
-                    append(" ${token.substring(1, token.length - 1)} ")
+                    append(token.substring(1, token.length - 1))
                 }
+                pop()
             }
             token.startsWith("*") && token.endsWith("*") && token.length > 2 -> {
                 withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {

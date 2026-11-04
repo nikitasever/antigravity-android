@@ -25,9 +25,9 @@ class DesignTokensTest {
     // ---------- Нейтрали ChatGPT (декодированы из декомпиляции) ----------
 
     @Test
-    fun `DesignColors — нейтрали ChatGPT равны декодированным значениям`() {
-        assertColorEquals(0xFF0D0D0D, DesignColors.Bg)
-        assertColorEquals(0xFF212121, DesignColors.Surface)
+    fun `DesignColors — поверхности объединённого дизайна по живым референсам`() {
+        assertColorEquals(0xFF151515, DesignColors.Bg)
+        assertColorEquals(0xFF20201E, DesignColors.Surface)
         assertColorEquals(0xFF303030, DesignColors.SurfaceHigh)
         assertColorEquals(0xFF414141, DesignColors.Border)
     }
@@ -40,8 +40,8 @@ class DesignTokensTest {
     }
 
     @Test
-    fun `DesignColors — акценты ChatGPT равны декодированным значениям`() {
-        assertColorEquals(0xFF3566F0, DesignColors.AccentBlue)
+    fun `DesignColors — основной синий и семантические акценты`() {
+        assertColorEquals(0xFF3566EF, DesignColors.AccentBlue)
         assertColorEquals(0xFF53B559, DesignColors.AccentGreen)
         assertColorEquals(0xFFFFCC38, DesignColors.AccentAmber)
         assertColorEquals(0xFFFF8066, DesignColors.AccentCoral)

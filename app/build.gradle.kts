@@ -1,7 +1,16 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+}
+
+// Локальный release-подписчик: keystore.properties не коммитится (см. .gitignore).
+// Без него release-сборка остаётся без signingConfig — честное поведение.
+val keystoreProps = Properties().apply {
+    val f = rootProject.file("keystore.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
 }
 
 android {
@@ -12,12 +21,22 @@ android {
         applicationId = "com.google.antigravity"
         minSdk = 26
         targetSdk = 35
-        versionCode = 20261105
-        versionName = "2.0.4-agy"
+        versionCode = 20261106
+        versionName = "2.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (keystoreProps.isNotEmpty()) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
+        }
+    }
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -25,6 +44,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.findByName("release")
         }
     }
     compileOptions {
@@ -70,6 +90,17 @@ android {
             "fsh",
             "vsh"
         )
+    }
+}
+
+// В проекте закоммичен собственный профиль запуска assets/dexopt/baseline.prof(.profm)
+// (см. c060fad). AGP компилирует библиотечные baseline-профили в тот же путь
+// assets/dexopt/baseline.prof, и packageRelease падает с
+// "already contains entry 'assets/dexopt/baseline.prof', cannot overwrite".
+// Генератор отключён: в APK попадает закоммиченный профиль.
+tasks.configureEach {
+    if (name.startsWith("compile") && name.endsWith("ArtProfile")) {
+        enabled = false
     }
 }
 
