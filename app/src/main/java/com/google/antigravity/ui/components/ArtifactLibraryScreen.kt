@@ -67,7 +67,8 @@ fun ArtifactLibraryScreen(artifacts: List<ArtifactDocument>, onOpenDrawer: () ->
     LaunchedEffect(selectedId) { editing = false; previewMode = true; documentMenuOpen = false }
     Surface(color = DesignColors.Bg, contentColor = Color.White, modifier = Modifier.fillMaxSize()) {
         Column {
-            ReferencePageHeader(title = if (selected == null) "Библиотека" else selected.title,
+            ReferencePageHeader(title = if (selected == null) "Библиотека"
+                else parseInlineMarkdown(selected.title, DesignColors.TextPrimary).text,
                 navigationIcon = {
                 IconButton(onClick = {
                     when {
@@ -169,10 +170,12 @@ fun ArtifactLibraryScreen(artifacts: List<ArtifactDocument>, onOpenDrawer: () ->
                                             tint = Color(0xFF60A5FA), modifier = Modifier.size(16.dp))
                                         Spacer(Modifier.width(6.dp))
                                     }
-                                    Text(document.title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
+                                    Text(parseInlineMarkdown(document.title, DesignColors.TextPrimary).text,
+                                        fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
                                         color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                 }
-                                Text(document.summary, fontSize = 13.sp, color = Color(0xFF9E9E9E),
+                                Text(parseInlineMarkdown(document.summary, DesignColors.TextSecondary).text,
+                                    fontSize = 13.sp, color = Color(0xFF9E9E9E),
                                     maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
                                 if (document.versions.isNotEmpty()) {
                                     Text("${document.versions.size} версий", fontSize = 11.sp,
