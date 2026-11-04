@@ -113,8 +113,30 @@ APK через streamed install и через push install не завершил
 - Android: 212 тестов, 35 наборов, 0 ошибок/падений/пропусков.
 - Node на Windows: полный прогон 207/208; MCP-подключение прошло отдельный
   повтор и повтор в составе файла. В повторном файле другая проверка превысила
-  лимит wall-clock 10 секунд. Полный зелёный Windows-прогон не заявляется.
+  лимит wall-clock 10 секунд. Это результаты промежуточных запусков под нагрузкой;
+  окончательный прогон после завершения Gradle приведён ниже.
 - Первый GitHub Actions выявил отдельный дефект чистой среды: до тестов не
   устанавливались зависимости npm. Два теста скриптов останавливались на
   проверке зависимостей. Добавлен `npm --prefix pc-bridge ci` из lock-файла
   перед тестами; поведение приложения и таймауты тестов не ослаблялись.
+
+### Окончательные результаты публикации
+
+Проверенный код: `b43d36411e8f53d5821eead164f176767cff56c9`.
+
+- Windows: полный `npm --prefix pc-bridge test` — **208/208**, 0 падений,
+  пропусков и отмен; 141,7 секунды. Отдельный security QA-файл — **15/15**.
+- Android локально: `testDebugUnitTest lintDebug assembleDebug` —
+  **BUILD SUCCESSFUL**, 20 мин 19 с. **212 тестов / 35 наборов**, без падений,
+  ошибок и пропусков. Lint: **0 ошибок, 189 предупреждений** (181 UnusedResources,
+  4 GradleDependency и по одному ModifierParameter, SetJavaScriptEnabled,
+  ObsoleteSdkInt, IconDuplicates).
+- Чистый GitHub Actions: **success**; **208/208 Node-тестов**, Android unit tests,
+  lint и APK-сборка успешны. [Прогон проверки](https://github.com/nikitasever/antigravity-android/actions/runs/41821615079).
+- [APK-артефакт GitHub Actions](https://github.com/nikitasever/antigravity-android/actions/runs/41821615079/artifacts/13317402567).
+- Локальный APK `app/build/outputs/apk/debug/app-debug.apk`: **153 364 207 байт**;
+  SHA-256 `0906b137133fdbb90d289d3e0dad7c8add8c6c44fc94b21094be1d34e4b0ba82`.
+  Это хеш локальной сборки; он не заявляется хешем CI-артефакта.
+
+Итоговый коммит отчёта меняет только этот Markdown-файл. Визуальная приёмка на
+телефоне/исправном эмуляторе по-прежнему не выполнена (причина и сценарии выше).
