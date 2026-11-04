@@ -50,6 +50,9 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CameraAlt
+import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AlternateEmail
@@ -236,6 +239,8 @@ fun MainScreen(
     val pcBridgeStatus by viewModel.pcBridgeStatus.collectAsState()
     val drawerSection by viewModel.drawerSection.collectAsState()
     val messages by viewModel.messages.collectAsState()
+    val voiceOverlayActive by viewModel.voiceEngine.isCallActive.collectAsState()
+    val voiceOverlayExpanded by viewModel.voiceEngine.isOverlayExpanded.collectAsState()
     val phoneFiles by viewModel.phoneFiles.collectAsState()
 
     // Round 5 Live StateFlows
@@ -405,7 +410,7 @@ fun MainScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(DesignColors.Bg)
+            .background(if (voiceOverlayActive && voiceOverlayExpanded) Color.Black else DesignColors.Bg)
             .windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.ime))
     ) {
         ModalNavigationDrawer(
@@ -696,6 +701,7 @@ fun MainScreen(
                             onUpdate = { transform -> viewModel.updateSettings(transform) },
                             onOpenGoogleWeb = { viewModel.selectDrawerSection(DrawerSection.GOOGLE_WEB) },
                             onSignOut = { viewModel.signOutGoogle() },
+                            onOpenDrawer = { scope.launch { drawerState.open() } },
                             onBack = { viewModel.selectDrawerSection(DrawerSection.CHAT) }
                         )
                     }
@@ -2156,19 +2162,19 @@ private fun ChatGptAttachmentPickerDialog(
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 AttachmentTileButton(
-                    icon = Icons.Default.CameraAlt,
+                    icon = Icons.Outlined.CameraAlt,
                     label = "Камера",
                     onClick = onTakePhoto,
                     modifier = Modifier.weight(1f)
                 )
                 AttachmentTileButton(
-                    icon = Icons.Default.Image,
-                    label = "Фотографии",
+                    icon = Icons.Outlined.Image,
+                    label = "Фото",
                     onClick = onPickPhotos,
                     modifier = Modifier.weight(1f)
                 )
                 AttachmentTileButton(
-                    icon = Icons.Default.AttachFile,
+                    icon = Icons.Outlined.Description,
                     label = "Файлы",
                     onClick = onPickAnyFiles,
                     modifier = Modifier.weight(1f)
@@ -2176,7 +2182,7 @@ private fun ChatGptAttachmentPickerDialog(
             }
 
             Surface(
-                color = Color(0xFF282828),
+                color = DesignColors.Surface,
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -2189,7 +2195,7 @@ private fun ChatGptAttachmentPickerDialog(
                     Icon(
                         imageVector = Icons.Default.AlternateEmail,
                         contentDescription = null,
-                        tint = DesignColors.AccentBlue,
+                        tint = DesignColors.TextPrimary,
                         modifier = Modifier.size(22.dp)
                     )
                     Spacer(modifier = Modifier.width(12.dp))
@@ -2197,20 +2203,20 @@ private fun ChatGptAttachmentPickerDialog(
                         Text(
                             text = "Упомянуть…",
                             color = Color.White,
-                            fontSize = 15.sp,
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
                             text = "Добавьте навык, подключение или файл",
                             color = Color(0xFF9E9E9E),
-                            fontSize = 12.sp
+                            fontSize = 14.sp
                         )
                     }
                 }
             }
 
             Surface(
-                color = Color(0xFF282828),
+                color = DesignColors.Surface,
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -2223,21 +2229,21 @@ private fun ChatGptAttachmentPickerDialog(
                     Icon(
                         imageVector = Icons.Default.Folder,
                         contentDescription = null,
-                        tint = DesignColors.AccentBlue,
+                        tint = DesignColors.TextPrimary,
                         modifier = Modifier.size(22.dp)
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
-                            text = "Поиск и файлы в телефоне",
+                            text = "Файлы телефона",
                             color = Color.White,
-                            fontSize = 15.sp,
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
-                            text = "Найти документы, фото, контакты или создать файл на смартфоне",
+                            text = "Поиск, чтение и создание файлов",
                             color = Color(0xFF9E9E9E),
-                            fontSize = 12.sp
+                            fontSize = 14.sp
                         )
                     }
                 }
@@ -2256,10 +2262,10 @@ private fun AttachmentTileButton(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        color = Color(0xFF2A2A2A),
+        color = DesignColors.Surface,
         shape = RoundedCornerShape(18.dp),
         modifier = modifier
-            .height(92.dp)
+            .heightIn(min = 112.dp)
             .clickable(onClick = onClick)
     ) {
         Column(
@@ -2267,17 +2273,15 @@ private fun AttachmentTileButton(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = label,
-                tint = Color.White,
-                modifier = Modifier.size(26.dp)
-            )
+            Surface(color = DesignColors.SurfaceHigh, shape = CircleShape) {
+                Icon(imageVector = icon, contentDescription = null, tint = DesignColors.TextPrimary,
+                    modifier = Modifier.padding(12.dp).size(26.dp))
+            }
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = label,
                 color = Color.White,
-                fontSize = 13.sp,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.Medium
             )
         }
@@ -2623,6 +2627,12 @@ private fun ChatGptMessageBubble(
     val clipboard = LocalClipboardManager.current
     var copiedToast by remember { mutableStateOf(false) }
     var isEditingPrompt by remember { mutableStateOf(false) }
+    LaunchedEffect(copiedToast) {
+        if (copiedToast) {
+            kotlinx.coroutines.delay(1800L)
+            copiedToast = false
+        }
+    }
     var editedText by remember(message.content) { mutableStateOf(message.content) }
     var showContextMenuSheet by remember { mutableStateOf(false) }
     var showSelectTextDialog by remember { mutableStateOf(false) }
@@ -3057,11 +3067,12 @@ private fun SettingsModalScreen(
     onUpdate: ((AntigravitySettings) -> AntigravitySettings) -> Unit,
     onOpenGoogleWeb: () -> Unit,
     onSignOut: () -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onOpenDrawer: () -> Unit
 ) {
     com.google.antigravity.ui.components.AppSettingsScreen(
         viewModel, settings, googleEmail, pcInstanceName, onUpdate,
-        onOpenGoogleWeb, onSignOut, onBack, onOpenPermissions
+        onOpenGoogleWeb, onSignOut, onBack, onOpenPermissions, onOpenDrawer
     )
 }
 

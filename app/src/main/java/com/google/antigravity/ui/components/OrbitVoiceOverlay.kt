@@ -59,6 +59,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -109,6 +110,12 @@ fun OrbitVoiceOverlay(
 
     var showCaptions by rememberSaveable { mutableStateOf(false) }
     var optionsOpen by remember { mutableStateOf(false) }
+    var shaderFailed by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val supportsGles3 = remember(context) {
+        context.getSystemService(android.app.ActivityManager::class.java)
+            ?.deviceConfigurationInfo?.reqGlEsVersion?.let { it >= 0x30000 } == true
+    }
 
     AnimatedVisibility(
         visible = isCallActive && isExpanded,
@@ -180,7 +187,7 @@ fun OrbitVoiceOverlay(
                     Box(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier
-                            .widthIn(max = 256.dp).fillMaxWidth().aspectRatio(1f)
+                            .widthIn(max = 300.dp).fillMaxWidth().aspectRatio(1f)
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null
@@ -194,13 +201,13 @@ fun OrbitVoiceOverlay(
                                 }
                             }
                     ) {
-                        ChatGptVolumetricCloudCanvas(
-                            status = status,
-                            audioLevel = smoothAudio,
-                            spectrumBands = spectrumBands,
-                            visualizerStyle = visualizerStyle,
-                            modifier = Modifier.fillMaxSize()
-                        )
+                        if (supportsGles3 && !shaderFailed && visualizerStyle == VoiceVisualizerStyle.ORBIT_ROSETTE) {
+                            ChatGptRealOpenGlOrbView(status, visualizerStyle, smoothAudio, spectrumBands,
+                                modifier = Modifier.fillMaxSize(), onRendererReady = { shaderFailed = !it })
+                        } else {
+                            ChatGptVolumetricCloudCanvas(status, smoothAudio, spectrumBands, visualizerStyle,
+                                modifier = Modifier.fillMaxSize())
+                        }
                     }
 
                     if (showCaptions) {

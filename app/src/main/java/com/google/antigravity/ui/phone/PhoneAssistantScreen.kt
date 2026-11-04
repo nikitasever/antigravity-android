@@ -92,6 +92,8 @@ import com.google.antigravity.device.PhoneSearchCategory
 import com.google.antigravity.device.PhoneSearchResultItem
 import com.google.antigravity.device.PhoneStorageSummaryInfo
 import com.google.antigravity.viewmodel.AntigravityViewModel
+import com.google.antigravity.ui.design.DesignColors
+import com.google.antigravity.ui.components.ReferencePageHeader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -187,102 +189,25 @@ fun PhoneAssistantScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF000000))
+            .background(DesignColors.Bg)
     ) {
-        // Верхняя панель
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(end = 8.dp)
-            ) {
-                IconButton(
-                    onClick = onBack,
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Назад",
-                        tint = Color.White,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(4.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Поиск по телефону",
-                        color = Color.White,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = "Файлы, документы, фото, контакты и приложения",
-                        color = Color(0xFF8E8E8E),
-                        fontSize = 12.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            // Кнопка «Спросить ИИ»
-            Surface(
-                color = Color(0xFF212121),
-                shape = RoundedCornerShape(20.dp),
-                modifier = Modifier
-                    .border(1.dp, Color(0xFF343434), RoundedCornerShape(20.dp))
-                    .clickable {
-                        val (visiblePrompt, hiddenCtx) = buildAiContextPrompt(
-                            searchQuery,
-                            activeItems,
-                            viewModel.phoneController
-                        )
-                        viewModel.sendUserPrompt(
-                            rawPrompt = visiblePrompt,
-                            viaVoice = false,
-                            hiddenPhoneContext = hiddenCtx
-                        )
-                    }
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AutoAwesome,
-                        contentDescription = null,
-                        tint = Color(0xFF60A5FA),
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Спросить ИИ",
-                        color = Color.White,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1
-                    )
-                }
-            }
-        }
+        ReferencePageHeader("Файлы телефона", navigationIcon = {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад") }
+        }, actions = {
+            IconButton(onClick = {
+                val (visiblePrompt, hiddenCtx) = buildAiContextPrompt(searchQuery, activeItems, viewModel.phoneController)
+                viewModel.sendUserPrompt(rawPrompt = visiblePrompt, viaVoice = false, hiddenPhoneContext = hiddenCtx)
+            }) { Icon(Icons.Default.AutoAwesome, "Спросить ИИ о найденных файлах") }
+        })
 
         // Большое поле поиска «Спросите или найдите что угодно на телефоне»
         Surface(
-            color = Color(0xFF212121),
+            color = DesignColors.Surface,
             shape = RoundedCornerShape(26.dp),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
-                .border(1.dp, Color(0xFF303030), RoundedCornerShape(26.dp))
+                .border(1.dp, DesignColors.SurfaceHigh, RoundedCornerShape(26.dp))
         ) {
             Row(
                 modifier = Modifier
@@ -293,7 +218,7 @@ fun PhoneAssistantScreen(
                 Icon(
                     imageVector = Icons.Default.Search,
                     contentDescription = null,
-                    tint = Color(0xFF9E9E9E),
+                    tint = DesignColors.TextSecondary,
                     modifier = Modifier.size(22.dp)
                 )
                 Spacer(modifier = Modifier.width(12.dp))
@@ -301,7 +226,7 @@ fun PhoneAssistantScreen(
                     if (searchQuery.isEmpty()) {
                         Text(
                             text = "Спросите или найдите что угодно на телефоне",
-                            color = Color(0xFF8E8E8E),
+                            color = DesignColors.TextSubtle,
                             fontSize = 15.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -341,7 +266,7 @@ fun PhoneAssistantScreen(
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = "Очистить",
-                            tint = Color(0xFF9E9E9E),
+                            tint = DesignColors.TextSecondary,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -378,7 +303,7 @@ fun PhoneAssistantScreen(
             PhoneSearchCategory.entries.forEach { category ->
                 val isSelected = selectedCategory == category
                 Surface(
-                    color = if (isSelected) Color.White else Color(0xFF212121),
+                    color = if (isSelected) Color.White else DesignColors.Surface,
                     shape = RoundedCornerShape(18.dp),
                     modifier = Modifier
                         .clip(RoundedCornerShape(18.dp))
@@ -398,8 +323,8 @@ fun PhoneAssistantScreen(
         // Индикатор фонового поиска
         AnimatedVisibility(visible = isSearching) {
             LinearProgressIndicator(
-                color = Color(0xFF3B82F6),
-                trackColor = Color(0xFF1A1A1A),
+                color = DesignColors.AccentBlue,
+                trackColor = DesignColors.Surface,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 8.dp)
@@ -419,13 +344,13 @@ fun PhoneAssistantScreen(
                 Icon(
                     imageVector = Icons.Default.AutoAwesome,
                     contentDescription = null,
-                    tint = Color(0xFF60A5FA),
+                    tint = DesignColors.AccentBlue,
                     modifier = Modifier.size(14.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = "Распознан фильтр: $humanFilter",
-                    color = Color(0xFF93C5FD),
+                    color = DesignColors.TextSecondary,
                     fontSize = 12.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -435,7 +360,7 @@ fun PhoneAssistantScreen(
 
         if (statusToastText.isNotBlank()) {
             Surface(
-                color = Color(0xFF1E293B),
+                color = DesignColors.SurfaceHigh,
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -443,7 +368,7 @@ fun PhoneAssistantScreen(
             ) {
                 Text(
                     text = statusToastText,
-                    color = Color(0xFFE2E8F0),
+                    color = DesignColors.TextPrimary,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
                 )
@@ -463,7 +388,7 @@ fun PhoneAssistantScreen(
             if (summary != null && !summary.hasAllFilesAccess) {
                 item(key = "all_files_onboarding") {
                     Surface(
-                        color = Color(0xFF171717),
+                        color = DesignColors.Surface,
                         shape = RoundedCornerShape(18.dp),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -474,7 +399,7 @@ fun PhoneAssistantScreen(
                                 Icon(
                                     imageVector = Icons.Default.FolderOpen,
                                     contentDescription = null,
-                                    tint = Color(0xFF60A5FA),
+                                    tint = DesignColors.AccentBlue,
                                     modifier = Modifier.size(22.dp)
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
@@ -550,7 +475,7 @@ fun PhoneAssistantScreen(
                     if (searchQuery.isNotBlank() && activeItems.isNotEmpty()) {
                         Text(
                             text = "Спросить ИИ о результатах →",
-                            color = Color(0xFF60A5FA),
+                            color = DesignColors.AccentBlue,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium,
                             modifier = Modifier.clickable {
@@ -592,7 +517,7 @@ fun PhoneAssistantScreen(
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
                                 text = "Попробуйте изменить запрос или поручите ИИ создать нужный файл прямо в чате.",
-                                color = Color(0xFF8E8E8E),
+                                color = DesignColors.TextSubtle,
                                 fontSize = 13.sp
                             )
                             if (searchQuery.isNotBlank()) {
@@ -600,7 +525,7 @@ fun PhoneAssistantScreen(
                                 Button(
                                     onClick = { onAskInChat(searchQuery) },
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color(0xFF212121),
+                                        containerColor = DesignColors.Surface,
                                         contentColor = Color.White
                                     ),
                                     shape = RoundedCornerShape(20.dp)
@@ -608,7 +533,7 @@ fun PhoneAssistantScreen(
                                     Icon(
                                         imageVector = Icons.Default.AutoAwesome,
                                         contentDescription = null,
-                                        tint = Color(0xFF60A5FA),
+                                        tint = DesignColors.AccentBlue,
                                         modifier = Modifier.size(16.dp)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
@@ -623,7 +548,7 @@ fun PhoneAssistantScreen(
                     item(key = "group_title_${category.name}") {
                         Text(
                             text = "${category.labelRu} (${groupList.size})",
-                            color = Color(0xFF9E9E9E),
+                            color = DesignColors.TextSecondary,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
                             modifier = Modifier.padding(top = 6.dp, bottom = 2.dp)
@@ -677,7 +602,7 @@ fun PhoneAssistantScreen(
                 )
                 Text(
                     text = "${menuTarget.category.labelRu} • ${menuTarget.sizeFormatted} • ${menuTarget.dateFormatted}",
-                    color = Color(0xFF9E9E9E),
+                    color = DesignColors.TextSecondary,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(top = 2.dp, bottom = 14.dp)
                 )
@@ -713,7 +638,7 @@ fun PhoneAssistantScreen(
                 ContextMenuActionRow(
                     icon = Icons.Default.AutoAwesome,
                     title = "Спросить ИИ об этом файле",
-                    tint = Color(0xFF60A5FA),
+                    tint = DesignColors.AccentBlue,
                     onClick = {
                         val target = menuTarget
                         selectedItemForMenu = null
@@ -773,7 +698,7 @@ private fun StorageSummaryCard(
     onQuickQueryClick: (String) -> Unit
 ) {
     Surface(
-        color = Color(0xFF171717),
+        color = DesignColors.Surface,
         shape = RoundedCornerShape(18.dp),
         modifier = Modifier
             .fillMaxWidth()
@@ -789,7 +714,7 @@ private fun StorageSummaryCard(
                     Icon(
                         imageVector = Icons.Default.Storage,
                         contentDescription = null,
-                        tint = Color(0xFF60A5FA),
+                        tint = DesignColors.AccentBlue,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
@@ -817,7 +742,7 @@ private fun StorageSummaryCard(
             val usedFraction = (summary.usedStorageGb / summary.totalStorageGb).coerceIn(0.05f, 0.98f)
             LinearProgressIndicator(
                 progress = { usedFraction },
-                color = Color(0xFF3B82F6),
+                color = DesignColors.AccentBlue,
                 trackColor = Color(0xFF2A2A2A),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -866,7 +791,7 @@ private fun PhoneResultItemCard(
     onLongClick: () -> Unit
 ) {
     Surface(
-        color = Color(0xFF171717),
+        color = DesignColors.Surface,
         shape = RoundedCornerShape(16.dp),
         modifier = Modifier
             .fillMaxWidth()
@@ -915,7 +840,7 @@ private fun PhoneResultItemCard(
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = "${item.sizeFormatted} • ${item.dateFormatted}",
-                    color = Color(0xFF9E9E9E),
+                    color = DesignColors.TextSecondary,
                     fontSize = 12.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -924,7 +849,7 @@ private fun PhoneResultItemCard(
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "«${item.snippet}»",
-                        color = Color(0xFF93C5FD),
+                        color = DesignColors.TextSecondary,
                         fontSize = 12.sp,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
@@ -1030,8 +955,8 @@ private fun categoryIcon(cat: PhoneSearchCategory): ImageVector {
 
 private fun categoryBadgeColor(cat: PhoneSearchCategory): Color {
     return when (cat) {
-        PhoneSearchCategory.ALL -> Color(0xFF60A5FA)
-        PhoneSearchCategory.DOCUMENTS -> Color(0xFF60A5FA)
+        PhoneSearchCategory.ALL -> DesignColors.AccentBlue
+        PhoneSearchCategory.DOCUMENTS -> DesignColors.AccentBlue
         PhoneSearchCategory.PHOTOS -> Color(0xFF10B981)
         PhoneSearchCategory.VIDEOS -> Color(0xFFF59E0B)
         PhoneSearchCategory.AUDIO -> Color(0xFFA855F7)

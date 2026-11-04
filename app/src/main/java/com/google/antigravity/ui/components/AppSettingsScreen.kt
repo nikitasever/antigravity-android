@@ -54,7 +54,7 @@ fun AppSettingsScreen(
     googleEmail: String, pcInstanceName: String,
     onUpdate: ((AntigravitySettings) -> AntigravitySettings) -> Unit,
     onOpenGoogleWeb: () -> Unit, onSignOut: () -> Unit, onBack: () -> Unit,
-    onOpenPermissions: () -> Unit
+    onOpenPermissions: () -> Unit, onOpenDrawer: () -> Unit = onBack
 ) {
     var page by rememberSaveable { mutableStateOf("Настройки") }
     var search by rememberSaveable { mutableStateOf("") }
@@ -92,24 +92,21 @@ fun AppSettingsScreen(
         else -> "Нет подключения"
     }
     Column(Modifier.fillMaxSize().background(DesignColors.Bg).systemBarsPadding()) {
-        Box(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
-            IconButton(onClick = back, modifier = Modifier.align(Alignment.CenterStart)) {
-                Icon(if (root) Icons.Default.Close else Icons.AutoMirrored.Filled.ArrowBack,
-                    if (root) "Закрыть настройки" else "Назад к настройкам", tint = Color.White)
-            }
-            Text(if (page == "Аккаунт") "Профиль" else page, color = Color.White,
-                fontSize = if (root) 27.sp else 22.sp, fontFamily = FontFamily.Serif,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 56.dp))
-            if (root) IconButton(onClick = { searchVisible = !searchVisible; if (!searchVisible) search = "" },
-                modifier = Modifier.align(Alignment.CenterEnd)) {
-                Icon(Icons.Default.Search, "Поиск настроек", tint = DesignColors.TextPrimary)
-            }
-        }
+        ReferencePageHeader(if (page == "Аккаунт") "Профиль" else page,
+            navigationIcon = {
+                IconButton(onClick = if (root) onOpenDrawer else back) {
+                    Icon(if (root) Icons.Default.Menu else Icons.AutoMirrored.Filled.ArrowBack,
+                        if (root) "Открыть меню" else "Назад к настройкам")
+                }
+            }, actions = {
+                if (root) IconButton(onClick = { searchVisible = !searchVisible; if (!searchVisible) search = "" }) {
+                    Icon(Icons.Default.Search, "Поиск настроек")
+                }
+            })
         key(page) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp).padding(top = 16.dp, bottom = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                .padding(horizontal = 16.dp).padding(top = 16.dp, bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 if (root) {
                     if (searchVisible || search.isNotBlank()) OutlinedTextField(value = search, onValueChange = { search = it },
                         label = { Text("Поиск по настройкам") }, singleLine = true,
@@ -144,19 +141,13 @@ fun AppSettingsScreen(
                             }
                         }
                     } else {
-                    Surface(color = SettingsSurface, shape = RoundedCornerShape(20.dp),
+                    Surface(color = SettingsSurface, shape = RoundedCornerShape(16.dp),
                         modifier = Modifier.fillMaxWidth().clickable { page = "Профиль" }) {
-                        Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Surface(shape = CircleShape, color = DesignColors.SurfaceHigh) {
-                                Icon(Icons.Default.PersonOutline, null, tint = DesignColors.TextPrimary,
-                                    modifier = Modifier.padding(12.dp).size(24.dp))
-                            }
-                            Column(Modifier.weight(1f).padding(start = 16.dp)) {
-                                Text(googleEmail.ifBlank { "Профиль" }, color = Color.White, fontSize = 18.sp,
-                                    maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                                Text(if (googleEmail.isBlank()) "Вход не выполнен" else "Профиль",
-                                    color = SettingsMuted, fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp))
-                            }
+                        Column(Modifier.padding(18.dp)) {
+                            Text(googleEmail.ifBlank { "Профиль" }, color = Color.White, fontSize = 18.sp,
+                                maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                            Text(if (googleEmail.isBlank()) "Вход не выполнен" else "Google и веб-сессия",
+                                color = SettingsMuted, fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp))
                         }
                     }
                     SettingsGroup("") {
@@ -338,7 +329,7 @@ private fun voiceDescription(provider: VoiceProvider) = when (provider) {
 @Composable private fun SettingsGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (title.isNotBlank()) Text(title, color = SettingsMuted, fontSize = 13.sp, modifier = Modifier.padding(start = 4.dp))
-        Surface(color = SettingsSurface, shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) { Column(content = content) }
+        Surface(color = SettingsSurface, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) { Column(content = content) }
     }
 }
 @Composable private fun SettingsLink(title: String, detail: String, icon: ImageVector? = null, onClick: () -> Unit) {
@@ -360,5 +351,5 @@ private fun voiceDescription(provider: VoiceProvider) = when (provider) {
         Switch(colors = com.google.antigravity.ui.design.designSwitchColors(), checked = checked, onCheckedChange = onChange, modifier = Modifier.semantics { contentDescription = title })
     }
 }
-@Composable private fun SettingsRule() { HorizontalDivider(color = Color(0xFF333333), modifier = Modifier.padding(horizontal = 16.dp)) }
+@Composable private fun SettingsRule() { HorizontalDivider(color = DesignColors.Bg, thickness = 2.dp) }
 @Composable private fun SettingsNote(text: String) { Text(text, color = SettingsMuted, fontSize = 14.sp, lineHeight = 21.sp) }

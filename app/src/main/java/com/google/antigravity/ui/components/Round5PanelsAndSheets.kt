@@ -858,7 +858,7 @@ fun ContextWindowSheet(
                 .padding(bottom = 20.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            SheetHeader(title = "Контекстное окно", onClose = onDismiss)
+            SheetHeader(title = "Контекст беседы", onClose = onDismiss)
             Text("$usedCompact из $maxCompact токенов ($pctInt%)",
                 color = DesignColors.TextSecondary, fontSize = 12.sp,
                 fontFamily = FontFamily.Monospace)
@@ -2217,7 +2217,7 @@ fun AndroidCliAndSandboxSheet(
                 .fillMaxHeight(0.92f)
                 .padding(horizontal = 16.dp)
         ) {
-            SheetHeader(title = "ANDROID CLI и Виртуальная песочница", onClose = onDismiss)
+            SheetHeader(title = "Терминал телефона", onClose = onDismiss)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -2843,7 +2843,7 @@ fun AiPermissionsSheet(
                 .padding(horizontal = 16.dp)
                 .padding(bottom = 28.dp)
         ) {
-            SheetHeader(title = "Разрешения ИИ (AI Permissions 2.0)", onClose = onDismiss)
+            SheetHeader(title = "Доступ помощника", onClose = onDismiss)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -2851,7 +2851,7 @@ fun AiPermissionsSheet(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Управление политиками Antigravity 2.0 для смартфона, песочницы и ПК",
+                        text = "Доступ к телефону, песочнице и компьютеру",
                         color = DesignColors.TextSecondary,
                         fontSize = DesignType.CAPTION_SP.sp,
                         maxLines = 1,
@@ -2891,7 +2891,7 @@ fun AiPermissionsSheet(
             Spacer(modifier = Modifier.height(14.dp))
 
             Text(
-                text = "Глобальные политики Antigravity 2.0",
+                text = "Режим выполнения",
                 color = DesignColors.TextPrimary,
                 fontSize = DesignType.SECTION_SP.sp,
                 fontWeight = FontWeight.SemiBold
@@ -3033,7 +3033,7 @@ private fun PermissionToggleRow(
             .fillMaxWidth()
             .padding(vertical = 4.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(DesignColors.SurfaceHigh)
+            .background(DesignColors.Surface)
             .border(1.dp, DesignColors.Border, RoundedCornerShape(12.dp))
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -3042,17 +3042,14 @@ private fun PermissionToggleRow(
             Text(
                 text = title,
                 color = DesignColors.TextPrimary,
-                fontSize = DesignType.BODY_SP.sp,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = subtitle,
                 color = DesignColors.TextSecondary,
-                fontSize = DesignType.CAPTION_SP.sp,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+                fontSize = 14.sp,
+                lineHeight = 20.sp
             )
         }
         Spacer(modifier = Modifier.width(8.dp))

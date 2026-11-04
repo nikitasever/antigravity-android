@@ -8,6 +8,12 @@ import android.opengl.GLUtils
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
@@ -34,10 +40,14 @@ fun ChatGptRealOpenGlOrbView(
     visualizerStyle: VoiceVisualizerStyle,
     audioLevel: Float,
     spectrumBands: FloatArray,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onRendererReady: (Boolean) -> Unit = {}
 ) {
     val context = LocalContext.current
-    val renderer = remember { ChatGptVoiceGlRenderer(context.applicationContext) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val renderer = remember { ChatGptVoiceGlRenderer(context.applicationContext) { ready ->
+        android.os.Handler(android.os.Looper.getMainLooper()).post { onRendererReady(ready) }
+    } }
 
     renderer.updateLiveState(
         status = status,
@@ -51,14 +61,26 @@ fun ChatGptRealOpenGlOrbView(
             setEGLContextClientVersion(3)
             setEGLConfigChooser(8, 8, 8, 8, 16, 0)
             setRenderer(renderer)
-            renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
+            renderMode = GLSurfaceView.RENDERMODE_WHEN_DIRTY
         }
     }
 
-    DisposableEffect(glView) {
+    DisposableEffect(glView, lifecycleOwner) {
         glView.onResume()
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) glView.onResume()
+            if (event == Lifecycle.Event.ON_PAUSE) glView.onPause()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
             glView.onPause()
+        }
+    }
+    LaunchedEffect(glView) {
+        while (isActive) {
+            if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) glView.requestRender()
+            delay(33L)
         }
     }
 
@@ -69,7 +91,8 @@ fun ChatGptRealOpenGlOrbView(
 }
 
 private class ChatGptVoiceGlRenderer(
-    private val context: Context
+    private val context: Context,
+    private val onReady: (Boolean) -> Unit
 ) : GLSurfaceView.Renderer {
 
     @Volatile
@@ -164,6 +187,7 @@ private class ChatGptVoiceGlRenderer(
         flowmapThinkingTex = loadTextureFromDrawable(R.drawable.flowmap_outward_clockwise, repeat = false)
 
         setupPrepassFramebuffer()
+        onReady(prepassProgram != 0 && mainProgram != 0)
         startTimeNs = System.nanoTime()
         lastFrameSec = 0f
     }

@@ -222,8 +222,22 @@ literal sans text, 16/24 sp, with a left gutter and a right-aligned neutral bubb
 The response-font preference applies to answers and reasoning summaries.
 
 OrbitVoiceOverlay follows the supplied ChatGPT 091536 screenshot: black canvas,
-responsive sphere up to 256 dp, compact lower text composer, mute and white close
+responsive renderer canvas up to 300 dp, compact lower text composer, mute and white close
 button. Captions are opt-in through the options menu; transient reconnect failures
 remain visible. Text, attachment and mute buttons invoke existing real handlers.
-The current Canvas is an adaptation, not a claim of original shader equivalence.
+The default GLES3 visualization uses the supplied voice_prepass/voice_main assets;
+the existing Canvas is a fallback after shader failure or without GLES3 support.
+Renderer frame requests are limited to about 30 fps while the lifecycle is resumed.
 See REFERENCE_CONVERSATION_RECHECK.md for item-level evidence and limitations.
+
+ReferencePageHeader owns centered 22 sp serif titles for Settings, Projects and
+Library. These screens share Bg/Surface tokens. Root Settings uses the drawer
+navigation icon and a simple profile row; separators span the group width.
+Library document actions live in an overflow menu, with at most export and menu
+in the header. Extension lists follow the mobile ChatGPT 091805 hierarchy: grouped
+name/status rows with a chevron; controls remain in detail views. No promotional
+hero artwork is added to installed extensions or the catalog.
+Inline code uses 84% of prose size, 6 dp horizontal and 2 dp vertical total
+padding, and Surface background. Attachment tiles use neutral surfaces, 48+ dp
+icon targets and short labels Camera/Photos/Files in the active Russian locale.
+Permission descriptions wrap instead of hiding the capability name behind ellipses.

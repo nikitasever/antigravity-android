@@ -28,9 +28,10 @@ internal fun InlineMarkdownText(text: AnnotatedString, style: TextStyle, onUrlCl
     val density = LocalDensity.current
     BoxWithConstraints {
         val widthPx = with(density) { maxWidth.roundToPx() }.coerceAtLeast(1)
-        val paddingPx = with(density) { 8.dp.roundToPx() }
-        val verticalPx = with(density) { 4.dp.roundToPx() }
+        val paddingPx = with(density) { 6.dp.roundToPx() }
+        val verticalPx = with(density) { 2.dp.roundToPx() }
         val codeStyle = style.copy(fontFamily = ChatGptMenloFontFamily,
+            fontSize = style.fontSize * 0.84f, lineHeight = style.lineHeight * 0.8f,
             lineBreak = LineBreak.Simple, hyphens = Hyphens.None, color = DesignColors.TextPrimary)
         val ranges = text.getStringAnnotations("CODE", 0, text.length)
         val content = remember(text, codeStyle, widthPx, density, measurer) {
@@ -49,7 +50,7 @@ internal fun InlineMarkdownText(text: AnnotatedString, style: TextStyle, onUrlCl
                         PlaceholderVerticalAlign.TextCenter)
                 ) {
                     // Drawing visual lines leaves selection/accessibility with the original alternate text.
-                    Canvas(Modifier.fillMaxSize().background(DesignColors.SurfaceHigh, RoundedCornerShape(4.dp))) {
+                    Canvas(Modifier.fillMaxSize().background(DesignColors.Surface, RoundedCornerShape(4.dp))) {
                         drawText(measured, topLeft = Offset(paddingPx / 2f, verticalPx / 2f))
                     }
                 }

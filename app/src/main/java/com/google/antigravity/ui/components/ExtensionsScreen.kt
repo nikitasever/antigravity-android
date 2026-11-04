@@ -21,12 +21,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -99,26 +102,8 @@ import com.google.antigravity.ui.TwoLineMenuCircleButton
 import com.google.antigravity.ui.design.DesignColors
 import com.google.antigravity.ui.design.DesignType
 
-// ---------------------------------------------------------------------------
-// Этап 6 (EXTENSIONS_INTEGRATION_PLAN.md): единый интерфейс расширений в
-// эталонном угольно-чёрном дизайне Claude Web (Connectors / Skills / Plugins).
-// 1) Тема: #0E0E10 фон, #18181B карточки/шиты, #27272A рамки 1.dp.
-// 2) Вкладки без рамок у неактивных табов, Segmented-капсула Мои / Каталог,
-//    контрастная белая кнопка "+ Установить" (#FFFFFF фон, #09090B текст).
-// 3) Компактный табличный вид (Connector | Type | Status) с иконками 32.dp
-//    для вкладки «Подключения»; честные индикаторы: "✓" только для активных,
-//    "⚠" для блокеров/ошибок.
-// 4) Hero-баннер (#0D254C для Плагинов, #13331C для Навыков) и карточки-витрины
-//    с иконками 42.dp и описанием maxLines = 2.
-// 5) Все длинные технические простыни (блокеры, лицензия, состав адаптеров,
-//    команды MCP и полные инструкции) вынесены в ModalBottomSheet по нажатию.
-// ---------------------------------------------------------------------------
-
-// Фоновые токены «как у них» — значения DesignColors (доказательства
-// референсов — см. DesignSystem.kt): экран → Bg (#0D0D0D), листы/диалоги →
-// Surface (#212121), карточки секций и повышенные элементы → SurfaceHigh
-// (#303030), рамки → Border (#414141). Имена сохранены как алиасы токенов,
-// чтобы не разъезжались места использования.
+// Shared mobile extension lists follow the supplied ChatGPT 091805 reference.
+// Connection state, permissions and installation still belong to the existing adapters.
 private val BgCharcoal = DesignColors.Bg
 private val CardBg = DesignColors.Surface
 private val BorderSubtle = DesignColors.Border
@@ -129,10 +114,6 @@ private val IconBoxBg = DesignColors.SurfaceHigh
 private val WhiteBtnBg = Color(0xFFFFFFFF)
 private val WhiteBtnText = Color(0xFF09090B)
 
-private val HeroSkillsBg = Color(0xFF13331C)
-private val HeroSkillsBorder = Color(0xFF1F4D2B)
-private val HeroPluginsBg = Color(0xFF0D254C)
-private val HeroPluginsBorder = Color(0xFF1B3F7A)
 
 // Текст и акценты — напрямую токенами DesignColors (DesignColors.TextPrimary #F3F3F3,
 // DesignColors.TextSecondary #C4C3CB, TextSubtle #89888D; DesignColors.AccentGreen #53B559,
@@ -232,54 +213,16 @@ fun ExtensionsScreen(
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // 1. Шапка: меню, заголовок, обновление и контрастная белая кнопка "+ Установить".
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             TwoLineMenuCircleButton(onClick = onOpenDrawer)
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Расширения",
-                    color = DesignColors.TextPrimary,
-                    fontSize = DesignType.TITLE_SP.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = if (isLoading) "Синхронизация с рабочей станцией ПК…" else "Подключения, навыки и плагины",
-                    color = if (isLoading) DesignColors.AccentGreen else DesignColors.TextSecondary,
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            Spacer(modifier = Modifier.width(4.dp))
-            Button(
-                onClick = { showAddDialog = true },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = WhiteBtnBg,
-                    contentColor = WhiteBtnText
-                ),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.height(34.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = null,
-                    tint = WhiteBtnText,
-                    modifier = Modifier.size(15.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = "Установить",
-                    color = WhiteBtnText,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
+            Text("Расширения", modifier = Modifier.weight(1f), textAlign = TextAlign.Center,
+                color = DesignColors.TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+            IconButton(onClick = { showAddDialog = true }, modifier = Modifier.size(48.dp)
+                .clip(CircleShape).background(WhiteBtnBg)) {
+                Icon(Icons.Default.Add, "Установить расширение", tint = WhiteBtnText)
             }
         }
+        if (isLoading) Text("Обновление…", color = DesignColors.TextSecondary, fontSize = 13.sp)
 
         // Плашка ошибки (если есть).
         if (!errorText.isNullOrBlank()) {
@@ -321,6 +264,7 @@ fun ExtensionsScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
+                modifier = Modifier.weight(1f),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
@@ -328,6 +272,7 @@ fun ExtensionsScreen(
                     val isSelected = activeTab == index
                     Box(
                         modifier = Modifier
+                            .weight(1f).heightIn(min = 48.dp)
                             .clip(RoundedCornerShape(8.dp))
                             .background(if (isSelected) ActivePillBg else Color.Transparent)
                             .clickable { activeTab = index }
@@ -337,17 +282,16 @@ fun ExtensionsScreen(
                         Text(
                             text = tab.title,
                             color = if (isSelected) DesignColors.TextPrimary else DesignColors.TextSecondary,
-                            fontSize = 13.sp,
+                            fontSize = 14.sp,
                             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                            maxLines = 1
+                            textAlign = TextAlign.Center, maxLines = 2
                         )
                     }
                 }
             }
-            Spacer(modifier = Modifier.weight(1f))
             IconButton(
                 onClick = onRefresh,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(48.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Refresh,
@@ -390,11 +334,7 @@ fun ExtensionsScreen(
                 ClaudeSearchField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    placeholder = when (activeTab) {
-                        0 -> "Поиск подключений…"
-                        1 -> "Поиск навыков…"
-                        else -> "Поиск плагинов…"
-                    }
+                    placeholder = "Поиск"
                 )
             }
         }
@@ -402,7 +342,7 @@ fun ExtensionsScreen(
         val query = searchQuery.trim().lowercase()
         LazyColumn(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(1.dp),
             contentPadding = PaddingValues(bottom = 16.dp)
         ) {
             if (scopeMine) {
@@ -415,7 +355,7 @@ fun ExtensionsScreen(
                             item {
                                 EmptyExtensionsCard(
                                     title = "Подключения не добавлены",
-                                    subtitle = "Нажмите «+ Установить», чтобы зарегистрировать MCP-сервер (agy mcp add). Инструменты появятся после живого рукопожатия «Проверить»."
+                                    subtitle = "Добавьте сервер кнопкой «+». После проверки подключения здесь появятся его инструменты."
                                 )
                             }
                         } else {
@@ -448,15 +388,11 @@ fun ExtensionsScreen(
                             }
                         } else {
                             item(key = "skills_section_header") {
-                                SectionHeaderRow(title = "Установленные навыки (${filtered.size})")
+                                SectionHeaderRow(title = "Добавленные · ${filtered.size}")
                             }
-                            items(filtered, key = { "skill_${it.id}" }) { skill ->
-                                SkillCard(
-                                    skill = skill,
-                                    onCardClick = { detailTarget = ExtensionDetailTarget.Skill(skill.id) },
-                                    onInsertIntoChat = { onInsertSkillIntoChat(skill.id.removePrefix("/")) },
-                                    onToggle = { onToggleSkill(skill.id) }
-                                )
+                            itemsIndexed(filtered, key = { _, skill -> "skill_${skill.id}" }) { index, skill ->
+                                SkillCard(skill, { detailTarget = ExtensionDetailTarget.Skill(skill.id) },
+                                    index == 0, index == filtered.lastIndex)
                             }
                         }
                     }
@@ -471,38 +407,22 @@ fun ExtensionsScreen(
                             item {
                                 EmptyExtensionsCard(
                                     title = "Плагины не установлены",
-                                    subtitle = "«+ Установить» принимает URL или локальный путь (реальный импорт); состав и право распространения проверяются для каждого пакета."
+                                    subtitle = "Выберите плагин из каталога или добавьте свой кнопкой «+»."
                                 )
                             }
                         } else {
                             item(key = "plugins_section_header") {
-                                SectionHeaderRow(title = "Установленные плагины (${filtered.size})")
+                                SectionHeaderRow(title = "Добавленные · ${filtered.size}")
                             }
-                            items(filtered, key = { "plugin_${it.id}" }) { plugin ->
-                                PluginCard(
-                                    plugin = plugin,
-                                    onCardClick = { detailTarget = ExtensionDetailTarget.Plugin(plugin.id) },
-                                    onToggle = { onTogglePlugin(plugin.id) },
-                                    onUpdate = { onUpdatePlugin(plugin.id) }
-                                )
+                            itemsIndexed(filtered, key = { _, plugin -> "plugin_${plugin.id}" }) { index, plugin ->
+                                PluginCard(plugin, { detailTarget = ExtensionDetailTarget.Plugin(plugin.id) },
+                                    index == 0, index == filtered.lastIndex)
                             }
                         }
                     }
                 }
             } else {
-                // 4. Каталог (Discover). Вкладка «Подключения» — тот же
-                //    компактный табличный вид, что и в «Мои» (без Hero-баннера
-                //    и без карточек с «Детали»: детали — по тапу на строку).
-                //    «Навыки»/«Плагины» — Hero-баннер + карточки-витрины.
-                if (query.isEmpty() && activeTab != 0) {
-                    item(key = "hero_catalog_$activeTab") {
-                        ClaudeHeroBanner(
-                            activeTab = activeTab,
-                            onActionClick = { showAddDialog = true }
-                        )
-                    }
-                }
-
+                // Catalog uses the same mobile list vocabulary, without promotional hero artwork.
                 val tabCategories = when (activeTab) {
                     0 -> setOf("mcp-server", "connector", "app")
                     1 -> setOf("skill", "skill-assets", "command", "agent", "output-style")
@@ -527,7 +447,7 @@ fun ExtensionsScreen(
                     item {
                         EmptyExtensionsCard(
                             title = "В каталоге ничего не найдено",
-                            subtitle = "Каталог строится по инвентарю источников (Claude / ChatGPT / Codex / Antigravity). Уточните поиск или обновите данные."
+                            subtitle = "Измените поисковый запрос или обновите список."
                         )
                     }
                 } else if (activeTab == 0) {
@@ -887,7 +807,7 @@ private fun CompactStatusBadge(
 ) {
     val normalized = supportStatus.trim().lowercase()
     val (symbol, label, color) = when (normalized) {
-        "fully-supported", "verified", "connected" -> Triple("✓", "Готов", DesignColors.AccentGreen)
+        "fully-supported", "supported", "verified", "connected" -> Triple("✓", "Готов", DesignColors.AccentGreen)
         "partial" -> Triple("⚠", "Частично", DesignColors.AccentAmber)
         "blocked", "failed" -> Triple("⚠", "Заблокирован", DesignColors.AccentCoral)
         "observation", "not-applicable" -> Triple("•", "Наблюдение", DesignColors.TextSubtle)
@@ -915,7 +835,8 @@ private fun SegmentedScopeItem(
 ) {
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
+            .heightIn(min = 48.dp)
+            .clip(RoundedCornerShape(24.dp))
             .background(if (selected) ActivePillBg else Color.Transparent)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 5.dp),
@@ -939,10 +860,10 @@ private fun ClaudeSearchField(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(38.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .heightIn(min = 48.dp)
+            .clip(RoundedCornerShape(24.dp))
             .background(SearchFieldBg)
-            .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
+            .border(1.dp, BorderSubtle, RoundedCornerShape(24.dp))
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -950,7 +871,7 @@ private fun ClaudeSearchField(
             imageVector = Icons.Default.Search,
             contentDescription = "Поиск",
             tint = DesignColors.TextSubtle,
-            modifier = Modifier.size(16.dp)
+            modifier = Modifier.size(20.dp)
         )
         Spacer(modifier = Modifier.width(8.dp))
         Box(
@@ -961,7 +882,7 @@ private fun ClaudeSearchField(
                 Text(
                     text = placeholder,
                     color = DesignColors.TextSubtle,
-                    fontSize = 13.sp,
+                    fontSize = 15.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -970,7 +891,7 @@ private fun ClaudeSearchField(
                 value = value,
                 onValueChange = onValueChange,
                 singleLine = true,
-                textStyle = TextStyle(color = DesignColors.TextPrimary, fontSize = 13.sp),
+                textStyle = TextStyle(color = DesignColors.TextPrimary, fontSize = 15.sp),
                 cursorBrush = SolidColor(DesignColors.TextPrimary),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                 modifier = Modifier.fillMaxWidth()
@@ -979,7 +900,7 @@ private fun ClaudeSearchField(
         if (value.isNotEmpty()) {
             IconButton(
                 onClick = { onValueChange("") },
-                modifier = Modifier.size(22.dp)
+                modifier = Modifier.size(48.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,
@@ -1006,165 +927,6 @@ private fun SectionHeaderRow(title: String) {
             fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.weight(1f)
-        )
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Hero-баннер Claude Web (#13331C для Навыков, #0D254C для Плагинов)
-// ---------------------------------------------------------------------------
-
-@Composable
-private fun ClaudeHeroBanner(
-    activeTab: Int,
-    onActionClick: () -> Unit
-) {
-    val bgColor = when (activeTab) {
-        1 -> HeroSkillsBg
-        2 -> HeroPluginsBg
-        else -> CardBg
-    }
-    val borderColor = when (activeTab) {
-        1 -> HeroSkillsBorder
-        2 -> HeroPluginsBorder
-        else -> BorderSubtle
-    }
-    val overline = when (activeTab) {
-        1 -> "From Antigravity • SKILL.md"
-        2 -> "From Antigravity • Plugins"
-        else -> "From Antigravity • MCP"
-    }
-    val headline = when (activeTab) {
-        1 -> "Data & Skills"
-        2 -> "Data & Plugins"
-        else -> "MCP Connectors"
-    }
-    val description = when (activeTab) {
-        1 -> "Анализ данных, SQL, таблицы и проверенные навыки SKILL.md в едином рабочем пространстве."
-        2 -> "Составные пакеты инструментов, правил и адаптеров с проверкой совместимости и лицензии."
-        else -> "Живые MCP-подключения stdio и Streamable HTTP с проверкой рукопожатия и вызовом tools/list."
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(bgColor)
-            .border(1.dp, borderColor, RoundedCornerShape(12.dp))
-            .padding(18.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Text(
-                    text = overline,
-                    color = Color(0xFFD4D4D8),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = headline,
-                    color = DesignColors.TextPrimary,
-                    fontSize = DesignType.TITLE_SP.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = description,
-                    color = Color(0xFFE4E4E7),
-                    fontSize = 12.5.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    lineHeight = 17.sp
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(WhiteBtnBg)
-                        .clickable(onClick = onActionClick)
-                        .padding(horizontal = 14.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        text = "Добавить",
-                        color = WhiteBtnText,
-                        fontSize = 12.5.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.width(14.dp))
-            HeroDataIllustration()
-        }
-    }
-}
-
-@Composable
-private fun HeroDataIllustration() {
-    Canvas(modifier = Modifier.size(width = 96.dp, height = 76.dp)) {
-        val strokeWidth = 2.dp.toPx()
-        val tableWidth = size.width * 0.76f
-        val tableHeight = size.height * 0.72f
-        val topLeft = Offset(2.dp.toPx(), 4.dp.toPx())
-
-        // Контур таблицы (как на скриншотах Claude Web Data).
-        drawRoundRect(
-            color = Color.White.copy(alpha = 0.9f),
-            topLeft = topLeft,
-            size = Size(tableWidth, tableHeight),
-            cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx()),
-            style = Stroke(width = strokeWidth)
-        )
-        // Горизонтальные линии сетки.
-        for (i in 1..3) {
-            val y = topLeft.y + (tableHeight / 4f) * i
-            drawLine(
-                color = Color.White.copy(alpha = 0.85f),
-                start = Offset(topLeft.x, y),
-                end = Offset(topLeft.x + tableWidth, y),
-                strokeWidth = strokeWidth
-            )
-        }
-        // Вертикальные линии сетки.
-        for (i in 1..2) {
-            val x = topLeft.x + (tableWidth / 3f) * i
-            drawLine(
-                color = Color.White.copy(alpha = 0.85f),
-                start = Offset(x, topLeft.y),
-                end = Offset(x, topLeft.y + tableHeight),
-                strokeWidth = strokeWidth
-            )
-        }
-
-        // Круг с графиком тренда в правом нижнем углу иллюстрации.
-        val circleRadius = 21.dp.toPx()
-        val circleCenter = Offset(size.width - circleRadius - 2.dp.toPx(), size.height - circleRadius - 2.dp.toPx())
-        drawCircle(
-            color = Color(0xFF6EA88E),
-            radius = circleRadius,
-            center = circleCenter
-        )
-        drawCircle(
-            color = Color.White,
-            radius = circleRadius,
-            center = circleCenter,
-            style = Stroke(width = strokeWidth)
-        )
-
-        val trendPath = Path().apply {
-            moveTo(circleCenter.x - circleRadius * 0.55f, circleCenter.y + circleRadius * 0.25f)
-            lineTo(circleCenter.x - circleRadius * 0.15f, circleCenter.y - circleRadius * 0.10f)
-            lineTo(circleCenter.x + circleRadius * 0.10f, circleCenter.y + circleRadius * 0.12f)
-            lineTo(circleCenter.x + circleRadius * 0.48f, circleCenter.y - circleRadius * 0.28f)
-        }
-        drawPath(
-            path = trendPath,
-            color = Color.White,
-            style = Stroke(width = strokeWidth, cap = StrokeCap.Round, join = StrokeJoin.Round)
         )
     }
 }
@@ -1537,362 +1299,65 @@ private fun ShowcaseIcon42(
 }
 
 @Composable
-private fun SkillCard(
-    skill: PcSkillItem,
-    onCardClick: () -> Unit,
-    onInsertIntoChat: () -> Unit,
-    onToggle: () -> Unit
-) {
-    Surface(
-        color = CardBg,
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
-            .clickable(onClick = onCardClick)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalAlignment = Alignment.Top
-        ) {
-            ShowcaseIcon42(
-                categoryOrName = "skill ${skill.name}",
-                accentColor = if (skill.enabled) DesignColors.AccentGreen else DesignColors.TextSubtle
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(3.dp)
-            ) {
-                Text(
-                    text = skill.name,
-                    color = DesignColors.TextPrimary,
-                    fontSize = 14.5.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    lineHeight = 18.sp
-                )
-                Text(
-                    text = skill.description.ifBlank { skill.instructionsPreview }.ifBlank { "Навык SKILL.md рабочей станции" },
-                    color = DesignColors.TextSecondary,
-                    fontSize = 12.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    lineHeight = 16.sp
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text(
-                        text = if (skill.enabled) "✓ Включён" else "• Отключён",
-                        color = if (skill.enabled) DesignColors.AccentGreen else DesignColors.TextSubtle,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        text = "· ПК (SKILL.md)",
-                        color = DesignColors.TextSubtle,
-                        fontSize = 11.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
+private fun SkillCard(skill: PcSkillItem, onCardClick: () -> Unit, first: Boolean, last: Boolean) {
+    ExtensionEntryRow(skill.name, if (skill.enabled) "Включён" else "Выключен",
+        "skill ${skill.name}", first, last, onCardClick)
+}
+
+@Composable
+private fun PluginCard(plugin: InstalledPluginItem, onCardClick: () -> Unit, first: Boolean, last: Boolean) {
+    val status = when (plugin.composition.supportStatus.lowercase()) {
+        "blocked", "failed" -> "Заблокирован"
+        "partial" -> "Доступен частично"
+        "fully-supported", "supported", "verified", "connected" -> if (plugin.enabled) "Включён" else "Выключен"
+        else -> "Требует проверки"
+    }
+    ExtensionEntryRow(plugin.name, status, "${plugin.category} ${plugin.name}", first, last, onCardClick)
+}
+
+@Composable
+private fun ExtensionEntryRow(name: String, status: String, iconKey: String,
+    first: Boolean, last: Boolean, onClick: () -> Unit) {
+    Surface(color = CardBg, shape = RoundedCornerShape(
+        topStart = if (first) 20.dp else 0.dp, topEnd = if (first) 20.dp else 0.dp,
+        bottomStart = if (last) 20.dp else 0.dp, bottomEnd = if (last) 20.dp else 0.dp),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
+        Row(Modifier.heightIn(min = 76.dp).padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            ShowcaseIcon42(iconKey, DesignColors.TextPrimary)
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(name, color = DesignColors.TextPrimary, fontSize = 17.sp,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 23.sp)
+                Text(status, color = DesignColors.TextSecondary, fontSize = 13.sp,
+                    modifier = Modifier.padding(top = 3.dp))
             }
-            Spacer(modifier = Modifier.width(6.dp))
-            // Кнопки справа в стиле Claude Web: [💬 В чат] + компактный тоггл.
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(ActivePillBg)
-                        .border(1.dp, BorderSubtle, RoundedCornerShape(8.dp))
-                        .clickable(onClick = onInsertIntoChat)
-                        .padding(horizontal = 7.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        text = "/ В чат",
-                        color = DesignColors.TextPrimary,
-                        fontSize = 10.5.sp,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (skill.enabled) ActivePillBg else IconBoxBg)
-                        .border(1.dp, BorderSubtle, RoundedCornerShape(8.dp))
-                        .clickable(onClick = onToggle),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = if (skill.enabled) "✓" else "○",
-                        color = if (skill.enabled) DesignColors.AccentGreen else DesignColors.TextSubtle,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Подробнее о $name",
+                tint = DesignColors.TextSecondary, modifier = Modifier.size(22.dp))
         }
     }
 }
 
 @Composable
-private fun PluginCard(
-    plugin: InstalledPluginItem,
-    onCardClick: () -> Unit,
-    onToggle: () -> Unit,
-    onUpdate: () -> Unit
-) {
-    val composition = plugin.composition
-    Surface(
-        color = CardBg,
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
-            .clickable(onClick = onCardClick)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalAlignment = Alignment.Top
-        ) {
-            ShowcaseIcon42(
-                categoryOrName = "${plugin.category} ${plugin.name}",
-                accentColor = if (plugin.enabled) DesignColors.AccentBlue else DesignColors.TextSubtle
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(3.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text(
-                        text = plugin.name,
-                        color = DesignColors.TextPrimary,
-                        fontSize = 14.5.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        lineHeight = 18.sp,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-                    Text(
-                        text = "v${plugin.version}",
-                        color = DesignColors.TextSubtle,
-                        fontSize = 11.sp,
-                        maxLines = 1
-                    )
-                }
-                Text(
-                    text = plugin.description.ifBlank { "Пакет плагина (${plugin.category})" },
-                    color = DesignColors.TextSecondary,
-                    fontSize = 12.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    lineHeight = 16.sp
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text(
-                        text = "by ${shortSourceName(plugin.source)}",
-                        color = DesignColors.TextSubtle,
-                        fontSize = 11.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-                    CompactStatusBadge(
-                        supportStatus = composition.supportStatus,
-                        fullSupportAllowed = composition.fullSupportAllowed
-                    )
-                }
+private fun CatalogCard(item: ExtensionCatalogItem, onCardClick: () -> Unit, onInstall: () -> Unit) {
+    Surface(color = CardBg, shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable(onClick = onCardClick)) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            ShowcaseIcon42("${item.category} ${item.name}", DesignColors.TextPrimary)
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(item.name, color = DesignColors.TextPrimary, fontSize = 17.sp,
+                    lineHeight = 23.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(humanDescriptionFor(item), color = DesignColors.TextSecondary, fontSize = 14.sp,
+                    lineHeight = 20.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 4.dp))
+                CompactStatusBadge(item.compatibility, item.compatibility == "fully-supported",
+                    item.blocker.contains("oauth", ignoreCase = true))
             }
-            Spacer(modifier = Modifier.width(6.dp))
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(ActivePillBg)
-                        .border(1.dp, BorderSubtle, RoundedCornerShape(8.dp))
-                        .clickable(onClick = onUpdate)
-                        .padding(horizontal = 7.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        text = "Обновить",
-                        color = DesignColors.TextPrimary,
-                        fontSize = 10.5.sp,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (plugin.enabled) ActivePillBg else IconBoxBg)
-                        .border(1.dp, BorderSubtle, RoundedCornerShape(8.dp))
-                        .clickable(onClick = onToggle),
-                    contentAlignment = Alignment.Center
-                ) {
-                    // Пункт 4: зелёная «✓» только когда статус не противоречит
-                    // ей; у заблокированного плагина «✓» не показывается.
-                    val blocked = composition.supportStatus.equals("blocked", ignoreCase = true) ||
-                        composition.supportStatus.equals("failed", ignoreCase = true)
-                    Text(
-                        text = when {
-                            blocked -> "⚠"
-                            plugin.enabled -> "✓"
-                            else -> "○"
-                        },
-                        color = when {
-                            blocked -> DesignColors.AccentCoral
-                            plugin.enabled -> DesignColors.AccentGreen
-                            else -> DesignColors.TextSubtle
-                        },
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CatalogCard(
-    item: ExtensionCatalogItem,
-    onCardClick: () -> Unit,
-    onInstall: () -> Unit
-) {
-    // Пункт 2: на витрине — человеческое описание назначения; сырой текст
-    // блокера/лицензии — только в нижней шторке по тапу на карточку.
-    val humanDescription = remember(item) { humanDescriptionFor(item) }
-    val oauthRequired = remember(item) {
-        item.blocker.contains("oauth", ignoreCase = true) ||
-            item.licenseNote.contains("oauth", ignoreCase = true)
-    }
-    Surface(
-        color = CardBg,
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
-            .clickable(onClick = onCardClick)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalAlignment = Alignment.Top
-        ) {
-            ShowcaseIcon42(
-                categoryOrName = "${item.category} ${item.name}",
-                accentColor = if (item.installable) DesignColors.AccentGreen else DesignColors.TextSecondary
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(3.dp)
-            ) {
-                Text(
-                    text = item.name,
-                    color = DesignColors.TextPrimary,
-                    fontSize = 14.5.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    lineHeight = 18.sp
-                )
-                Text(
-                    text = humanDescription,
-                    color = DesignColors.TextSecondary,
-                    fontSize = 12.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    lineHeight = 16.sp
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                // Пункт 3: короткое имя источника + бейдж без обрубков; бейдж
-                // имеет приоритет по ширине, источник сокращается первым.
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text(
-                        text = "by ${shortSourceName(item.sourceProduct)}",
-                        color = DesignColors.TextSubtle,
-                        fontSize = 11.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-                    CompactStatusBadge(
-                        supportStatus = item.compatibility,
-                        fullSupportAllowed = item.compatibility == "fully-supported",
-                        oauthRequired = oauthRequired
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.width(6.dp))
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(ActivePillBg)
-                        .border(1.dp, BorderSubtle, RoundedCornerShape(8.dp))
-                        .clickable(onClick = onCardClick)
-                        .padding(horizontal = 7.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        text = "Детали",
-                        color = DesignColors.TextPrimary,
-                        fontSize = 10.5.sp,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1
-                    )
-                }
-                if (item.installable) {
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(WhiteBtnBg)
-                            .clickable(onClick = onInstall),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = "Установить",
-                            tint = WhiteBtnText,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-            }
+            if (item.installable) IconButton(onClick = onInstall, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.Default.Add, "Установить ${item.name}", tint = DesignColors.TextPrimary)
+            } else Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Подробнее о ${item.name}",
+                tint = DesignColors.TextSecondary, modifier = Modifier.size(24.dp))
         }
     }
 }
@@ -1906,7 +1371,7 @@ private fun CatalogCard(
 private fun CompositionBadge(supportStatus: String, fullSupportAllowed: Boolean) {
     val normalized = supportStatus.trim().lowercase()
     val (prefixSymbol, label, color) = when (normalized) {
-        "fully-supported", "verified", "connected" -> Triple("✓", "полностью поддержан", DesignColors.AccentGreen)
+        "fully-supported", "supported", "verified", "connected" -> Triple("✓", "полностью поддержан", DesignColors.AccentGreen)
         "partial" -> Triple("⚠", "частично поддержан", DesignColors.AccentAmber)
         "blocked", "failed" -> Triple("⚠", "заблокирован", DesignColors.AccentCoral)
         "observation", "not-applicable" -> Triple("•", "наблюдение", DesignColors.TextSubtle)

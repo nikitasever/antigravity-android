@@ -26,6 +26,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.google.antigravity.model.ArtifactDocument
+import com.google.antigravity.ui.design.DesignColors
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import com.google.antigravity.model.ArtifactVersion
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -49,6 +51,7 @@ fun ArtifactLibraryScreen(artifacts: List<ArtifactDocument>, onOpenDrawer: () ->
     var query by rememberSaveable { mutableStateOf("") }
     var onlySaved by rememberSaveable { mutableStateOf(false) }
     var confirmRemoval by remember { mutableStateOf(false) }
+    var documentMenuOpen by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf(false) }
     var showVersions by remember { mutableStateOf(false) }
     var previewMode by rememberSaveable { mutableStateOf(true) }
@@ -61,11 +64,11 @@ fun ArtifactLibraryScreen(artifacts: List<ArtifactDocument>, onOpenDrawer: () ->
         (!onlySaved || it.id.startsWith("saved_message_")) &&
             (query.isBlank() || it.title.contains(query.trim(), true) || it.content.contains(query.trim(), true))
     }.sortedByDescending { it.pinned } }
-    LaunchedEffect(selectedId) { editing = false; previewMode = true }
-    Surface(color = Color.Black, contentColor = Color.White, modifier = Modifier.fillMaxSize()) {
+    LaunchedEffect(selectedId) { editing = false; previewMode = true; documentMenuOpen = false }
+    Surface(color = DesignColors.Bg, contentColor = Color.White, modifier = Modifier.fillMaxSize()) {
         Column {
-            TopAppBar(title = { Text(if (selected == null) "Библиотека" else selected.title,
-                maxLines = 1, overflow = TextOverflow.Ellipsis) }, navigationIcon = {
+            ReferencePageHeader(title = if (selected == null) "Библиотека" else selected.title,
+                navigationIcon = {
                 IconButton(onClick = {
                     when {
                         editing -> editing = false
@@ -73,42 +76,38 @@ fun ArtifactLibraryScreen(artifacts: List<ArtifactDocument>, onOpenDrawer: () ->
                         else -> onOpenDrawer()
                     }
                 }) {
-                    Icon(if (selected == null) Icons.Default.Menu else Icons.Default.Close,
+                    Icon(if (selected == null) Icons.Default.Menu else Icons.AutoMirrored.Filled.ArrowBack,
                         if (selected == null) "Открыть меню" else "Назад к библиотеке")
                 }
             }, actions = {
-                if (selected != null) {
-                    if (!editing && selected.id.startsWith("saved_message_")) {
-                        IconButton(onClick = { onTogglePinned(selected.id) }) {
-                            Icon(
-                                if (selected.pinned) Icons.Default.PushPin else Icons.Outlined.PushPin,
-                                if (selected.pinned) "Открепить артефакт" else "Закрепить артефакт",
-                                tint = if (selected.pinned) Color(0xFF60A5FA) else Color.White
-                            )
-                        }
-                        IconButton(onClick = { editing = true }) {
-                            Icon(Icons.Default.Edit, "Редактировать документ")
-                        }
-                        if (selected.versions.isNotEmpty()) IconButton(onClick = { showVersions = true }) {
-                            Icon(Icons.Default.History, "Версии документа")
+                if (selected != null && !editing) {
+                    IconButton(onClick = { onSaveFile("document_${selected.id.takeLast(12)}.md", selected.content) }) {
+                        Icon(Icons.Default.SaveAlt, "Сохранить документ на телефон")
+                    }
+                    Box {
+                        IconButton(onClick = { documentMenuOpen = true }) { Icon(Icons.Default.MoreVert, "Действия с документом") }
+                        DropdownMenu(expanded = documentMenuOpen, onDismissRequest = { documentMenuOpen = false },
+                            containerColor = DesignColors.Surface) {
+                            if (selected.id.startsWith("saved_message_")) {
+                                DropdownMenuItem(text = { Text(if (selected.pinned) "Открепить" else "Закрепить") },
+                                    onClick = { documentMenuOpen = false; onTogglePinned(selected.id) })
+                                DropdownMenuItem(text = { Text("Редактировать") },
+                                    onClick = { documentMenuOpen = false; editing = true })
+                                if (selected.versions.isNotEmpty()) DropdownMenuItem(text = { Text("Версии документа") },
+                                    onClick = { documentMenuOpen = false; showVersions = true })
+                            }
+                            DropdownMenuItem(text = { Text("Поделиться") }, onClick = {
+                                documentMenuOpen = false
+                                context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"; putExtra(Intent.EXTRA_TEXT, selected.content)
+                                }, "Поделиться документом"))
+                            })
+                            if (selected.id.startsWith("saved_message_")) DropdownMenuItem(text = { Text("Удалить сохранённый документ") },
+                                onClick = { documentMenuOpen = false; confirmRemoval = true })
                         }
                     }
-                    if (!editing) {
-                        IconButton(onClick = { onSaveFile("document_${selected.id.takeLast(12)}.md", selected.content) }) {
-                            Icon(Icons.Default.SaveAlt, "Сохранить документ на телефон")
-                        }
-                        IconButton(onClick = {
-                            context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"; putExtra(Intent.EXTRA_TEXT, selected.content)
-                            }, "Поделиться документом"))
-                        }) { Icon(Icons.Default.Share, "Поделиться документом") }
-                        if (selected.id.startsWith("saved_message_")) IconButton(onClick = { confirmRemoval = true }) {
-                            Icon(Icons.Default.Delete, "Удалить сохранённый документ")
-                        }
-                    }
-                } else IconButton(onClick = onOpenFiles) { Icon(Icons.Default.FolderOpen, "Файлы телефона") }
-            }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Black,
-                titleContentColor = Color.White, navigationIconContentColor = Color.White, actionIconContentColor = Color.White))
+                } else if (selected == null) IconButton(onClick = onOpenFiles) { Icon(Icons.Default.FolderOpen, "Файлы рабочего пространства") }
+            })
             if (selected != null) {
                 if (editing) {
                     ArtifactEditForm(
@@ -161,7 +160,7 @@ fun ArtifactLibraryScreen(artifacts: List<ArtifactDocument>, onOpenDrawer: () ->
                             color = Color(0xFF9E9E9E), modifier = Modifier.padding(vertical = 24.dp))
                     }
                     items(filtered, key = { it.id }) { document ->
-                        Surface(color = Color(0xFF171717), shape = RoundedCornerShape(14.dp),
+                        Surface(color = DesignColors.Surface, shape = RoundedCornerShape(14.dp),
                             modifier = Modifier.fillMaxWidth().clickable { selectedId = document.id }) {
                             Column(Modifier.padding(16.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {

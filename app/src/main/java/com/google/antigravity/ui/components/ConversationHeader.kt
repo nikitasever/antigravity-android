@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
@@ -46,8 +47,10 @@ internal fun ConversationHeader(
     val actions: @Composable () -> Unit = {
         Box {
             FilledIconButton(onClick = { menuOpen = true }, modifier = Modifier.size(48.dp),
-                colors = IconButtonDefaults.filledIconButtonColors(containerColor = DesignColors.SurfaceHigh)) {
-                Icon(Icons.Default.MoreHoriz, "Меню чата", tint = Color.White, modifier = Modifier.size(26.dp))
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = if (hasConversation) Color.Transparent else DesignColors.SurfaceHigh)) {
+                Icon(if (hasConversation) Icons.Default.MoreVert else Icons.Default.MoreHoriz,
+                    "Меню чата", tint = Color.White, modifier = Modifier.size(26.dp))
             }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false },
                 containerColor = DesignColors.SurfaceHigh) {

@@ -21,6 +21,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.antigravity.model.ProjectWorkspace
+import com.google.antigravity.ui.design.DesignColors
 import com.google.antigravity.model.ProjectWorkspaces
 import com.google.antigravity.model.ScratchProjectItem
 
@@ -49,15 +50,10 @@ fun ProjectWorkspaceScreen(
     val selectedWorkspace = selectedProject?.let { workspaces[ProjectWorkspaces.idFor(it.name)] }
     BackHandler(enabled = selectedProject != null) { selectedProjectName = null }
 
-    Surface(color = Color.Black, contentColor = Color.White, modifier = Modifier.fillMaxSize()) {
+    Surface(color = DesignColors.Bg, contentColor = Color.White, modifier = Modifier.fillMaxSize()) {
         Column {
-            TopAppBar(
-                title = {
-                    Text(
-                        if (selectedProject == null) "Проекты" else selectedProject.name,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis
-                    )
-                },
+            ReferencePageHeader(
+                title = if (selectedProject == null) "Проекты" else selectedProject.name,
                 navigationIcon = {
                     IconButton(onClick = {
                         if (selectedProject != null) selectedProjectName = null else onOpenDrawer()
@@ -67,11 +63,7 @@ fun ProjectWorkspaceScreen(
                             if (selectedProject == null) "Открыть меню" else "Назад к проектам"
                         )
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Black, titleContentColor = Color.White,
-                    navigationIconContentColor = Color.White, actionIconContentColor = Color.White
-                )
+                }
             )
             if (selectedProject == null) {
                 LazyColumn(
@@ -88,7 +80,7 @@ fun ProjectWorkspaceScreen(
                     items(projects, key = { it.name }) { proj ->
                         val workspace = workspaces[ProjectWorkspaces.idFor(proj.name)]
                         Surface(
-                            color = Color(0xFF171717), shape = RoundedCornerShape(16.dp),
+                            color = DesignColors.Surface, shape = RoundedCornerShape(16.dp),
                             modifier = Modifier.fillMaxWidth().clickable { selectedProjectName = proj.name }
                         ) {
                             Row(
@@ -170,7 +162,7 @@ private fun ProjectWorkspaceDetail(
     ) {
         item {
             Surface(
-                color = Color(0xFF171717), shape = RoundedCornerShape(16.dp),
+                color = DesignColors.Surface, shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(Modifier.padding(16.dp)) {
@@ -190,7 +182,7 @@ private fun ProjectWorkspaceDetail(
 
         item {
             Surface(
-                color = Color(0xFF171717), shape = RoundedCornerShape(16.dp),
+                color = DesignColors.Surface, shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(Modifier.padding(16.dp)) {
@@ -219,7 +211,7 @@ private fun ProjectWorkspaceDetail(
 
         item {
             Surface(
-                color = Color(0xFF171717), shape = RoundedCornerShape(16.dp),
+                color = DesignColors.Surface, shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(Modifier.padding(16.dp)) {
@@ -294,7 +286,7 @@ private fun ProjectWorkspaceDetail(
 
         item {
             Surface(
-                color = Color(0xFF171717), shape = RoundedCornerShape(16.dp),
+                color = DesignColors.Surface, shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(Modifier.padding(16.dp)) {

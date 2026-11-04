@@ -242,21 +242,13 @@ class AntigravityBackendClient(
         if (!allowLocal && isLocalOrLoopbackUrl(lastWorkingBridgeUrl)) {
             lastWorkingBridgeUrl = ""
         }
-        return buildList {
-            if (allowLocal) {
-                add("http://10.0.2.2:8787")
-                add("http://127.0.0.1:8787")
-            }
-            if (clean.isNotBlank() && (allowLocal || !isLocalOrLoopbackUrl(clean))) add(clean)
-            if (cached.isNotBlank() && (allowLocal || !isLocalOrLoopbackUrl(cached))) {
-                add(cached)
-            }
-            addAll(knownDynamicTunnels.filter { allowLocal || !isLocalOrLoopbackUrl(it) })
-            if (clean.isNotBlank() && (allowLocal || !isLocalOrLoopbackUrl(clean))) {
-                add(clean)
-            }
-            addAll(DEFAULT_PUBLIC_BRIDGE_URLS)
-        }.distinct()
+        return prioritizedBridgeUrls(
+            configured = clean.takeIf { allowLocal || !isLocalOrLoopbackUrl(it) }.orEmpty(),
+            localDefaults = if (allowLocal) listOf("http://10.0.2.2:8787", "http://127.0.0.1:8787") else emptyList(),
+            cached = cached.takeIf { allowLocal || !isLocalOrLoopbackUrl(it) }.orEmpty(),
+            discovered = knownDynamicTunnels.filter { allowLocal || !isLocalOrLoopbackUrl(it) },
+            publicDefaults = DEFAULT_PUBLIC_BRIDGE_URLS
+        )
     }
 
     fun sanitizeCleanUserText(raw: String): String {
@@ -588,6 +580,11 @@ class AntigravityBackendClient(
         }
         val cached = lastWorkingBridgeUrl.trim().trimEnd('/')
         val now = System.currentTimeMillis()
+        val explicit = clean.trimEnd('/')
+        if (explicit.isNotBlank() && explicit != cached &&
+            (!isLocalOrLoopbackUrl(explicit) || isEmulatorDevice() && !forcePublicTunnelOnly)) {
+            probeSingleBridgeUrl(explicit)?.let { return it.resolvedBaseUrl }
+        }
         if (cached.isNotBlank() && !(forcePublicTunnelOnly && isLocalOrLoopbackUrl(cached))) {
             if (now - lastWorkingBridgeVerifiedAtMs < 20_000L || probeSingleBridgeUrl(cached) != null) {
                 return lastWorkingBridgeUrl.ifBlank { cached }
@@ -2866,311 +2863,302 @@ class AntigravityBackendClient(
         }.toString()
 
         val verifiedBase = resolveWorkingBaseUrl(pcBridgeUrl)
-        val initialCandidates = buildList {
-            if (!verifiedBase.isNullOrBlank()) add(verifiedBase)
-            addAll(buildCandidateBridgeUrls(pcBridgeUrl))
-        }.distinct()
-        for (attempt in 0..1) {
-            val urlsToTry = if (attempt == 0) {
-                initialCandidates
-            } else {
-                discoverLatestBridgeUrls().filter { it !in initialCandidates }
-            }
-            for (base in urlsToTry) {
-                if (forcePublicTunnelOnly && isLocalOrLoopbackUrl(base)) continue
-                val streamStartMs = System.currentTimeMillis()
-                var firstTokenTimeMs = 0L
-                var streamTokensPerSecond = 0f
-                var streamOutputTokensCount = 0
-                var activeTurnId = clientTurnId
-                var returnedConvId = conversationId
-                var liveThinking = ""
-                var liveFullText = ""
-                var previousVisibleText = ""
-                var finalReply = ""
-                var finalThinkingSec = 0
-                var receivedDoneEvent = false
-                var receivedAnyEvent = false
-                val streamTools = mutableListOf<ToolCallEvent>()
-                val streamDiffs = mutableListOf<FileDiffItem>()
-                val streamMedia = mutableListOf<GeneratedMediaAttachment>()
+        // Resolve/discover before submitting a turn. Never replay an accepted or
+        // uncertain request on a different workstation; recovery polls this one.
+        for (base in listOfNotNull(verifiedBase)) {
+            if (forcePublicTunnelOnly && isLocalOrLoopbackUrl(base)) continue
+            val streamStartMs = System.currentTimeMillis()
+            var firstTokenTimeMs = 0L
+            var streamTokensPerSecond = 0f
+            var streamOutputTokensCount = 0
+            var activeTurnId = clientTurnId
+            var returnedConvId = conversationId
+            var liveThinking = ""
+            var liveFullText = ""
+            var previousVisibleText = ""
+            var finalReply = ""
+            var finalThinkingSec = 0
+            var receivedDoneEvent = false
+            var receivedAnyEvent = false
+            val streamTools = mutableListOf<ToolCallEvent>()
+            val streamDiffs = mutableListOf<FileDiffItem>()
+            val streamMedia = mutableListOf<GeneratedMediaAttachment>()
 
-                try {
-                    if (base != lastWorkingBridgeUrl && probeSingleBridgeUrl(base) == null) {
-                        continue
-                    }
-                    val req = Request.Builder()
-                        .url("$base/api/chat/stream")
-                        .post(payload.toRequestBody("application/json; charset=utf-8".toMediaType()))
-                        .build()
+            try {
+                if (base != lastWorkingBridgeUrl && probeSingleBridgeUrl(base) == null) {
+                    continue
+                }
+                val req = Request.Builder()
+                    .url("$base/api/chat/stream")
+                    .post(payload.toRequestBody("application/json; charset=utf-8".toMediaType()))
+                    .build()
 
-                    activeRemoteTurn.set(base to clientTurnId)
-                    val success = clientForUrl(base).newCall(req).useCancellable { resp ->
-                        if (!resp.isSuccessful) return@useCancellable false
-                        val reader: BufferedReader = resp.body?.charStream()?.buffered() ?: return@useCancellable false
-                        var line: String?
-                        while (true) {
-                            currentCoroutineContext().ensureActive()
-                            line = reader.readLine() ?: break
-                            val trimmedLine = line.trim()
-                            if (trimmedLine.isEmpty()) continue
-                            val ev = try {
-                                JSONObject(trimmedLine)
-                            } catch (failure: Throwable) {
-                                if (failure is kotlinx.coroutines.CancellationException) throw failure;
-                                continue
+                activeRemoteTurn.set(base to clientTurnId)
+                val success = clientForUrl(base).newCall(req).useCancellable { resp ->
+                    if (!resp.isSuccessful) return@useCancellable false
+                    val reader: BufferedReader = resp.body?.charStream()?.buffered() ?: return@useCancellable false
+                    var line: String?
+                    while (true) {
+                        currentCoroutineContext().ensureActive()
+                        line = reader.readLine() ?: break
+                        val trimmedLine = line.trim()
+                        if (trimmedLine.isEmpty()) continue
+                        val ev = try {
+                            JSONObject(trimmedLine)
+                        } catch (failure: Throwable) {
+                            if (failure is kotlinx.coroutines.CancellationException) throw failure;
+                            continue
+                        }
+                        receivedAnyEvent = true
+                        when (ev.optString("type", "")) {
+                            "init" -> {
+                                val tid = ev.optString("turnId", "")
+                                if (tid.isNotBlank()) activeTurnId = tid
+                                val cid = ev.optString("conversationId", "")
+                                if (cid.isNotBlank()) returnedConvId = cid
                             }
-                            receivedAnyEvent = true
-                            when (ev.optString("type", "")) {
-                                "init" -> {
-                                    val tid = ev.optString("turnId", "")
-                                    if (tid.isNotBlank()) activeTurnId = tid
-                                    val cid = ev.optString("conversationId", "")
-                                    if (cid.isNotBlank()) returnedConvId = cid
-                                }
-                                "thinking_delta" -> {
-                                    val fullT = ev.optString("fullThinking", ev.optString("thinking", ""))
-                                    val deltaT = ev.optString("delta", "")
-                                    liveThinking = if (fullT.isNotBlank()) fullT else (liveThinking + deltaT)
-                                    val elapsed = ((System.currentTimeMillis() - streamStartMs) / 1000L).toInt().coerceAtLeast(1)
-                                    onUpdate(
-                                        StreamingTurnUpdate(
-                                            thinking = liveThinking.trim(),
-                                            thinkingDurationSec = elapsed,
-                                            toolCalls = streamTools.toList(),
-                                            textDelta = "",
-                                            fullText = previousVisibleText,
-                                            createdDiffs = streamDiffs.toList(),
-                                            isDone = false,
-                                            tokensPerSecond = streamTokensPerSecond,
-                                            outputTokensCount = streamOutputTokensCount,
-                                            firstTokenLatencyMs = if (firstTokenTimeMs > 0L) (firstTokenTimeMs - streamStartMs).coerceAtLeast(50L) else 0L
-                                        )
+                            "thinking_delta" -> {
+                                val fullT = ev.optString("fullThinking", ev.optString("thinking", ""))
+                                val deltaT = ev.optString("delta", "")
+                                liveThinking = if (fullT.isNotBlank()) fullT else (liveThinking + deltaT)
+                                val elapsed = ((System.currentTimeMillis() - streamStartMs) / 1000L).toInt().coerceAtLeast(1)
+                                onUpdate(
+                                    StreamingTurnUpdate(
+                                        thinking = liveThinking.trim(),
+                                        thinkingDurationSec = elapsed,
+                                        toolCalls = streamTools.toList(),
+                                        textDelta = "",
+                                        fullText = previousVisibleText,
+                                        createdDiffs = streamDiffs.toList(),
+                                        isDone = false,
+                                        tokensPerSecond = streamTokensPerSecond,
+                                        outputTokensCount = streamOutputTokensCount,
+                                        firstTokenLatencyMs = if (firstTokenTimeMs > 0L) (firstTokenTimeMs - streamStartMs).coerceAtLeast(50L) else 0L
                                     )
+                                )
+                            }
+                            "tool" -> {
+                                val nested = ev.optJSONObject("tool")
+                                val tId = ev.optString("id", nested?.optString("id", "") ?: "").ifBlank { "tc_${streamTools.size}" }
+                                val tName = ev.optString("toolName", nested?.optString("name", "pc_tool") ?: "pc_tool")
+                                val tSummary = ev.optString("summary", nested?.optString("summary", "Инструмент ПК") ?: "Инструмент ПК")
+                                val tDetails = ev.optString("details", nested?.optString("output", "") ?: "")
+                                val existingIdx = streamTools.indexOfFirst { it.id == tId || (it.toolName == tName && it.summary == tSummary) }
+                                val eventItem = ToolCallEvent(
+                                    id = tId,
+                                    toolName = tName,
+                                    summary = tSummary,
+                                    details = tDetails,
+                                    status = ToolCallStatus.COMPLETED,
+                                    durationMs = 80L
+                                )
+                                if (existingIdx >= 0) {
+                                    streamTools[existingIdx] = eventItem
+                                } else {
+                                    streamTools.add(eventItem)
                                 }
-                                "tool" -> {
-                                    val nested = ev.optJSONObject("tool")
-                                    val tId = ev.optString("id", nested?.optString("id", "") ?: "").ifBlank { "tc_${streamTools.size}" }
-                                    val tName = ev.optString("toolName", nested?.optString("name", "pc_tool") ?: "pc_tool")
-                                    val tSummary = ev.optString("summary", nested?.optString("summary", "Инструмент ПК") ?: "Инструмент ПК")
-                                    val tDetails = ev.optString("details", nested?.optString("output", "") ?: "")
-                                    val existingIdx = streamTools.indexOfFirst { it.id == tId || (it.toolName == tName && it.summary == tSummary) }
-                                    val eventItem = ToolCallEvent(
-                                        id = tId,
-                                        toolName = tName,
-                                        summary = tSummary,
-                                        details = tDetails,
-                                        status = ToolCallStatus.COMPLETED,
-                                        durationMs = 80L
+                                val diffObj = ev.optJSONObject("diff") ?: nested?.optJSONObject("diff")
+                                if (diffObj != null) {
+                                    val diffItem = FileDiffItem(
+                                        path = diffObj.optString("path", "file"),
+                                        additions = diffObj.optInt("additions", 1).coerceAtLeast(0),
+                                        deletions = diffObj.optInt("deletions", 0).coerceAtLeast(0),
+                                        diffPatch = diffObj.optString("diffPatch", "")
                                     )
-                                    if (existingIdx >= 0) {
-                                        streamTools[existingIdx] = eventItem
-                                    } else {
-                                        streamTools.add(eventItem)
+                                    if (streamDiffs.none { it.path == diffItem.path && it.additions == diffItem.additions }) {
+                                        streamDiffs.add(diffItem)
                                     }
-                                    val diffObj = ev.optJSONObject("diff") ?: nested?.optJSONObject("diff")
-                                    if (diffObj != null) {
+                                }
+                                val elapsed = ((System.currentTimeMillis() - streamStartMs) / 1000L).toInt().coerceAtLeast(1)
+                                onUpdate(
+                                    StreamingTurnUpdate(
+                                        thinking = liveThinking.trim(),
+                                        thinkingDurationSec = elapsed,
+                                        toolCalls = streamTools.toList(),
+                                        textDelta = "",
+                                        fullText = previousVisibleText,
+                                        createdDiffs = streamDiffs.toList(),
+                                        isDone = false,
+                                        tokensPerSecond = streamTokensPerSecond,
+                                        outputTokensCount = streamOutputTokensCount,
+                                        firstTokenLatencyMs = if (firstTokenTimeMs > 0L) (firstTokenTimeMs - streamStartMs).coerceAtLeast(50L) else 0L
+                                    )
+                                )
+                            }
+                            "text_delta" -> {
+                                val nowMs = System.currentTimeMillis()
+                                if (firstTokenTimeMs == 0L) firstTokenTimeMs = nowMs
+                                val fullTxt = ev.optString("fullText", ev.optString("text", ""))
+                                val deltaTxt = ev.optString("delta", "")
+                                liveFullText = if (fullTxt.isNotBlank()) fullTxt else (liveFullText + deltaTxt)
+
+                                val (cleanVisible, inlineThink) = stripStreamingHiddenBlocks(liveFullText)
+                                if (inlineThink.isNotBlank() && liveThinking.isBlank()) {
+                                    liveThinking = inlineThink
+                                }
+                                val newVisibleDelta = if (cleanVisible.startsWith(previousVisibleText)) {
+                                    cleanVisible.substring(previousVisibleText.length)
+                                } else {
+                                    ""
+                                }
+                                previousVisibleText = cleanVisible
+                                val elapsedMs = (nowMs - streamStartMs).coerceAtLeast(150L)
+                                val elapsed = (elapsedMs / 1000L).toInt().coerceAtLeast(1)
+                                val serverTps = ev.optDouble("tokensPerSecond", 0.0).toFloat()
+                                val serverOutTok = ev.optInt("outputTokensCount", 0)
+                                streamOutputTokensCount = if (serverOutTok > 0) serverOutTok else (cleanVisible.length / 3.6f).toInt().coerceAtLeast(1)
+                                streamTokensPerSecond = if (serverTps > 0f) {
+                                    serverTps
+                                } else {
+                                    ((streamOutputTokensCount.toFloat() / (elapsedMs.toFloat() / 1000f)) * 10f).toInt().toFloat() / 10f
+                                }
+                                onUpdate(
+                                    StreamingTurnUpdate(
+                                        thinking = liveThinking.trim(),
+                                        thinkingDurationSec = elapsed,
+                                        toolCalls = streamTools.toList(),
+                                        textDelta = newVisibleDelta,
+                                        fullText = cleanVisible,
+                                        createdDiffs = streamDiffs.toList(),
+                                        isDone = false,
+                                        tokensPerSecond = streamTokensPerSecond,
+                                        outputTokensCount = streamOutputTokensCount,
+                                        firstTokenLatencyMs = (firstTokenTimeMs - streamStartMs).coerceAtLeast(50L)
+                                    )
+                                )
+                            }
+                            "done" -> {
+                                receivedDoneEvent = true
+                                val cid = ev.optString("conversationId", "")
+                                if (cid.isNotBlank()) returnedConvId = cid
+                                val doneReply = ev.optString("reply", ev.optString("error", ""))
+                                if (doneReply.isNotBlank()) finalReply = doneReply
+                                val doneThink = ev.optString("thinking", "")
+                                if (doneThink.isNotBlank()) liveThinking = doneThink
+                                finalThinkingSec = ev.optInt("thinkingDurationSec", 0)
+                                val doneTps = ev.optDouble("tokensPerSecond", 0.0).toFloat()
+                                val doneOutTok = ev.optInt("outputTokensCount", 0)
+                                if (doneTps > 0f) streamTokensPerSecond = doneTps
+                                if (doneOutTok > 0) streamOutputTokensCount = doneOutTok
+                                val doneTools = ev.optJSONArray("toolCalls")
+                                if (doneTools != null) {
+                                    for (ti in 0 until doneTools.length()) {
+                                        val to = doneTools.optJSONObject(ti) ?: continue
+                                        val tId = to.optString("id", "done_tc_$ti")
+                                        val tName = to.optString("name", to.optString("toolName", "pc_tool"))
+                                        val tSummary = to.optString("summary", tName)
+                                        val tDetails = to.optString("output", to.optString("details", ""))
+                                        val existingIdx = streamTools.indexOfFirst { it.id == tId || (it.toolName == tName && it.summary == tSummary) }
+                                        val item = ToolCallEvent(
+                                            id = tId,
+                                            toolName = tName,
+                                            summary = tSummary,
+                                            details = tDetails,
+                                            status = ToolCallStatus.COMPLETED,
+                                            durationMs = 80L
+                                        )
+                                        if (existingIdx >= 0) {
+                                            streamTools[existingIdx] = item
+                                        } else {
+                                            streamTools.add(item)
+                                        }
+                                    }
+                                }
+                                val doneDiffs = ev.optJSONArray("createdDiffs")
+                                if (doneDiffs != null) {
+                                    for (di in 0 until doneDiffs.length()) {
+                                        val dObj = doneDiffs.optJSONObject(di) ?: continue
                                         val diffItem = FileDiffItem(
-                                            path = diffObj.optString("path", "file"),
-                                            additions = diffObj.optInt("additions", 1).coerceAtLeast(0),
-                                            deletions = diffObj.optInt("deletions", 0).coerceAtLeast(0),
-                                            diffPatch = diffObj.optString("diffPatch", "")
+                                            path = dObj.optString("path", "file"),
+                                            additions = dObj.optInt("additions", 1).coerceAtLeast(0),
+                                            deletions = dObj.optInt("deletions", 0).coerceAtLeast(0),
+                                            diffPatch = dObj.optString("diffPatch", "")
                                         )
                                         if (streamDiffs.none { it.path == diffItem.path && it.additions == diffItem.additions }) {
                                             streamDiffs.add(diffItem)
                                         }
                                     }
-                                    val elapsed = ((System.currentTimeMillis() - streamStartMs) / 1000L).toInt().coerceAtLeast(1)
-                                    onUpdate(
-                                        StreamingTurnUpdate(
-                                            thinking = liveThinking.trim(),
-                                            thinkingDurationSec = elapsed,
-                                            toolCalls = streamTools.toList(),
-                                            textDelta = "",
-                                            fullText = previousVisibleText,
-                                            createdDiffs = streamDiffs.toList(),
-                                            isDone = false,
-                                            tokensPerSecond = streamTokensPerSecond,
-                                            outputTokensCount = streamOutputTokensCount,
-                                            firstTokenLatencyMs = if (firstTokenTimeMs > 0L) (firstTokenTimeMs - streamStartMs).coerceAtLeast(50L) else 0L
-                                        )
-                                    )
                                 }
-                                "text_delta" -> {
-                                    val nowMs = System.currentTimeMillis()
-                                    if (firstTokenTimeMs == 0L) firstTokenTimeMs = nowMs
-                                    val fullTxt = ev.optString("fullText", ev.optString("text", ""))
-                                    val deltaTxt = ev.optString("delta", "")
-                                    liveFullText = if (fullTxt.isNotBlank()) fullTxt else (liveFullText + deltaTxt)
-
-                                    val (cleanVisible, inlineThink) = stripStreamingHiddenBlocks(liveFullText)
-                                    if (inlineThink.isNotBlank() && liveThinking.isBlank()) {
-                                        liveThinking = inlineThink
-                                    }
-                                    val newVisibleDelta = if (cleanVisible.startsWith(previousVisibleText)) {
-                                        cleanVisible.substring(previousVisibleText.length)
-                                    } else {
-                                        ""
-                                    }
-                                    previousVisibleText = cleanVisible
-                                    val elapsedMs = (nowMs - streamStartMs).coerceAtLeast(150L)
-                                    val elapsed = (elapsedMs / 1000L).toInt().coerceAtLeast(1)
-                                    val serverTps = ev.optDouble("tokensPerSecond", 0.0).toFloat()
-                                    val serverOutTok = ev.optInt("outputTokensCount", 0)
-                                    streamOutputTokensCount = if (serverOutTok > 0) serverOutTok else (cleanVisible.length / 3.6f).toInt().coerceAtLeast(1)
-                                    streamTokensPerSecond = if (serverTps > 0f) {
-                                        serverTps
-                                    } else {
-                                        ((streamOutputTokensCount.toFloat() / (elapsedMs.toFloat() / 1000f)) * 10f).toInt().toFloat() / 10f
-                                    }
-                                    onUpdate(
-                                        StreamingTurnUpdate(
-                                            thinking = liveThinking.trim(),
-                                            thinkingDurationSec = elapsed,
-                                            toolCalls = streamTools.toList(),
-                                            textDelta = newVisibleDelta,
-                                            fullText = cleanVisible,
-                                            createdDiffs = streamDiffs.toList(),
-                                            isDone = false,
-                                            tokensPerSecond = streamTokensPerSecond,
-                                            outputTokensCount = streamOutputTokensCount,
-                                            firstTokenLatencyMs = (firstTokenTimeMs - streamStartMs).coerceAtLeast(50L)
-                                        )
-                                    )
-                                }
-                                "done" -> {
-                                    receivedDoneEvent = true
-                                    val cid = ev.optString("conversationId", "")
-                                    if (cid.isNotBlank()) returnedConvId = cid
-                                    val doneReply = ev.optString("reply", ev.optString("error", ""))
-                                    if (doneReply.isNotBlank()) finalReply = doneReply
-                                    val doneThink = ev.optString("thinking", "")
-                                    if (doneThink.isNotBlank()) liveThinking = doneThink
-                                    finalThinkingSec = ev.optInt("thinkingDurationSec", 0)
-                                    val doneTps = ev.optDouble("tokensPerSecond", 0.0).toFloat()
-                                    val doneOutTok = ev.optInt("outputTokensCount", 0)
-                                    if (doneTps > 0f) streamTokensPerSecond = doneTps
-                                    if (doneOutTok > 0) streamOutputTokensCount = doneOutTok
-                                    val doneTools = ev.optJSONArray("toolCalls")
-                                    if (doneTools != null) {
-                                        for (ti in 0 until doneTools.length()) {
-                                            val to = doneTools.optJSONObject(ti) ?: continue
-                                            val tId = to.optString("id", "done_tc_$ti")
-                                            val tName = to.optString("name", to.optString("toolName", "pc_tool"))
-                                            val tSummary = to.optString("summary", tName)
-                                            val tDetails = to.optString("output", to.optString("details", ""))
-                                            val existingIdx = streamTools.indexOfFirst { it.id == tId || (it.toolName == tName && it.summary == tSummary) }
-                                            val item = ToolCallEvent(
-                                                id = tId,
-                                                toolName = tName,
-                                                summary = tSummary,
-                                                details = tDetails,
-                                                status = ToolCallStatus.COMPLETED,
-                                                durationMs = 80L
-                                            )
-                                            if (existingIdx >= 0) {
-                                                streamTools[existingIdx] = item
-                                            } else {
-                                                streamTools.add(item)
-                                            }
-                                        }
-                                    }
-                                    val doneDiffs = ev.optJSONArray("createdDiffs")
-                                    if (doneDiffs != null) {
-                                        for (di in 0 until doneDiffs.length()) {
-                                            val dObj = doneDiffs.optJSONObject(di) ?: continue
-                                            val diffItem = FileDiffItem(
-                                                path = dObj.optString("path", "file"),
-                                                additions = dObj.optInt("additions", 1).coerceAtLeast(0),
-                                                deletions = dObj.optInt("deletions", 0).coerceAtLeast(0),
-                                                diffPatch = dObj.optString("diffPatch", "")
-                                            )
-                                            if (streamDiffs.none { it.path == diffItem.path && it.additions == diffItem.additions }) {
-                                                streamDiffs.add(diffItem)
-                                            }
-                                        }
-                                    }
-                                    val doneMedia = parseGeneratedMediaArray(
-                                        arr = ev.optJSONArray("generatedMedia"),
-                                        baseUrl = base,
-                                        fallbackPrompt = prompt,
-                                        fallbackModel = modelId
-                                    )
-                                    for (gm in doneMedia) {
-                                        if (streamMedia.none { it.mediaUrl == gm.mediaUrl && it.fileName == gm.fileName }) {
-                                            streamMedia.add(gm)
-                                        }
+                                val doneMedia = parseGeneratedMediaArray(
+                                    arr = ev.optJSONArray("generatedMedia"),
+                                    baseUrl = base,
+                                    fallbackPrompt = prompt,
+                                    fallbackModel = modelId
+                                )
+                                for (gm in doneMedia) {
+                                    if (streamMedia.none { it.mediaUrl == gm.mediaUrl && it.fileName == gm.fileName }) {
+                                        streamMedia.add(gm)
                                     }
                                 }
                             }
                         }
-                        true
                     }
+                    true
+                }
 
-                    if (receivedDoneEvent) activeRemoteTurn.compareAndSet(activeRemoteTurn.get()?.takeIf { it.second == clientTurnId }, null)
-                    val effectiveReply = finalReply.ifBlank { liveFullText }.trim()
-                    if (success && receivedDoneEvent && (effectiveReply.isNotEmpty() || (receivedDoneEvent && (liveThinking.isNotBlank() || streamTools.isNotEmpty() || streamMedia.isNotEmpty())))) {
+                if (receivedDoneEvent) activeRemoteTurn.compareAndSet(activeRemoteTurn.get()?.takeIf { it.second == clientTurnId }, null)
+                val effectiveReply = finalReply.ifBlank { liveFullText }.trim()
+                if (success && receivedDoneEvent && (effectiveReply.isNotEmpty() || (receivedDoneEvent && (liveThinking.isNotBlank() || streamTools.isNotEmpty() || streamMedia.isNotEmpty())))) {
+                    lastWorkingBridgeUrl = base
+                    val elapsedMs = (System.currentTimeMillis() - streamStartMs).coerceAtLeast(180L)
+                    val outTok = if (streamOutputTokensCount > 0) streamOutputTokensCount else (effectiveReply.length / 3.6f).toInt().coerceAtLeast(1)
+                    val tps = if (streamTokensPerSecond > 0f) streamTokensPerSecond else (((outTok.toFloat() / (elapsedMs.toFloat() / 1000f)) * 10f).toInt().toFloat() / 10f)
+                    return PcBridgeChatResponse(
+                        reply = effectiveReply,
+                        conversationId = returnedConvId,
+                        thinking = liveThinking.trim(),
+                        thinkingDurationSec = finalThinkingSec,
+                        toolCalls = streamTools,
+                        createdDiffs = streamDiffs,
+                        generatedMedia = streamMedia,
+                        resolvedBaseUrl = base,
+                        tokensPerSecond = tps.coerceAtLeast(0f),
+                        outputTokensCount = outTok
+                    )
+                }
+
+                // If stream closed before "done" after connection started, seamlessly recover via /api/chat/turn-status
+                if (!receivedDoneEvent && (receivedAnyEvent || streamTools.isNotEmpty() || liveThinking.isNotBlank())) {
+                    val polled = pollTurnUntilComplete(
+                        base = base,
+                        turnId = activeTurnId,
+                        conversationId = returnedConvId,
+                        streamStartMs = streamStartMs,
+                        initialThinking = liveThinking,
+                        initialText = previousVisibleText,
+                        streamTools = streamTools,
+                        streamDiffs = streamDiffs,
+                        onUpdate = onUpdate
+                    )
+                    if (polled != null) {
                         lastWorkingBridgeUrl = base
-                        val elapsedMs = (System.currentTimeMillis() - streamStartMs).coerceAtLeast(180L)
-                        val outTok = if (streamOutputTokensCount > 0) streamOutputTokensCount else (effectiveReply.length / 3.6f).toInt().coerceAtLeast(1)
-                        val tps = if (streamTokensPerSecond > 0f) streamTokensPerSecond else (((outTok.toFloat() / (elapsedMs.toFloat() / 1000f)) * 10f).toInt().toFloat() / 10f)
-                        return PcBridgeChatResponse(
-                            reply = effectiveReply,
-                            conversationId = returnedConvId,
-                            thinking = liveThinking.trim(),
-                            thinkingDurationSec = finalThinkingSec,
-                            toolCalls = streamTools,
-                            createdDiffs = streamDiffs,
-                            generatedMedia = streamMedia,
-                            resolvedBaseUrl = base,
-                            tokensPerSecond = tps.coerceAtLeast(0f),
-                            outputTokensCount = outTok
-                        )
+                        return polled
                     }
-
-                    // If stream closed before "done" after connection started, seamlessly recover via /api/chat/turn-status
-                    if (!receivedDoneEvent && (receivedAnyEvent || streamTools.isNotEmpty() || liveThinking.isNotBlank())) {
-                        val polled = pollTurnUntilComplete(
-                            base = base,
-                            turnId = activeTurnId,
-                            conversationId = returnedConvId,
-                            streamStartMs = streamStartMs,
-                            initialThinking = liveThinking,
-                            initialText = previousVisibleText,
-                            streamTools = streamTools,
-                            streamDiffs = streamDiffs,
-                            onUpdate = onUpdate
-                        )
-                        if (polled != null) {
-                            lastWorkingBridgeUrl = base
-                            return polled
-                        }
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure;
+                // Mid-turn SSE disconnect recovery: if we already received events/tools on this turn, poll until completion!
+                if (!receivedDoneEvent && (receivedAnyEvent || streamTools.isNotEmpty() || liveThinking.isNotBlank())) {
+                    val polled = pollTurnUntilComplete(
+                        base = base,
+                        turnId = activeTurnId,
+                        conversationId = returnedConvId,
+                        streamStartMs = streamStartMs,
+                        initialThinking = liveThinking,
+                        initialText = previousVisibleText,
+                        streamTools = streamTools,
+                        streamDiffs = streamDiffs,
+                        onUpdate = onUpdate
+                    )
+                    if (polled != null) {
+                        lastWorkingBridgeUrl = base
+                        return polled
                     }
-                } catch (e: kotlinx.coroutines.CancellationException) {
-                    throw e
-                } catch (failure: Throwable) {
-                    if (failure is kotlinx.coroutines.CancellationException) throw failure;
-                    // Mid-turn SSE disconnect recovery: if we already received events/tools on this turn, poll until completion!
-                    if (!receivedDoneEvent && (receivedAnyEvent || streamTools.isNotEmpty() || liveThinking.isNotBlank())) {
-                        val polled = pollTurnUntilComplete(
-                            base = base,
-                            turnId = activeTurnId,
-                            conversationId = returnedConvId,
-                            streamStartMs = streamStartMs,
-                            initialThinking = liveThinking,
-                            initialText = previousVisibleText,
-                            streamTools = streamTools,
-                            streamDiffs = streamDiffs,
-                            onUpdate = onUpdate
-                        )
-                        if (polled != null) {
-                            lastWorkingBridgeUrl = base
-                            return polled
-                        }
-                    }
-                    if (base == lastWorkingBridgeUrl) {
-                        lastWorkingBridgeUrl = ""
-                    }
+                }
+                if (base == lastWorkingBridgeUrl) {
+                    lastWorkingBridgeUrl = ""
                 }
             }
         }

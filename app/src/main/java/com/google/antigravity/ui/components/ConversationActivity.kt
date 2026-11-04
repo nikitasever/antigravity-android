@@ -42,8 +42,7 @@ internal fun ConversationActivity(
             onSaveCodeToPhone = onSaveCode)
     }
     if (thinking.isNotEmpty()) {
-        ActivityRow("Ход рассуждений", Icons.Default.History, onToggleThinking,
-            if (message.thinkingDurationSec > 0) "${message.thinkingDurationSec} с" else null)
+        ActivityRow("Ход рассуждений", Icons.Default.History, onToggleThinking, null)
     }
     if (tools.isNotEmpty()) {
         val active = tools.lastOrNull { it.status == ToolCallStatus.RUNNING || it.status == ToolCallStatus.AWAITING_APPROVAL }
