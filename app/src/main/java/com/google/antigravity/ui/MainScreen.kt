@@ -1599,7 +1599,7 @@ private fun ChatGptRemoteSessionsCodexScreen(
 
         ChatGptBottomInputPill(
             viewModel = viewModel,
-            placeholderText = "Спросить Antigravity (/ скиллы, @ агенты)",
+            placeholderText = "Спросить Antigravity",
             pendingAttachments = pendingAttachments,
             isDictatingInline = isDictatingInline,
             isStreaming = isAnyMessageStreaming,
