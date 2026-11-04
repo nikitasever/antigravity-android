@@ -1421,66 +1421,15 @@ private fun ChatGptRemoteSessionsCodexScreen(
             .fillMaxSize()
             .background(DesignColors.Bg)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+        com.google.antigravity.ui.components.ChatModeHeader(
+            workSelected = topModeTab == TopModeTab.WORK_SESSIONS,
+            onDrawer = onOpenDrawer,
+            onSelectWork = { onSelectTopTab(if (it) TopModeTab.WORK_SESSIONS else TopModeTab.CHAT) }
         ) {
-            TwoLineMenuCircleButton(onClick = onOpenDrawer)
-
-            Surface(
-                color = Color(0xFF212121),
-                shape = RoundedCornerShape(24.dp),
-                modifier = Modifier
-                    .width(196.dp)
-                    .height(42.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(3.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    val isChat = topModeTab == TopModeTab.CHAT
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(if (isChat) DesignColors.UserBubble else Color.Transparent)
-                            .clickable { onSelectTopTab(TopModeTab.CHAT) }
-                    ) {
-                        Text(
-                            text = "Чат",
-                            color = if (isChat) Color.White else Color(0xFF9E9E9E),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(if (!isChat) DesignColors.UserBubble else Color.Transparent)
-                            .clickable { onSelectTopTab(TopModeTab.WORK_SESSIONS) }
-                    ) {
-                        Text(
-                            text = "Работа",
-                            color = if (!isChat) Color.White else Color(0xFF9E9E9E),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
+            androidx.compose.material3.FilledIconButton(onClick = onToggleSearch, modifier = Modifier.size(48.dp),
+                colors = androidx.compose.material3.IconButtonDefaults.filledIconButtonColors(containerColor = DesignColors.SurfaceHigh)) {
+                Icon(Icons.Default.Search, "Поиск сессий", tint = Color.White, modifier = Modifier.size(26.dp))
             }
-
-            SearchCircleButton(onClick = onToggleSearch)
         }
 
         AnimatedVisibility(visible = showSearchBar) {

@@ -97,7 +97,8 @@ These pages do not imply cloud profile editing or new notification delivery.
 The original live ChatGPT screenshot `Screenshot_20261104_091531_ChatGPT.jpg`
 governs main-screen density: three aligned header controls, 48dp circles, a
 48dp high segmented control (up to 190dp wide), and no model/context subtitle.
-`ConversationHeader` owns this geometry and shrinks the segment on narrow phones.
+`ChatModeHeader` owns this geometry for both Chat and Work and shrinks the segment
+on narrow phones. `ConversationHeader` adds the conversation action menu.
 The right control opens conversation actions, following the supplied Claude Code
 conversation-menu pattern; model, context, search and outline remain reachable.
 This is an explicit combined-product variant, not a claim of exact ChatGPT copying.
@@ -167,10 +168,11 @@ existing ViewModel file writer and CodeArtifactViewer.
 
 ## Current reference verification scope
 
-For the current comparison pass, use only the supplied ChatGPT 1.2026.293 APK,
-resources and identified original screenshots. Keep existing project features.
-Track observed behavior separately from resource names and implementation
-assumptions in CHATGPT_COMPARISON.md. Claude is outside this comparison pass.
+For the current visual pass, use the identified original ChatGPT and Claude live
+screenshots together with the supplied historical Claude Code remote-control
+screens. APK resources supplement implementation evidence; they do not prove
+rendered fidelity. Keep existing phone/PC features, and distinguish observations
+from assumptions. The earlier ChatGPT-only comparison scope is superseded here.
 
 ## Tasks on phone and PC
 

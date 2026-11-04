@@ -36,6 +36,35 @@ internal fun ConversationHeader(
     onOutline: () -> Unit
 ) {
     var menuOpen by remember { mutableStateOf(false) }
+    ChatModeHeader(workSelected, onDrawer, onSelectWork) {
+        Box {
+            FilledIconButton(onClick = { menuOpen = true }, modifier = Modifier.size(48.dp),
+                colors = IconButtonDefaults.filledIconButtonColors(containerColor = DesignColors.SurfaceHigh)) {
+                Icon(Icons.Default.MoreHoriz, "Меню чата", tint = Color.White, modifier = Modifier.size(26.dp))
+            }
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false },
+                containerColor = DesignColors.SurfaceHigh) {
+                DropdownMenuItem(text = { Text("Новый чат") }, onClick = { menuOpen = false; onNewChat() })
+                DropdownMenuItem(text = { Column { Text("Модель"); Text(modelName, fontSize = 12.sp, color = DesignColors.TextSecondary) } },
+                    onClick = { menuOpen = false; onModel() })
+                DropdownMenuItem(text = { Column { Text("Контекст"); Text(contextLabel, fontSize = 12.sp, color = DesignColors.TextSecondary) } },
+                    onClick = { menuOpen = false; onContext() })
+                HorizontalDivider(color = DesignColors.Border)
+                DropdownMenuItem(text = { Text("Поиск в чате") }, onClick = { menuOpen = false; onSearch() })
+                DropdownMenuItem(text = { Text("Содержание разговора") }, onClick = { menuOpen = false; onOutline() })
+            }
+        }
+    }
+}
+
+/** The same segment geometry is used when switching between Chat and Work. */
+@Composable
+internal fun ChatModeHeader(
+    workSelected: Boolean,
+    onDrawer: () -> Unit,
+    onSelectWork: (Boolean) -> Unit,
+    trailing: @Composable () -> Unit
+) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically) {
         TwoLineMenuCircleButton(onDrawer)
@@ -55,22 +84,6 @@ internal fun ConversationHeader(
                 }
             }
         }
-        Box {
-            FilledIconButton(onClick = { menuOpen = true }, modifier = Modifier.size(48.dp),
-                colors = IconButtonDefaults.filledIconButtonColors(containerColor = DesignColors.SurfaceHigh)) {
-                Icon(Icons.Default.MoreHoriz, "Меню чата", tint = Color.White, modifier = Modifier.size(26.dp))
-            }
-            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false },
-                containerColor = DesignColors.SurfaceHigh) {
-                DropdownMenuItem(text = { Text("Новый чат") }, onClick = { menuOpen = false; onNewChat() })
-                DropdownMenuItem(text = { Column { Text("Модель"); Text(modelName, fontSize = 12.sp, color = DesignColors.TextSecondary) } },
-                    onClick = { menuOpen = false; onModel() })
-                DropdownMenuItem(text = { Column { Text("Контекст"); Text(contextLabel, fontSize = 12.sp, color = DesignColors.TextSecondary) } },
-                    onClick = { menuOpen = false; onContext() })
-                HorizontalDivider(color = DesignColors.Border)
-                DropdownMenuItem(text = { Text("Поиск в чате") }, onClick = { menuOpen = false; onSearch() })
-                DropdownMenuItem(text = { Text("Содержание разговора") }, onClick = { menuOpen = false; onOutline() })
-            }
-        }
+        trailing()
     }
 }
