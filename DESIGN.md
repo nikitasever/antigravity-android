@@ -78,12 +78,13 @@ AppSettingsScreen owns Appearance controls and a real Markdown preview.
 ChatGptMessageBubble forwards text size to prompts and replies; response font
 affects assistant prose only. MarkdownRenderer scales prose, headings, tables
 and code while preserving monospaced code and link annotations. The default
-remains 15sp prose / 22sp line height. Assistant prose and greeting default to
+is 18sp prose / 28sp line height. Assistant prose and greeting default to
 system serif; user messages and interface controls use sans. The empty ChatGPT-style
 conversation stays blank instead of adding a two-line Antigravity headline. Explicitly saved
 font choices remain effective. Android accessibility font scaling uses sp units.
 `InlineMarkdownText` measures code chips as atomic inline items. Oversized tokens
-wrap within a full-width chip; original text and URL annotation offsets are kept.
+wrap within a full-width chip; immediately following closing punctuation stays
+inside that visual item, with the message, alternate text and URL offsets intact.
 Fenced code wraps and retains existing diff colors and copy/save controls.
 
 `SheetHeader` owns modal headings: centered title, close on the left, 48dp button.
@@ -104,7 +105,7 @@ conversation-menu pattern; model, context, search and outline remain reachable.
 This is an explicit combined-product variant, not a claim of exact ChatGPT copying.
 
 The composer uses the ChatGPT #303030 surface, 1dp outline and 32dp rounding,
-56dp minimum height, a plain plus and larger microphone. Existing attachments,
+56dp minimum height and 32dp outer side insets, a plain plus and larger microphone. Existing attachments,
 queue, draft, send, stop and voice handlers are preserved. Claude dark background
 and serif assistant responses remain the chosen combined-product treatment.
 
@@ -117,6 +118,17 @@ archive, session actions and phone/PC tools remain functional in their owners.
 Canonical owners are `ChatGptMainChatScreen`, `ChatGptExactNavigationDrawer`, and
 the shared sheets in `ui/components/Round5PanelsAndSheets.kt`. Extend those owners
 instead of creating parallel versions of the same interaction.
+
+The populated `ConversationHeader` follows ChatGPT recording f_0043: a back
+circle, a title/location capsule and a shared New chat/menu capsule. Location is
+the real execution target; the model remains reachable from the title/menu.
+Extensions select Connections/Skills/Plugins through the centered header menu
+(ChatGPT 091619); refresh is in that menu, rather than an extra row of wrapping tabs.
+Attachment tiles use natural content height with a 112dp minimum, never
+`fillMaxSize()` inside an unconstrained sheet row. All lower actions must fit.
+The native voice surface is transparent above the Compose voice background;
+successful shader linking alone is not readiness. Keep the Canvas fallback until
+a nonblack rendered frame, and fall back on failure or an 8-second startup deadline.
 
 ## Behavior
 

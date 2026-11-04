@@ -2,6 +2,7 @@ package com.google.antigravity.ui.components
 
 import android.content.Context
 import android.graphics.BitmapFactory
+import android.graphics.PixelFormat
 import android.opengl.GLES30
 import android.opengl.GLSurfaceView
 import android.opengl.GLUtils
@@ -60,6 +61,10 @@ fun ChatGptRealOpenGlOrbView(
         GLSurfaceView(context).apply {
             setEGLContextClientVersion(3)
             setEGLConfigChooser(8, 8, 8, 8, 16, 0)
+            // A SurfaceView below Compose's opaque voice background is invisible.
+            // Only this bounded orb surface is above the window; its exterior stays transparent.
+            holder.setFormat(PixelFormat.TRANSLUCENT)
+            setZOrderOnTop(true)
             setRenderer(renderer)
             renderMode = GLSurfaceView.RENDERMODE_WHEN_DIRTY
         }
@@ -118,6 +123,7 @@ private class ChatGptVoiceGlRenderer(
 
     private var startTimeNs: Long = System.nanoTime()
     private var lastFrameSec: Float = 0f
+    private var reportedReady = false
 
     private var smoothMic: Float = 0.05f
     private var smoothListen: Float = 1.0f
@@ -166,7 +172,7 @@ private class ChatGptVoiceGlRenderer(
     }
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
-        GLES30.glClearColor(0f, 0f, 0f, 1f)
+        GLES30.glClearColor(0f, 0f, 0f, 0f)
         GLES30.glDisable(GLES30.GL_DEPTH_TEST)
 
         val vaos = IntArray(1)
@@ -176,7 +182,13 @@ private class ChatGptVoiceGlRenderer(
 
         val vertSrc = readRawShader(R.raw.voice_vert)
         val prepassFragSrc = readRawShader(R.raw.voice_prepass)
-        val mainFragSrc = readRawShader(R.raw.voice_main)
+        // The shipped shader calls smoothstep(0, 0, dist) while not thinking.
+        // That is undefined in GLSL and can produce invalid colors on drivers. Keep
+        // the original resource intact and define this zero-width transition.
+        val mainFragSrc = readRawShader(R.raw.voice_main).replace(
+            "smoothstep(0.55 * min(thinkingState, 1.0), 0.0, dist)",
+            "(1.0 - smoothstep(0.0, max(0.00001, 0.55 * min(thinkingState, 1.0)), dist))"
+        )
         val orbitFragSrc = readRawShader(R.raw.orbit_animation_frag)
 
         prepassProgram = buildShaderProgram(vertSrc, prepassFragSrc)
@@ -187,7 +199,11 @@ private class ChatGptVoiceGlRenderer(
         flowmapThinkingTex = loadTextureFromDrawable(R.drawable.flowmap_outward_clockwise, repeat = false)
 
         setupPrepassFramebuffer()
-        onReady(prepassProgram != 0 && mainProgram != 0)
+        reportedReady = false
+        if (prepassProgram == 0 || mainProgram == 0) {
+            reportedReady = true
+            onReady(false)
+        }
         startTimeNs = System.nanoTime()
         lastFrameSec = 0f
     }
@@ -302,7 +318,7 @@ private class ChatGptVoiceGlRenderer(
         // =========================================================================
         GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
         GLES30.glViewport(0, 0, surfaceWidth, surfaceHeight)
-        GLES30.glClearColor(0f, 0f, 0f, 1f)
+        GLES30.glClearColor(0f, 0f, 0f, 0f)
         GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
         GLES30.glEnable(GLES30.GL_BLEND)
         GLES30.glBlendFunc(GLES30.GL_SRC_ALPHA, GLES30.GL_ONE_MINUS_SRC_ALPHA)
@@ -354,12 +370,23 @@ private class ChatGptVoiceGlRenderer(
 
             GLES30.glDrawArrays(GLES30.GL_TRIANGLES, 0, 6)
         }
+        // Linked programs alone do not prove that the surface actually draws an orb.
+        // Probe once after the initial fade, and let Compose keep its fallback until then.
+        if (!reportedReady && nowSec >= 0.6f) {
+            val pixel = java.nio.ByteBuffer.allocateDirect(4)
+            GLES30.glReadPixels(surfaceWidth / 2, surfaceHeight / 2, 1, 1,
+                GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, pixel)
+            val visible = (0..2).any { (pixel.get(it).toInt() and 255) > 8 }
+            reportedReady = true
+            android.util.Log.d("VoiceOrb", "First visible GPU frame: $visible; GL error: ${GLES30.glGetError()}")
+            onReady(visible)
+        }
     }
 
     private fun renderOrbit3dShader(nowSec: Float, mic: Float) {
         GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
         GLES30.glViewport(0, 0, surfaceWidth, surfaceHeight)
-        GLES30.glClearColor(0f, 0f, 0f, 1f)
+        GLES30.glClearColor(0f, 0f, 0f, 0f)
         GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
         GLES30.glEnable(GLES30.GL_BLEND)
         GLES30.glBlendFunc(GLES30.GL_ONE, GLES30.GL_ONE_MINUS_SRC_ALPHA)
@@ -462,6 +489,7 @@ private class ChatGptVoiceGlRenderer(
         val linkStatus = IntArray(1)
         GLES30.glGetProgramiv(prog, GLES30.GL_LINK_STATUS, linkStatus, 0)
         if (linkStatus[0] == 0) {
+            android.util.Log.w("VoiceOrb", GLES30.glGetProgramInfoLog(prog))
             GLES30.glDeleteProgram(prog)
             return 0
         }
@@ -475,6 +503,7 @@ private class ChatGptVoiceGlRenderer(
         val compiled = IntArray(1)
         GLES30.glGetShaderiv(shader, GLES30.GL_COMPILE_STATUS, compiled, 0)
         if (compiled[0] == 0) {
+            android.util.Log.w("VoiceOrb", GLES30.glGetShaderInfoLog(shader))
             GLES30.glDeleteShader(shader)
             return 0
         }

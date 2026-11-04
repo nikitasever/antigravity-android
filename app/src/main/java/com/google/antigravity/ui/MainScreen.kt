@@ -1793,7 +1793,7 @@ private fun ChatGptBottomInputPill(
         modifier = Modifier
             .fillMaxWidth()
             .background(DesignColors.Bg)
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .padding(horizontal = 32.dp, vertical = 12.dp)
     ) {
         currentQueue.forEach { queued ->
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -2269,7 +2269,7 @@ private fun AttachmentTileButton(
             .clickable(onClick = onClick)
     ) {
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {

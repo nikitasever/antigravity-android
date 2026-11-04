@@ -33,7 +33,11 @@ internal fun InlineMarkdownText(text: AnnotatedString, style: TextStyle, onUrlCl
         val codeStyle = style.copy(fontFamily = ChatGptMenloFontFamily,
             fontSize = style.fontSize * 0.84f, lineHeight = style.lineHeight * 0.8f,
             lineBreak = LineBreak.Simple, hyphens = Hyphens.None, color = DesignColors.TextPrimary)
-        val ranges = text.getStringAnnotations("CODE", 0, text.length)
+        val codeRanges = text.getStringAnnotations("CODE", 0, text.length)
+        val ranges = codeRanges.mapIndexed { index, range ->
+            AnnotatedString.Range(range.item, range.start,
+                inlineCodeItemEnd(text.text, range.end, codeRanges.getOrNull(index + 1)?.start ?: text.length))
+        }
         val content = remember(text, codeStyle, widthPx, density, measurer) {
             ranges.associate { range ->
                 val value = text.text.substring(range.start, range.end)

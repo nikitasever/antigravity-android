@@ -68,22 +68,32 @@ internal fun ConversationHeader(
         }
     }
     if (hasConversation) {
-        // Both populated reference conversations use a title and session controls.
-        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
+        // ChatGPT recording f_0043: back circle, conversation capsule, actions capsule.
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onDrawer) {
+            FilledIconButton(onClick = onDrawer, modifier = Modifier.size(48.dp),
+                colors = IconButtonDefaults.filledIconButtonColors(containerColor = DesignColors.SurfaceHigh)) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, "Открыть список чатов", tint = DesignColors.TextPrimary)
             }
-            Column(Modifier.weight(1f).clickable(onClick = onModel).padding(horizontal = 4.dp)) {
-                Text(title.ifBlank { "Новый чат" }, fontSize = 18.sp, maxLines = 1,
-                    overflow = TextOverflow.Ellipsis, color = DesignColors.TextPrimary)
-                Text("$executionLabel · $modelName", fontSize = 12.sp, maxLines = 1,
-                    overflow = TextOverflow.Ellipsis, color = DesignColors.TextSecondary)
+            Surface(modifier = Modifier.weight(1f).heightIn(min = 48.dp), shape = CircleShape,
+                color = DesignColors.SurfaceHigh, onClick = onModel) {
+                Column(Modifier.padding(horizontal = 18.dp, vertical = 6.dp),
+                    verticalArrangement = Arrangement.Center) {
+                    Text(title.ifBlank { "Новый чат" }, fontSize = 14.sp, lineHeight = 18.sp, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, color = DesignColors.TextPrimary)
+                    Text(executionLabel.ifBlank { modelName }, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, color = DesignColors.TextSecondary)
+                }
             }
-            IconButton(onClick = onNewChat) {
-                Icon(Icons.Default.Edit, "Новый чат", tint = DesignColors.TextPrimary)
+            Surface(shape = CircleShape, color = DesignColors.SurfaceHigh) {
+                Row {
+                    IconButton(onClick = onNewChat) {
+                        Icon(Icons.Default.Edit, "Новый чат", tint = DesignColors.TextPrimary)
+                    }
+                    actions()
+                }
             }
-            actions()
         }
     } else ChatModeHeader(workSelected, onDrawer, onSelectWork, actions)
 }

@@ -1,6 +1,8 @@
 package com.google.antigravity.ui.components
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -42,7 +44,7 @@ internal fun ConversationActivity(
             onSaveCodeToPhone = onSaveCode)
     }
     if (thinking.isNotEmpty()) {
-        ActivityRow("Ход рассуждений", Icons.Default.History, onToggleThinking, null)
+        ActivityRow("Ход рассуждений", null, onToggleThinking, null, reasoning = true)
     }
     if (tools.isNotEmpty()) {
         val active = tools.lastOrNull { it.status == ToolCallStatus.RUNNING || it.status == ToolCallStatus.AWAITING_APPROVAL }
@@ -55,7 +57,7 @@ internal fun ConversationActivity(
             tools.size == 1 -> tools.first().toolTitleRu
             else -> "Выполнено действий: ${tools.size}"
         }
-        ActivityRow(label, if (failed > 0) Icons.Default.ErrorOutline else Icons.Default.Terminal,
+        ActivityRow(label, if (failed > 0) Icons.Default.ErrorOutline else null,
             { toolsOpen = true }, null)
         // Approval must remain visible even while the summary is collapsed.
         tools.filter { it.requiresApproval && it.approvalDecision == ApprovalDecision.PENDING }.forEach { tool ->
@@ -129,14 +131,21 @@ internal fun ConversationActivity(
 }
 
 @Composable
-private fun ActivityRow(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector,
-    onClick: () -> Unit, trailing: String?) {
+private fun ActivityRow(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector?,
+    onClick: () -> Unit, trailing: String?, reasoning: Boolean = false) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 48.dp)
         .padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, tint = DesignColors.TextSecondary, modifier = Modifier.size(20.dp))
-        Spacer(Modifier.width(10.dp))
+        if (reasoning) {
+            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                repeat(3) { Box(Modifier.size(4.dp).background(DesignColors.ClaudeCoral, CircleShape)) }
+            }
+            Spacer(Modifier.width(8.dp))
+        } else if (icon != null) {
+            Icon(icon, null, tint = DesignColors.TextSecondary, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(8.dp))
+        }
         Text(label, color = DesignColors.TextSecondary, fontSize = 15.sp,
-            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
         if (trailing != null) Text(trailing, color = DesignColors.TextSecondary, fontSize = 13.sp)
         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Открыть подробности",
             tint = DesignColors.TextSecondary, modifier = Modifier.size(20.dp))

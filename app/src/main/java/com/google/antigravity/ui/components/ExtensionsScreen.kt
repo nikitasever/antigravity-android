@@ -53,6 +53,9 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -204,6 +207,7 @@ fun ExtensionsScreen(
     var showAddDialog by remember { mutableStateOf(false) }
     var mcpToolCallServer by remember { mutableStateOf<PcMcpServerItem?>(null) }
     var detailTarget by remember { mutableStateOf<ExtensionDetailTarget?>(null) }
+    var sectionMenuOpen by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -215,8 +219,28 @@ fun ExtensionsScreen(
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             TwoLineMenuCircleButton(onClick = onOpenDrawer)
-            Text("Расширения", modifier = Modifier.weight(1f), textAlign = TextAlign.Center,
-                color = DesignColors.TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                Row(Modifier.clip(CircleShape).clickable { sectionMenuOpen = true }
+                    .heightIn(min = 48.dp).padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text(ExtensionsTab.entries[activeTab].title,
+                        color = DesignColors.TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+                    Icon(Icons.Default.KeyboardArrowDown, "Выбрать раздел", tint = DesignColors.TextPrimary)
+                }
+                DropdownMenu(sectionMenuOpen, onDismissRequest = { sectionMenuOpen = false },
+                    containerColor = DesignColors.SurfaceHigh) {
+                    ExtensionsTab.entries.forEachIndexed { index, tab ->
+                        DropdownMenuItem(text = { Text(tab.title) }, onClick = {
+                            activeTab = index
+                            sectionMenuOpen = false
+                        })
+                    }
+                    HorizontalDivider(color = DesignColors.Border)
+                    DropdownMenuItem(text = { Text("Обновить") },
+                        leadingIcon = { Icon(Icons.Default.Refresh, null) },
+                        onClick = { sectionMenuOpen = false; onRefresh() })
+                }
+            }
             IconButton(onClick = { showAddDialog = true }, modifier = Modifier.size(48.dp)
                 .clip(CircleShape).background(WhiteBtnBg)) {
                 Icon(Icons.Default.Add, "Установить расширение", tint = WhiteBtnText)
@@ -252,53 +276,6 @@ fun ExtensionsScreen(
                         )
                     }
                 }
-            }
-        }
-
-        // 2. Двухрядная компактная панель управления (помещается в мобильную
-        //    ширину без горизонтального скролла и обрезки):
-        //    верхний ряд — вкладки слева + компактная иконка обновления справа;
-        //    нижний ряд — цельный Segmented «Мои | Каталог» слева + поиск справа.
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                modifier = Modifier.weight(1f),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                ExtensionsTab.entries.forEachIndexed { index, tab ->
-                    val isSelected = activeTab == index
-                    Box(
-                        modifier = Modifier
-                            .weight(1f).heightIn(min = 48.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (isSelected) ActivePillBg else Color.Transparent)
-                            .clickable { activeTab = index }
-                            .padding(horizontal = 11.dp, vertical = 7.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = tab.title,
-                            color = if (isSelected) DesignColors.TextPrimary else DesignColors.TextSecondary,
-                            fontSize = 14.sp,
-                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                            textAlign = TextAlign.Center, maxLines = 2
-                        )
-                    }
-                }
-            }
-            IconButton(
-                onClick = onRefresh,
-                modifier = Modifier.size(48.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Refresh,
-                    contentDescription = "Обновить",
-                    tint = DesignColors.TextSecondary,
-                    modifier = Modifier.size(18.dp)
-                )
             }
         }
 

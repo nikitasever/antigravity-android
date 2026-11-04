@@ -1,10 +1,22 @@
 package com.google.antigravity
 
 import com.google.antigravity.ui.components.inlineCodeLines
+import com.google.antigravity.ui.components.inlineCodeItemEnd
 import org.junit.Assert.*
 import org.junit.Test
 
 class InlineCodeWrappingTest {
+    @Test fun closingPunctuationStaysWithCodeWithoutChangingOriginalText() {
+        val text = "/data/user/0/com.google.antigravity/files.) Next"
+        val pathEnd = text.indexOf(".) Next")
+        assertEquals(pathEnd + 2, inlineCodeItemEnd(text, pathEnd))
+        assertEquals(pathEnd, inlineCodeItemEnd(text, pathEnd, pathEnd))
+        assertEquals(6, inlineCodeItemEnd("v1.2.0 Next", 6))
+        val item = text.substring(0, inlineCodeItemEnd(text, pathEnd))
+        val lines = wrap(item, item.codePointCount(0, item.length) - 2)
+        assertEquals(item, lines.joinToString(""))
+        assertFalse(lines.last().all { it in ".)" })
+    }
     @Test fun hugeTokensNeverRequireMeasuringHugeSubstrings() {
         val value = "x".repeat(10_000)
         var longestProbe = 0

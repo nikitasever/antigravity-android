@@ -3,6 +3,15 @@ package com.google.antigravity.ui.components
 import java.text.BreakIterator
 import java.util.Locale
 
+private const val CLOSING_PUNCTUATION = ".,;:!?)]}»”’"
+
+/** Keep immediately following punctuation in the same visual item, without editing the message. */
+internal fun inlineCodeItemEnd(text: String, codeEnd: Int, limit: Int = text.length): Int {
+    var end = codeEnd
+    while (end < limit && text[end] in CLOSING_PUNCTUATION) end++
+    return end
+}
+
 /** Visual lines only. The message and the inline placeholder's alternate text stay intact.
  * Greedy character wrapping avoids the native word break after a Windows drive prefix.
  */
@@ -45,6 +54,9 @@ internal fun inlineCodeLines(value: String, maxWidth: Int, measureWidth: (String
                         low = middle + 1
                     } else high = middle - 1
                 }
+                // Do not strand a closing period/bracket on a line of its own.
+                if (end < boundaries.lastIndex && end > start + 1 &&
+                    line.substring(boundaries[end]).all { it in CLOSING_PUNCTUATION }) end--
                 add(line.substring(boundaries[start], boundaries[end]))
                 start = end
             }
