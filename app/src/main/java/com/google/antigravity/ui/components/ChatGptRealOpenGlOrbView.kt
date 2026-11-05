@@ -22,6 +22,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.google.antigravity.R
 import com.google.antigravity.model.VoiceSessionStatus
 import com.google.antigravity.model.VoiceVisualizerStyle
+import com.google.antigravity.voice.VoiceOrbMotion
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 import kotlin.math.cos
@@ -43,13 +44,19 @@ fun ChatGptRealOpenGlOrbView(
     audioLevel: Float,
     spectrumBands: FloatArray,
     modifier: Modifier = Modifier,
-    onRendererReady: (Boolean) -> Unit = {}
+    onRendererReady: (Boolean) -> Unit = {},
+    onRendererInitializing: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val rendererAlive = remember { java.util.concurrent.atomic.AtomicBoolean(true) }
     val readyCallback = rememberUpdatedState(onRendererReady)
-    val renderer = remember { ChatGptVoiceGlRenderer(context.applicationContext) { ready ->
+    val initializingCallback = rememberUpdatedState(onRendererInitializing)
+    val renderer = remember { ChatGptVoiceGlRenderer(context.applicationContext, onInitializing = {
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            if (rendererAlive.get()) initializingCallback.value()
+        }
+    }) { ready ->
         android.os.Handler(android.os.Looper.getMainLooper()).post {
             if (rendererAlive.get()) readyCallback.value(ready)
         }
@@ -104,6 +111,7 @@ fun ChatGptRealOpenGlOrbView(
 
 internal class ChatGptVoiceGlRenderer(
     private val context: Context,
+    private val onInitializing: () -> Unit = {},
     private val onReady: (Boolean) -> Unit
 ) : GLSurfaceView.Renderer {
 
@@ -142,7 +150,7 @@ internal class ChatGptVoiceGlRenderer(
     private var thinkTimestamp: Float = 0.0f
     private var speakTimestamp: Float = 0.0f
     private var haltTimestamp: Float = 0.0f
-    private var lastKnownStatus: VoiceSessionStatus = VoiceSessionStatus.INACTIVE
+    private val motion = VoiceOrbMotion()
 
     private val cumulativeAudio = FloatArray(4) { 0f }
 
@@ -200,6 +208,10 @@ internal class ChatGptVoiceGlRenderer(
     }
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
+        onInitializing()
+        motion.reset()
+        cumulativeAudio.fill(0f)
+        smoothMic = targetMicLevel
         GLES30.glClearColor(0f, 0f, 0f, 0f)
         GLES30.glDisable(GLES30.GL_DEPTH_TEST)
 
@@ -258,28 +270,16 @@ internal class ChatGptVoiceGlRenderer(
         lastFrameSec = nowSec
 
         val st = currentStatus
-        if (st != lastKnownStatus) {
-            when (st) {
-                VoiceSessionStatus.LISTENING, VoiceSessionStatus.USER_SPEAKING -> listenTimestamp = nowSec
-                VoiceSessionStatus.THINKING -> thinkTimestamp = nowSec
-                VoiceSessionStatus.AI_SPEAKING -> speakTimestamp = nowSec
-                VoiceSessionStatus.MUTED -> haltTimestamp = nowSec
-                else -> {}
-            }
-            lastKnownStatus = st
-        }
-
-        val targetListen = if (st == VoiceSessionStatus.LISTENING || st == VoiceSessionStatus.USER_SPEAKING || st == VoiceSessionStatus.CONNECTING) 1f else 0f
-        val targetThink = if (st == VoiceSessionStatus.THINKING) 1f else 0f
-        val targetSpeak = if (st == VoiceSessionStatus.AI_SPEAKING) 1f else 0f
-        val targetHalt = if (st == VoiceSessionStatus.MUTED) 1f else 0f
-
-        val lerpSpeed = (dt * 7.5f).coerceIn(0.05f, 1.0f)
-        smoothListen += (targetListen - smoothListen) * lerpSpeed
-        smoothThink += (targetThink - smoothThink) * lerpSpeed
-        smoothSpeak += (targetSpeak - smoothSpeak) * lerpSpeed
-        smoothHalt += (targetHalt - smoothHalt) * lerpSpeed
-        smoothMic += (targetMicLevel - smoothMic) * (dt * 12f).coerceIn(0.08f, 1.0f)
+        motion.advance(st, nowSec)
+        smoothListen = motion.weights[0]
+        smoothThink = motion.weights[1]
+        smoothSpeak = motion.weights[2]
+        smoothHalt = motion.weights[3]
+        listenTimestamp = motion.timestamps[0]
+        thinkTimestamp = motion.timestamps[1]
+        speakTimestamp = motion.timestamps[2]
+        haltTimestamp = motion.timestamps[3]
+        smoothMic += (targetMicLevel - smoothMic) * (1f - kotlin.math.exp(-12f * dt))
 
         val b0 = band0 + (if (st == VoiceSessionStatus.AI_SPEAKING) 0.35f * (sin(nowSec * 6.5f) * 0.5f + 0.5f) else 0f)
         val b1 = band1 + (if (st == VoiceSessionStatus.AI_SPEAKING) 0.42f * (sin(nowSec * 8.2f + 1.1f) * 0.5f + 0.5f) else 0f)

@@ -22,7 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.positionOnScreen
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -51,7 +51,10 @@ internal fun VoiceConversationSettingsSheet(
         // (which covers the unshifted full dialog on Material3).
         dragHandle = {
             Box(Modifier.fillMaxWidth().height(48.dp)
-                .onGloballyPositioned { onSheetTopChanged(it.boundsInWindow().top) },
+                .onGloballyPositioned {
+                    val top = it.positionOnScreen().y
+                    if (top.isFinite()) onSheetTopChanged(top)
+                },
                 contentAlignment = Alignment.Center) {
                 BottomSheetDefaults.DragHandle(color = DesignColors.TextSubtle)
             }

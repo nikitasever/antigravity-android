@@ -246,6 +246,16 @@ the existing Canvas is a fallback after shader failure or without GLES3 support.
 Renderer frame requests are limited to about 30 fps while the lifecycle is resumed.
 Disposed surfaces cannot deliver readiness callbacks into a later call. A device
 EGL test exercises both shader passes and checks visible center/transparent exterior.
+VoiceOrbMotion owns elapsed-time state transitions using zr31.c's atan/sin curve
+and normal 0.65 s duration. Interrupted transitions start from the current weights;
+listen/user-speaking do not restart the same visual channel. Recreating the EGL
+surface resets the motion timeline and audio integrals, and reports initializing
+separately from shader failure so the Canvas fallback covers context restoration.
+The overlay's initialization timeout follows the same resumed lifecycle as GPU
+frame requests; time spent in the background cannot permanently disable the orb.
+Sheet and Activity geometry use screen coordinates, since window origins can differ
+after resume. Unplaced sheet measurements are ignored; the square orb fits both
+available axes instead of overflowing a body with zero/limited height.
 The vertex loader computes equivalent fullscreen coordinates to avoid the reproduced
 SwiftShader constant-array failure; raw APK resources remain intact. Shader colors
 use fw9.e defaults with the Main/Low/Mid/High mapping established in vml0.java.

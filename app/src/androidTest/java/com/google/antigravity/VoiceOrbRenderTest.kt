@@ -40,7 +40,9 @@ class VoiceOrbRenderTest {
             val clear = ByteBuffer.allocateDirect(4)
             GLES30.glReadPixels(256, 256, 1, 1, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, clear)
             assertEquals("Pbuffer readback must work before probing the renderer", 255, clear.get(0).toInt() and 255)
-            val renderer = ChatGptVoiceGlRenderer(InstrumentationRegistry.getInstrumentation().targetContext) {}
+            var initializations = 0
+            val renderer = ChatGptVoiceGlRenderer(InstrumentationRegistry.getInstrumentation().targetContext,
+                onInitializing = { initializations++ }) {}
             renderer.updateLiveState(VoiceSessionStatus.LISTENING, VoiceVisualizerStyle.ORBIT_ROSETTE,
                 0.15f, FloatArray(16) { 0.1f })
             renderer.onSurfaceCreated(null, null)
@@ -61,6 +63,22 @@ class VoiceOrbRenderTest {
             GLES30.glReadPixels(0, 0, 1, 1, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, corner)
             assertEquals("The transparent orb must not occlude Compose outside its silhouette", 0,
                 corner.get(3).toInt() and 255)
+            renderer.updateLiveState(VoiceSessionStatus.AI_SPEAKING, VoiceVisualizerStyle.ORBIT_ROSETTE,
+                0.3f, FloatArray(16) { 0.2f })
+            renderer.onDrawFrame(null)
+            SystemClock.sleep(700L)
+            renderer.onDrawFrame(null)
+            // The same renderer can receive a new surface after background/context loss.
+            renderer.onSurfaceCreated(null, null)
+            renderer.onSurfaceChanged(null, 512, 512)
+            renderer.updateLiveState(VoiceSessionStatus.LISTENING, VoiceVisualizerStyle.ORBIT_ROSETTE,
+                0.1f, FloatArray(16) { 0.1f })
+            repeat(6) { renderer.onDrawFrame(null); SystemClock.sleep(200L) }
+            GLES30.glReadPixels(256, 256, 1, 1, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, center)
+            assertEquals(2, initializations)
+            assertTrue("Recreated surface must produce a visible center", (center.get(3).toInt() and 255) > 128)
+            assertTrue((0..2).sumOf { center.get(it).toInt() and 255 } > 64)
+            assertEquals(GLES30.GL_NO_ERROR, GLES30.glGetError())
         } finally {
             EGL14.eglMakeCurrent(display, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_CONTEXT)
             EGL14.eglDestroySurface(display, surface)

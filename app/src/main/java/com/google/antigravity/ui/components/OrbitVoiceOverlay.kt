@@ -65,7 +65,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.positionOnScreen
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -83,6 +83,9 @@ import com.google.antigravity.model.VoiceTransportMode
 import com.google.antigravity.model.VoiceVisualizerStyle
 import com.google.antigravity.voice.RealtimeVoiceEngine
 import com.google.antigravity.ui.design.DesignColors
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
 import java.util.Locale
 import kotlin.math.cos
 import kotlin.math.sin
@@ -124,6 +127,7 @@ fun OrbitVoiceOverlay(
     var shaderFailed by remember { mutableStateOf(false) }
     var shaderReady by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
     val supportsGles3 = remember(context) {
         context.getSystemService(android.app.ActivityManager::class.java)
             ?.deviceConfigurationInfo?.reqGlEsVersion?.let { it >= 0x30000 } == true
@@ -148,8 +152,8 @@ fun OrbitVoiceOverlay(
         onDismiss = { optionsOpen = false; sheetTopPx = null },
         onSheetTopChanged = { sheetTopPx = it }
     )
-    LaunchedEffect(isCallActive, isExpanded, visualizerStyle, shaderReady) {
-        if (isCallActive && isExpanded && supportsGles3 &&
+    LaunchedEffect(isCallActive, isExpanded, visualizerStyle, shaderReady, lifecycleState) {
+        if (lifecycleState.isAtLeast(Lifecycle.State.RESUMED) && isCallActive && isExpanded && supportsGles3 &&
             visualizerStyle == VoiceVisualizerStyle.ORBIT_ROSETTE && !shaderReady) {
             kotlinx.coroutines.delay(8_000L)
             shaderFailed = true
@@ -174,11 +178,17 @@ fun OrbitVoiceOverlay(
                 .systemBarsPadding()
                 .imePadding()
                 .padding(horizontal = 16.dp, vertical = 12.dp)
-                .onGloballyPositioned { contentTopPx = it.boundsInWindow().top }
+                .onGloballyPositioned {
+                    val top = it.positionOnScreen().y
+                    if (top.isFinite()) contentTopPx = top
+                }
         ) {
             val density = LocalDensity.current
-            val availableHeight = if (optionsOpen && sheetTopPx != null) {
-                with(density) { (sheetTopPx!! - contentTopPx).coerceAtLeast(0f).toDp() }
+            // Dialog and Activity have independent window origins after recreation.
+            // Compare screen coordinates, ignoring the sheet's unplaced initial frame.
+            val sheetBoundary = sheetTopPx?.takeIf { it.isFinite() && it > contentTopPx }
+            val availableHeight = if (optionsOpen && sheetBoundary != null) {
+                with(density) { (sheetBoundary - contentTopPx).toDp() }
                     .coerceIn(0.dp, maxHeight)
             } else maxHeight
             val voiceHeight by animateDpAsState(availableHeight, tween(220), label = "voiceAboveSettings")
@@ -225,10 +235,12 @@ fun OrbitVoiceOverlay(
                     verticalArrangement = Arrangement.Center,
                     modifier = Modifier.weight(1f)
                 ) {
+                    BoxWithConstraints(Modifier.weight(1f, fill = false).fillMaxWidth()) {
+                    val orbSize = minOf(330.dp, maxWidth, maxHeight)
                     Box(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier
-                            .widthIn(max = 330.dp).fillMaxWidth().aspectRatio(1f)
+                            .size(orbSize).align(Alignment.Center)
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null
@@ -249,6 +261,12 @@ fun OrbitVoiceOverlay(
                         }
                         if (supportsGles3 && !shaderFailed && visualizerStyle == VoiceVisualizerStyle.ORBIT_ROSETTE) {
                             ChatGptRealOpenGlOrbView(status, visualizerStyle, smoothAudio, spectrumBands,
+                                onRendererInitializing = {
+                                    if (isCallActive && isExpanded) {
+                                        shaderReady = false
+                                        shaderFailed = false
+                                    }
+                                },
                                 modifier = Modifier.fillMaxSize(), onRendererReady = {
                                     // The exit animation still owns its surface briefly.
                                     // A warm-up callback must not undo the collapse reset.
@@ -258,6 +276,7 @@ fun OrbitVoiceOverlay(
                                     }
                                 })
                         }
+                    }
                     }
 
                     if (showCaptions) {
