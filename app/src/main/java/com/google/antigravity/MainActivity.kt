@@ -42,6 +42,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = false
+            isAppearanceLightNavigationBars = false
+        }
 
         Thread { publishDynamicAppShortcuts() }.start()
         if (isVoiceLaunchIntent(intent)) voiceLaunchRequest++
@@ -100,11 +104,13 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            com.google.antigravity.ui.design.FixedDarkAppearance {
             MaterialTheme(colorScheme = colorScheme) {
                 MainScreen(
                     viewModel = viewModel,
                     onRequestVoicePermissionAndStart = requestVoiceAndStart
                 )
+            }
             }
         }
     }

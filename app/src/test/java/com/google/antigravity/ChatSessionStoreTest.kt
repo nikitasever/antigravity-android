@@ -6,6 +6,64 @@ import org.junit.Test
 import java.nio.file.Files
 
 class ChatSessionStoreTest {
+    @Test fun approvalCapabilityAndTransientSendingStateNeverEnterHistory() {
+        val tool=ToolCallEvent(toolName="write_file",summary="Write",details="",status=ToolCallStatus.AWAITING_APPROVAL,
+            requiresApproval=true,approvalHandle=ToolApprovalHandle("r","secret-capability","t","c","http://bridge","path: file"),
+            approvalSending=true,approvalError="transient transport failure")
+        val encoded=ChatSessionStore.encode(SavedChat("c","C",AgentExecutionTarget.PC_REMOTE_SESSION,
+            listOf(ChatMessage(role=MessageRole.AGENT,content="",timestamp="",toolCalls=listOf(tool)))))
+        assertFalse(encoded.contains("secret-capability"))
+        assertFalse(encoded.contains("transient transport failure"))
+        val restored=ChatSessionStore.decode(encoded).messages.single().toolCalls.single()
+        assertNull(restored.approvalHandle)
+        assertFalse(restored.approvalSending)
+        assertEquals(ToolCallStatus.FAILED,restored.status)
+    }
+
+    private fun restoreTools(tools: List<ToolCallEvent>): List<ToolCallEvent> = ChatSessionStore.decode(
+        ChatSessionStore.encode(SavedChat("tools", "Tools", AgentExecutionTarget.PHONE_LOCAL_RESOURCES,
+            listOf(ChatMessage(role = MessageRole.AGENT, content = "", timestamp = "", toolCalls = tools)))))
+        .messages.single().toolCalls
+
+    @Test fun ordinaryOutputNeverBecomesADiffAfterRestart() {
+        val tool = ToolCallEvent(toolName = "list_dir", summary = "Files", details = "notes.txt\nphoto.jpg",
+            unifiedDiff = null, toolTitleRu = "Файлы устройства", parentTaskId = "child",
+            executionTarget = AgentExecutionTarget.PHONE_LOCAL_RESOURCES)
+        assertEquals(tool, restoreTools(listOf(tool)).single())
+    }
+
+    @Test fun actualDiffAndApprovalDecisionSurviveRestart() {
+        val tool = ToolCallEvent(toolName = "write_file", summary = "Change", details = "Written",
+            unifiedDiff = "--- old\n+++ new\n+real change", requiresApproval = true,
+            approvalDecision = ApprovalDecision.APPROVED, status = ToolCallStatus.COMPLETED)
+        assertEquals(tool, restoreTools(listOf(tool)).single())
+    }
+
+    @Test fun restartExpiresRunningAndApprovalStatesWithAnExplanation() {
+        val tools = listOf(ToolCallStatus.RUNNING, ToolCallStatus.AWAITING_APPROVAL, ToolCallStatus.APPROVED).map {
+            ToolCallEvent(toolName = "read_file", summary = "Read", details = "partial", unifiedDiff = null,
+                requiresApproval = true, status = it)
+        }
+        val restored = restoreTools(tools)
+        assertTrue(restored.all { it.status == ToolCallStatus.FAILED && !it.status.isUnfinished })
+        assertTrue(restored.all { it.details.startsWith("partial") && it.details.contains("прервано") })
+        assertTrue(restored.all { it.unifiedDiff == null })
+    }
+
+    @Test fun olderHistoryWithoutDiffOrApprovalMetadataStillLoadsWithoutInventingChanges() {
+        val root = org.json.JSONObject(ChatSessionStore.encode(SavedChat("old", "Old",
+            AgentExecutionTarget.PC_REMOTE_SESSION, listOf(ChatMessage(role = MessageRole.AGENT,
+                content = "done", timestamp = "", toolCalls = listOf(ToolCallEvent(toolName = "read_file",
+                    summary = "Read", details = "file output")))))))
+        val tool = root.getJSONArray("messages").getJSONObject(0).getJSONArray("tools").getJSONObject(0)
+        listOf("unifiedDiff", "toolTitleRu", "requiresApproval", "approvalDecision").forEach(tool::remove)
+        val restored = ChatSessionStore.decode(root.toString()).messages.single().toolCalls.single()
+        assertEquals("file output", restored.details)
+        assertNull(restored.unifiedDiff)
+        assertFalse(restored.requiresApproval)
+        assertEquals(ApprovalDecision.PENDING, restored.approvalDecision)
+    }
+
     @Test fun restoresConversationAttachmentsAndToolResultsAfterRestart() {
         val directory = Files.createTempDirectory("antigravity-history").toFile()
         try {

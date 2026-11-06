@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -62,7 +63,7 @@ fun ChatHistoryDrawer(
     }
     val muted = Color(0xFF9E9E9E)
     ModalDrawerSheet(
-        modifier = Modifier.fillMaxWidth(0.92f).widthIn(max = 380.dp),
+        modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth().imePadding(),
         drawerContainerColor = Color(0xFF111111), drawerContentColor = Color.White
     ) {
         Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 12.dp, top = 16.dp, bottom = 12.dp),
@@ -72,7 +73,7 @@ fun ChatHistoryDrawer(
         }
         OutlinedTextField(
             value = query, onValueChange = { query = it }, singleLine = true,
-            placeholder = { Text("Поиск чатов", fontSize = 16.sp, maxLines = 1) },
+            placeholder = { Text("Поиск чатов и проектов", fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) },
             leadingIcon = { Icon(Icons.Default.Search, null) },
             trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) {
                 Icon(Icons.Default.Close, "Очистить поиск")
@@ -91,7 +92,8 @@ fun ChatHistoryDrawer(
                     HistoryDestination(Icons.Default.Folder, "Проекты") { onSection(DrawerSection.PROJECTS) }
                     HistoryDestination(Icons.Default.Description, "Библиотека") { onSection(DrawerSection.LIBRARY) }
                     HistoryDestination(Icons.Default.Computer, "Рабочие сессии") { onSection(DrawerSection.REMOTE_SESSIONS) }
-                    HistoryDestination(Icons.Default.ExpandMore, "Инструменты", { toolsExpanded = !toolsExpanded })
+                    HistoryDestination(if (toolsExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        "Инструменты", { toolsExpanded = !toolsExpanded })
                     if (toolsExpanded) {
                         HistoryDestination(Icons.Default.PhoneAndroid, "Файлы телефона") { onSection(DrawerSection.PHONE_EXPLORER) }
                         HistoryDestination(Icons.Default.Cloud, "Модели OpenRouter", onModels)
@@ -109,7 +111,7 @@ fun ChatHistoryDrawer(
             }
             item {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (archived) "Архив" else if (query.isBlank()) "Чаты" else "Результаты поиска",
+                    Text(if (archived) "Архив" else if (query.isBlank()) "Недавние" else "Результаты поиска",
                         color = muted, fontSize = 13.sp, modifier = Modifier.weight(1f))
                     TextButton(onClick = { archived = !archived }) { Text(if (archived) "Все чаты" else "Архив", color = muted) }
                 }
@@ -119,12 +121,12 @@ fun ChatHistoryDrawer(
                     Text("Проекты", color = muted, fontSize = 13.sp,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
                 }
-                items(matchingProjects, key = { "project_${it.name}" }) { proj ->
+                items(matchingProjects.distinctBy { it.host to it.path }, key = { listOf("project", it.host, it.path).toString() }) { proj ->
                     Surface(color = Color.Transparent, shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 1.dp)) {
                         Row(Modifier.fillMaxWidth().clickable { onSelectProject(proj) },
                             verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Folder, null, tint = Color(0xFF60A5FA),
+                            Icon(Icons.Default.Folder, null, tint = DesignColors.TextSecondary,
                                 modifier = Modifier.padding(start = 12.dp).size(20.dp))
                             Column(Modifier.weight(1f).padding(start = 14.dp, top = 13.dp, bottom = 13.dp)) {
                                 Text(proj.name, maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -135,24 +137,29 @@ fun ChatHistoryDrawer(
                     }
                 }
             }
-            if (visible.isEmpty()) item {
+            if (visible.isEmpty() && matchingProjects.isEmpty()) item {
                 Text(when { query.isNotBlank() -> "Ничего не найдено. Попробуйте другое слово."
                     archived -> "В архиве пока нет чатов"
                     else -> "Здесь появятся ваши разговоры" }, color = muted, fontSize = 14.sp,
                     modifier = Modifier.padding(20.dp))
             }
-            items(visible, key = { it.id }) { session ->
+            items(visible, key = { "chat_${it.id}" }) { session ->
                 var menuOpen by remember(session.id) { mutableStateOf(false) }
                 val p = preferences[session.id] ?: ChatLibraryPreferences()
                 Surface(color = if (session.id == activeSessionId) Color(0xFF2F2F2F) else Color.Transparent,
                     shape = RoundedCornerShape(12.dp), modifier = Modifier.padding(horizontal = 8.dp, vertical = 1.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f).clickable { onSelect(session) }.padding(start = 12.dp, top = 13.dp, bottom = 13.dp)) {
+                        Row(Modifier.weight(1f).clickable { onSelect(session) }.heightIn(min = 52.dp)
+                            .padding(start = 16.dp, top = 13.dp, bottom = 13.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Outlined.ChatBubbleOutline, null, tint = DesignColors.TextSecondary,
+                                modifier = Modifier.size(20.dp))
+                        Column(Modifier.weight(1f).padding(start = 16.dp)) {
                             Text((if (p.pinned) "• " else "") + session.title, maxLines = 1,
-                                overflow = TextOverflow.Ellipsis, fontSize = 15.sp, color = Color.White)
+                                overflow = TextOverflow.Ellipsis, fontSize = 16.sp, color = Color.White)
                             if (query.isNotBlank() && session.id in matches && !session.title.contains(query.trim(), true)) {
                                 Text("Совпадение в сообщении или вложении", color = muted, fontSize = 11.sp, maxLines = 1)
                             }
+                        }
                         }
                         Box {
                             IconButton(onClick = { menuOpen = true }) { Icon(Icons.Default.MoreHoriz, "Действия с чатом «${session.title}»", tint = muted) }

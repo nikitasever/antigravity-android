@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.Antigravity" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowLightStatusBar">false</item>
         <item name="android:statusBarColor">#000000</item>
         <item name="android:navigationBarColor">#000000</item>
     </style>
 
     <style name="Theme.Antigravity.AssistOverlay" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowContentOverlay">@null</item>

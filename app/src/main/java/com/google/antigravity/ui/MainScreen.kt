@@ -270,6 +270,7 @@ fun MainScreen(
 
     var showModelPickerDialog by remember { mutableStateOf(false) }
     var showAttachmentSheet by remember { mutableStateOf(false) }
+    var extensionsInitialTab by rememberSaveable { mutableStateOf(com.google.antigravity.ui.components.ExtensionsTab.CONNECTIONS) }
     var showOpenRouterSheet by remember { mutableStateOf(false) }
     var showGoogleDriveSheet by remember { mutableStateOf(false) }
     var showSwarmSheet by remember { mutableStateOf(false) }
@@ -639,6 +640,7 @@ fun MainScreen(
                         // Этап 6: единый интерфейс расширений — Подключения /
                         // Навыки / Плагины; внутри Мои / Каталог с поиском.
                         ExtensionsScreen(
+                            initialTab = extensionsInitialTab,
                             plugins = installedPlugins,
                             skills = installedSkills,
                             mcpServers = mcpServers,
@@ -802,7 +804,7 @@ fun MainScreen(
 
         // Модальное меню прикрепления файлов и фото (кнопка `+` как в ChatGPT)
         if (showAttachmentSheet) {
-            ChatGptAttachmentPickerDialog(
+            com.google.antigravity.ui.components.ChatAttachmentSheet(
                 onTakePhoto = {
                     showAttachmentSheet = false
                     cameraPreviewLauncher.launch(null)
@@ -814,6 +816,11 @@ fun MainScreen(
                 onPickAnyFiles = {
                     showAttachmentSheet = false
                     multipleFilesLauncher.launch(arrayOf("*/*"))
+                },
+                onOpenPlugins = {
+                    showAttachmentSheet = false
+                    extensionsInitialTab = com.google.antigravity.ui.components.ExtensionsTab.PLUGINS
+                    viewModel.selectDrawerSection(DrawerSection.PLUGINS)
                 },
                 onOpenPhoneStorage = {
                     showAttachmentSheet = false
@@ -830,7 +837,7 @@ fun MainScreen(
         }
 
         if (showModelPickerDialog) {
-            ModelAndModeSelectorDialog(
+            com.google.antigravity.ui.components.ConversationModelSheet(
                 settings = settings,
                 availableModels = availableModels,
                 openRouterTotalCount = openRouterTotalCount.coerceAtLeast(openRouterModels.size),
@@ -846,10 +853,6 @@ fun MainScreen(
                     showModelPickerDialog = false
                     viewModel.syncOpenRouterCatalog(forceRefresh = false)
                     showOpenRouterSheet = true
-                },
-                onSwitchToChatTab = {
-                    viewModel.selectTopModeTab(TopModeTab.CHAT)
-                    showModelPickerDialog = false
                 },
                 onDismiss = { showModelPickerDialog = false }
             )
@@ -930,13 +933,6 @@ fun MainScreen(
                 panelState = swarmPanelState,
                 onDismiss = { showSwarmSheet = false },
                 onCancelTask = viewModel::cancelSubagentAnalysis,
-                onDispatchCodeTask = { viewModel.dispatchSwarmTask(it, prepareChanges = true) },
-                onDispatchSwarmTask = { taskPrompt ->
-                    viewModel.dispatchSwarmTask(taskPrompt)
-                },
-                onInsertMention = { mentionText ->
-                    viewModel.sendUserPrompt("${mentionText.trim()} Доложи текущий статус", viaVoice = false)
-                },
                 isOwnTaskActive = swarmOwnTaskActive
             )
         }
@@ -1121,7 +1117,8 @@ private fun ChatGptMainChatScreen(
     LaunchedEffect(listState) {
         snapshotFlow { listState.canScrollForward }.collect { if (!it) followLatest = true }
     }
-    LaunchedEffect(searchQuery, searchPosition) {
+    BackHandler(enabled = showSearch) { showSearch = false; searchQuery = "" }
+    LaunchedEffect(searchQuery, searchPosition, searchMatches) {
         searchMatches.getOrNull(searchPosition.coerceIn(0, (searchMatches.size - 1).coerceAtLeast(0)))?.let {
             followLatest = false
             listState.scrollToItem(it)
@@ -1157,6 +1154,7 @@ private fun ChatGptMainChatScreen(
             onSelectWork = { onSelectTopTab(if (it) TopModeTab.WORK_SESSIONS else TopModeTab.CHAT) },
             onNewChat = onNewChat,
             onModel = onOpenModelPicker,
+            onTasks = onOpenSwarmSheet,
             onContext = onOpenContextSheet,
             onSearch = { showSearch = true },
             onOutline = { showOutline = true }
@@ -1218,6 +1216,7 @@ private fun ChatGptMainChatScreen(
                             readingTextSize = chatSettings.chatTextSize,
                             responseFont = chatSettings.responseFont,
                             isSpeakingAloud = isSpeakingAloud,
+                            conversationStreaming = isAnyMessageStreaming,
                             onToggleThinking = { viewModel.toggleThinkingExpanded(msg.id) },
                             onSpeak = { viewModel.toggleSpeakMessage(msg.content) },
                             onBranch = { viewModel.branchFromMessage(msg.id) },
@@ -1262,26 +1261,13 @@ private fun ChatGptMainChatScreen(
         }
 
         val isSwarmTaskActive by viewModel.isSwarmTaskActive.collectAsState()
-        val swarmPanelState by viewModel.swarmPanelState.collectAsState()
-
-        // Компактная плашка фоновых задач появляется только при реально запущенной фоновой/мультиагентной задаче
-        if (forceExpandBgTasks || isSwarmTaskActive) {
-            CodeBackgroundTasksEntryPoint(
-                agents = swarmAgents,
-                panelState = swarmPanelState,
-                isStreaming = isAnyMessageStreaming,
-                isSwarmTaskActive = isSwarmTaskActive,
-                activeSessionTitle = activeSessionTitle,
-                onOpenFullSheet = onOpenSwarmSheet,
-                onCancelTask = viewModel::cancelSubagentAnalysis,
-                onDispatchCodeTask = { viewModel.dispatchSwarmTask(it, prepareChanges = true) },
-                onDispatchSwarmTask = { prompt -> viewModel.dispatchSwarmTask(prompt) },
-                onInsertMention = { mentionText ->
-                    viewModel.sendUserPrompt("${mentionText.trim()} Доложи текущий статус", viaVoice = false)
-                },
-                forceExpandedInline = forceExpandBgTasks
-            )
-        }
+        // The count includes automatic phone delegation, not the leader or child tool calls.
+        CodeBackgroundTasksEntryPoint(
+            agents = swarmAgents,
+            onOpenFullSheet = onOpenSwarmSheet,
+            showWhenIdle = forceExpandBgTasks,
+            isOwnTaskActive = isSwarmTaskActive
+        )
 
         val isDictatingInline by viewModel.voiceEngine.isDictatingInline.collectAsState()
 
@@ -1289,6 +1275,9 @@ private fun ChatGptMainChatScreen(
             viewModel = viewModel,
             placeholderText = adaptiveInputPlaceholder,
             pendingAttachments = pendingAttachments,
+            expanded = messages.isNotEmpty(),
+            modelLabel = shortModelSubtitle,
+            onModel = onOpenModelPicker,
             isDictatingInline = isDictatingInline,
             isStreaming = isAnyMessageStreaming,
             onStopStreaming = { viewModel.stopActiveGeneration() },
@@ -1725,6 +1714,9 @@ private fun ChatGptBottomInputPill(
     viewModel: AntigravityViewModel,
     placeholderText: String,
     pendingAttachments: List<AttachedFileItem>,
+    expanded: Boolean = false,
+    modelLabel: String = "",
+    onModel: () -> Unit = {},
     isDictatingInline: Boolean = false,
     isStreaming: Boolean = false,
     onStopStreaming: () -> Unit = {},
@@ -1807,17 +1799,25 @@ private fun ChatGptBottomInputPill(
         modifier = Modifier
             .fillMaxWidth()
             .background(DesignColors.Bg)
-            .padding(horizontal = 32.dp, vertical = 12.dp)
+            .padding(horizontal = if (expanded || isStreaming) 16.dp else 32.dp, vertical = 12.dp)
     ) {
+        if (currentQueue.isNotEmpty()) {
+        Text("В очереди: ${currentQueue.size}", color = DesignColors.TextSecondary,
+            fontSize = 12.sp, modifier = Modifier.padding(bottom = 4.dp))
+        // Bound the queue independently: ten rows plus the keyboard must never
+        // push the editor and Stop below the viewport.
+        Column(Modifier.fillMaxWidth().heightIn(max = 96.dp).verticalScroll(rememberScrollState())) {
         currentQueue.forEach { queued ->
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("В очереди: ${queued.prompt}", color = Color(0xFF9E9E9E), maxLines = 1,
+                Text(queued.prompt, color = Color(0xFF9E9E9E), maxLines = 1,
                     overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 if (!isStreaming) TextButton(onClick = { viewModel.sendQueuedFollowUp(queued.id) }) { Text("Отправить") }
                 IconButton(onClick = { viewModel.removeQueuedFollowUp(queued.id) }) {
                     Icon(Icons.Default.Close, contentDescription = "Удалить сообщение из очереди", tint = Color.Gray)
                 }
             }
+        }
+        }
         }
         attachmentError?.let { error ->
             Text(error, color = Color(0xFFF87171), fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
@@ -2011,294 +2011,29 @@ private fun ChatGptBottomInputPill(
             }
         }
 
-        Surface(
-            color = DesignColors.SurfaceHigh,
-            shape = RoundedCornerShape(32.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, DesignColors.Border),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 56.dp)
-                    .padding(start = 4.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .clickable { onPlusClick() }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "Загрузить файлы или фото",
-                        tint = Color.White,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(6.dp))
-
-                Box(
-                    modifier = Modifier.weight(1f),
-                    contentAlignment = Alignment.CenterStart
-                ) {
-                    if (text.isEmpty()) {
-                        Text(
-                            text = if (pendingAttachments.isNotEmpty()) "Добавьте сообщение к файлу..." else if (isStreaming) "Сообщение в очередь…" else placeholderText,
-                            color = Color(0xFF8E8E8E),
-                            fontSize = 17.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    BasicTextField(
-                        value = text,
-                        onValueChange = { viewModel.setComposerDraft(it) },
-                        textStyle = TextStyle(
-                            color = Color.White,
-                            fontSize = 16.sp
-                        ),
-                        cursorBrush = SolidColor(Color.White),
-                        maxLines = 4,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(if (isDictatingInline) Color(0xFFEF4444) else Color.Transparent)
-                        .clickable {
-                            val sessionId = viewModel.settings.value.activeConversationId
-                            onMicDictationClick(text) { dictated ->
-                                viewModel.setComposerDraft(dictated, sessionId)
-                            }
-                        }
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Mic,
-                        contentDescription = "Голосовая диктовка в текст",
-                        tint = Color.White,
-                        modifier = Modifier.size(26.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(4.dp))
-
-                if (isStreaming) {
-                    if (text.isNotBlank() || pendingAttachments.isNotEmpty()) IconButton(onClick = {
-                        val toQueue = text
-                        viewModel.setComposerDraft("")
-                        onSendPrompt(toQueue)
-                    }) { Icon(Icons.Default.ArrowUpward, "Добавить в очередь", tint = Color.White) }
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(Color.White)
-                            .clickable { onStopStreaming() }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Stop,
-                            contentDescription = "Остановить генерацию",
-                            tint = Color.Black,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                } else if (text.isNotBlank() || pendingAttachments.isNotEmpty()) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(Color.White)
-                            .clickable {
-                                val toSend = text
-                                viewModel.setComposerDraft("")
-                                handleSendAction(toSend)
-                            }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowUpward,
-                            contentDescription = "Отправить",
-                            tint = Color.Black,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                } else {
-                    BlueVoiceWaveformCircleButton(onClick = onBlueVoiceWaveClick)
-                }
-            }
-        }
-    }
-}
-
-/**
- * Нижняя шторка выбора вложений по кнопке `+` 1:1 как в ChatGPT Android 1.2026.293 (`ModalBottomSheet`).
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ChatGptAttachmentPickerDialog(
-    onTakePhoto: () -> Unit,
-    onPickPhotos: () -> Unit,
-    onPickAnyFiles: () -> Unit,
-    onOpenPhoneStorage: () -> Unit,
-    onMention: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = DesignColors.Bg,
-        contentColor = Color.White,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            com.google.antigravity.ui.components.SheetHeader("Добавление в чат", onDismiss)
-            // 3 большие плитки сверху (Камера | Фотографии | Файлы), как в ChatGPT Android 1.2026.293
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                AttachmentTileButton(
-                    icon = Icons.Outlined.CameraAlt,
-                    label = "Камера",
-                    onClick = onTakePhoto,
-                    modifier = Modifier.weight(1f)
-                )
-                AttachmentTileButton(
-                    icon = Icons.Outlined.Image,
-                    label = "Фото",
-                    onClick = onPickPhotos,
-                    modifier = Modifier.weight(1f)
-                )
-                AttachmentTileButton(
-                    icon = Icons.Outlined.Description,
-                    label = "Файлы",
-                    onClick = onPickAnyFiles,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            Surface(
-                color = DesignColors.Surface,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onMention() }
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AlternateEmail,
-                        contentDescription = null,
-                        tint = DesignColors.TextPrimary,
-                        modifier = Modifier.size(22.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = "Упомянуть…",
-                            color = Color.White,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = "Добавьте навык, подключение или файл",
-                            color = Color(0xFF9E9E9E),
-                            fontSize = 14.sp
-                        )
-                    }
-                }
-            }
-
-            Surface(
-                color = DesignColors.Surface,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onOpenPhoneStorage() }
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Folder,
-                        contentDescription = null,
-                        tint = DesignColors.TextPrimary,
-                        modifier = Modifier.size(22.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = "Файлы телефона",
-                            color = Color.White,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = "Поиск, чтение и создание файлов",
-                            color = Color(0xFF9E9E9E),
-                            fontSize = 14.sp
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-        }
-    }
-}
-
-@Composable
-private fun AttachmentTileButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        color = DesignColors.Surface,
-        shape = RoundedCornerShape(18.dp),
-        modifier = modifier
-            .heightIn(min = 112.dp)
-            .clickable(onClick = onClick)
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Surface(color = DesignColors.SurfaceHigh, shape = CircleShape) {
-                Icon(imageVector = icon, contentDescription = null, tint = DesignColors.TextPrimary,
-                    modifier = Modifier.padding(12.dp).size(26.dp))
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = label,
-                color = Color.White,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Medium
-            )
-        }
+        com.google.antigravity.ui.components.ConversationComposer(
+            text = text,
+            placeholder = if (isStreaming) "Сообщение в очередь…" else placeholderText,
+            expanded = expanded,
+            streaming = isStreaming,
+            hasAttachments = pendingAttachments.isNotEmpty(),
+            dictating = isDictatingInline,
+            onTextChange = { viewModel.setComposerDraft(it) },
+            onAttach = onPlusClick,
+            onDictate = {
+                val sessionId = viewModel.settings.value.activeConversationId
+                onMicDictationClick(text) { dictated -> viewModel.setComposerDraft(dictated, sessionId) }
+            },
+            onSend = {
+                val input = text
+                viewModel.setComposerDraft("")
+                if (isStreaming) onSendPrompt(input) else handleSendAction(input)
+            },
+            onStop = onStopStreaming,
+            modelLabel = modelLabel,
+            onModel = onModel,
+            voiceAction = { BlueVoiceWaveformCircleButton(onClick = onBlueVoiceWaveClick) }
+        )
     }
 }
 
@@ -2573,6 +2308,7 @@ private fun BlueVoiceWaveformCircleButton(onClick: () -> Unit) {
             .size(40.dp)
             .clip(CircleShape)
             .background(DesignColors.AccentBlue)
+            .semantics { contentDescription = "Начать голосовой разговор" }
             .clickable(onClick = onClick)
     ) {
         Canvas(modifier = Modifier.size(20.dp)) {
@@ -2623,6 +2359,7 @@ private fun ChatGptMessageBubble(
     readingTextSize: com.google.antigravity.model.ChatTextSize = com.google.antigravity.model.ChatTextSize.NORMAL,
     responseFont: com.google.antigravity.model.ResponseFont = com.google.antigravity.model.ResponseFont.SERIF,
     isSpeakingAloud: Boolean = false,
+    conversationStreaming: Boolean = false,
     onToggleThinking: () -> Unit,
     onSpeak: () -> Unit,
     onBranch: () -> Unit = {},
@@ -2733,12 +2470,12 @@ private fun ChatGptMessageBubble(
 
             message.versionState?.takeIf { it.branches.size > 1 }?.let { versions ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(enabled = !message.isStreaming && versions.selected > 0,
+                    IconButton(enabled = !conversationStreaming && !message.isStreaming && versions.selected > 0,
                         onClick = { onSelectVersion(versions.selected - 1) }) {
                         Icon(Icons.Default.KeyboardArrowLeft, "Предыдущая версия", tint = Color.Gray)
                     }
                     Text("${versions.selected + 1} / ${versions.branches.size}", color = Color.Gray, fontSize = 12.sp)
-                    IconButton(enabled = !message.isStreaming && versions.selected < versions.branches.lastIndex,
+                    IconButton(enabled = !conversationStreaming && !message.isStreaming && versions.selected < versions.branches.lastIndex,
                         onClick = { onSelectVersion(versions.selected + 1) }) {
                         Icon(Icons.Default.KeyboardArrowRight, "Следующая версия", tint = Color.Gray)
                     }
@@ -2785,13 +2522,13 @@ private fun ChatGptMessageBubble(
                     }
                 }
             } else {
-                // Пузырь сообщения пользователя 1:1 как в ChatGPT Android 1.2026.293 (#2F2F2F, с поддержкой кликабельных ссылок)
+                // Claude-style rounded rectangle; literal prompt text is preserved.
                 Surface(
                     color = DesignColors.UserBubble,
-                    shape = RoundedCornerShape(22.dp),
+                    shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
                         .padding(start = 32.dp)
-                        .clip(RoundedCornerShape(22.dp))
+                        .clip(RoundedCornerShape(14.dp))
                         .combinedClickable(
                             onClick = {},
                             onLongClick = { showContextMenuSheet = true }
@@ -2943,7 +2680,7 @@ private fun ChatGptMessageBubble(
                         onSpeak()
                     }
                 )
-                if (isUser) {
+                if (isUser && !conversationStreaming) {
                     MessageContextMenuRow(
                         icon = Icons.Default.Edit,
                         label = "Редактировать сообщение",
@@ -3090,168 +2827,3 @@ private fun SettingsModalScreen(
         onOpenGoogleWeb, onSignOut, onBack, onOpenPermissions, onOpenDrawer, initialPage
     )
 }
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ModelAndModeSelectorDialog(
-    settings: AntigravitySettings,
-    availableModels: List<AntigravityModelOption>,
-    openRouterTotalCount: Int = 452,
-    onSelectTarget: (AgentExecutionTarget) -> Unit,
-    onSelectModel: (String) -> Unit,
-    onOpenOpenRouterCatalog: () -> Unit = {},
-    @Suppress("UNUSED_PARAMETER") onSwitchToChatTab: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val modelsList = if (availableModels.isNotEmpty()) availableModels else AVAILABLE_AGY_MODELS
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = DesignColors.Bg,
-        contentColor = Color.White,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            // Заголовок и подзаголовок из строковых ресурсов ChatGPT 1.2026.293 (0x7f130fab, 0x7f130fa9)
-            com.google.antigravity.ui.components.SheetHeader("Выбрать модель", onDismiss)
-            Text(
-                text = "Переключайтесь между рекомендуемыми нами моделями",
-                color = Color(0xFF9E9E9E),
-                fontSize = 13.5.sp
-            )
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // Переключатель среды выполнения в единой компактной капсуле ChatGPT
-            Surface(
-                color = Color(0xFF2A2A2A),
-                shape = RoundedCornerShape(20.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(40.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(3.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    val targets = listOf(
-                        AgentExecutionTarget.PC_REMOTE_SESSION to "Сессия ПК",
-                        AgentExecutionTarget.PHONE_LOCAL_RESOURCES to "Смартфон",
-                        AgentExecutionTarget.GOOGLE_WEB_CONSOLE to "Веб-консоль"
-                    )
-                    targets.forEach { (target, shortLabel) ->
-                        val isTargetSelected = settings.executionTarget == target
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight()
-                                .clip(RoundedCornerShape(17.dp))
-                                .background(if (isTargetSelected) Color(0xFF3D3D3D) else Color.Transparent)
-                                .clickable { onSelectTarget(target) }
-                        ) {
-                            Text(
-                                text = shortLabel,
-                                color = if (isTargetSelected) Color.White else Color(0xFFA0A0A0),
-                                fontSize = 13.sp,
-                                fontWeight = if (isTargetSelected) FontWeight.SemiBold else FontWeight.Medium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // Кнопка перехода в полный живой каталог OpenRouter (450+ моделей 2026: Фото, Видео, Reasoning, Vision)
-            Surface(
-                color = Color(0xFF132238),
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, Color(0xFF58A6FF).copy(alpha = 0.55f), RoundedCornerShape(14.dp))
-                    .clickable { onOpenOpenRouterCatalog() }
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Openrouter",
-                            color = Color(0xFF58A6FF),
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.2.sp
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "Синхронизация openrouter.ai/api/v1/models • Фото, Видео, Reasoning, Free",
-                            color = Color(0xFFA0B3C8),
-                            fontSize = 11.8.sp
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            // Чистый список моделей без рамок 1:1 как в ChatGPT Android 1.2026.293
-            modelsList.forEach { model ->
-                val selected = settings.selectedModelId == model.id
-                Surface(
-                    color = if (selected) Color(0xFF2B2B2B) else Color.Transparent,
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .clickable { onSelectModel(model.id) }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = model.displayName,
-                                color = Color.White,
-                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                                fontSize = 15.5.sp
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = model.badge,
-                                color = Color(0xFF9E9E9E),
-                                fontSize = 13.sp
-                            )
-                        }
-                        if (selected) {
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Icon(
-                                imageVector = Icons.Default.Check,
-                                contentDescription = "Выбрано",
-                                tint = Color.White,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(18.dp))
-        }
-    }
-}
-
-

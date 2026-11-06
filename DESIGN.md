@@ -119,9 +119,10 @@ Canonical owners are `ChatGptMainChatScreen`, `ChatGptExactNavigationDrawer`, an
 the shared sheets in `ui/components/Round5PanelsAndSheets.kt`. Extend those owners
 instead of creating parallel versions of the same interaction.
 
-The populated `ConversationHeader` follows ChatGPT recording f_0043: a back
-circle, a title/location capsule and a shared New chat/menu capsule. Location is
-the real execution target; the model remains reachable from the title/menu.
+The populated `ConversationHeader` uses the supplied Claude Remote control
+hierarchy: flat back navigation, title/location and quiet actions. ChatGPT's
+f_0043 documents its Work screen, not a universal header for every conversation.
+Location is the real execution target; model selection remains in the title/menu.
 Extensions select Connections/Skills/Plugins through the centered header menu
 (ChatGPT 091619); refresh is in that menu, rather than an extra row of wrapping tabs.
 Attachment tiles use natural content height with a 112dp minimum, never
@@ -269,6 +270,87 @@ in the header. Extension lists follow the mobile ChatGPT 091805 hierarchy: group
 name/status rows with a chevron; controls remain in detail views. No promotional
 hero artwork is added to installed extensions or the catalog.
 Inline code uses 84% of prose size, 6 dp horizontal and 2 dp vertical total
-padding, and Surface background. Attachment tiles use neutral surfaces, 48+ dp
-icon targets and short labels Camera/Photos/Files in the active Russian locale.
+padding, and Surface background. ChatAttachmentSheet owns the attachment action
+list observed in ChatGPT live capture 091526: inset SurfaceHigh panel, 28dp corners,
+64dp rows, neutral circular icon backgrounds and short Russian labels. The old
+tile grid is retired. Plugins opens the actual extension screen; phone files and
+mentions remain additional actions below a divider. No inactive reasoning toggle
+is copied from the reference without a provider-backed setting.
 Permission descriptions wrap instead of hiding the capability name behind ellipses.
+
+## Correction after 2.1.1 was rejected
+
+The empty home retains the verified ChatGPT segments and compact pill. A populated
+conversation follows Claude's flat header and a 14 dp user-message rectangle;
+assistant serif text remains the existing explicit preference. ConversationComposer
+is the single input-surface owner called by ChatGptBottomInputPill: a separate text
+row while writing/generating, then attachment, dictation, queue/send and Stop/voice
+actions. The lower model label opens the existing model picker and shows the
+actual selected model. It uses existing Surface/Border tokens, 24 dp corners, 16 dp conversation
+side insets, and no invented model or permission badge. Empty home keeps 32 dp
+side insets and 32 dp corners. Do not force all controls into the text row.
+Pending queue rows have a separate 96 dp maximum scrolling region and a real
+count. Ten queued messages must not consume the keyboard viewport or hide Stop.
+MarkdownSegments owns fenced-code segmentation, including unclosed streamed blocks,
+longer fences and Windows line endings; original source inside blocks is preserved.
+See DESIGN_RECHECK_2026-11-05.md for actual verification and remaining gaps.
+FixedDarkAppearance owns the Compose night-mode signal for Main and Assist windows.
+The app's fixed dark palette must not inherit light system-bar icons policy from
+the device's light theme when Material3 1.3.0 opens a modal. Native window themes
+and MainActivity use light icons; system theme, locale and font scale are preserved.
+
+### Drawer and settings continuation — 2026-11-05
+
+ChatHistoryDrawer remains the drawer owner. Claude 090907 supplies the full-width
+phone drawer, outline conversation icons and recent-history hierarchy; search and
+the collapsible tools section retain Antigravity capabilities. Drawer width is
+capped at 420dp on larger displays. Project result identity uses host and path,
+not display name. Project-only matches must not show a no-results message.
+AppSettingsScreen owns settings search: opening focuses the field; Close and Back
+clear the search and dismiss its keyboard before leaving settings. Selecting a
+result also closes search. Settings switches use one toggleable row and a passive
+visual thumb, so tapping the label and tapping the switch have identical behavior.
+
+ConversationModelSheet owns model and execution-target selection, replacing the
+screen-local selector. SheetHeader stays visible while the content scrolls. Target
+choices wrap in radio rows instead of truncating inside a fixed 40dp capsule.
+OpenRouter uses a neutral catalog row with the actual known count, without a
+promotional card or endpoint URL. modelPickerOptions preserves an actual saved
+selection missing from a refreshed catalog and deduplicates model IDs.
+
+ExtensionErrorBanner owns extension-screen failures: a neutral Surface message,
+48dp dismissal target and explicit list refresh (disabled while loading). Raw
+server/transport text is mapped by extensionErrorCopy and never echoed in the
+banner. The existing EmptyExtensionsCard remains the empty-state visual owner;
+extensionEmptyCopy distinguishes loading, failed fetch, no matches and actual
+empty installation. Search uses a full-width ClaudeSearchField on its own row
+instead of shrinking beside the scope tabs at larger font sizes. Category-to-tab
+mapping belongs to extensionCatalogTab, with plugins excluding MCP/skill kinds.
+The failure banner scrolls with list content; it must not push the search field
+behind the keyboard at 320dp and 130% font scale. Section/scope/query and the
+attachment-to-plugin initial destination survive Activity recreation. The section
+title ellipsizes while preserving a 24dp dropdown icon and a 48dp row target.
+
+BackgroundTaskSheet owns the background-task entry and details. The supplied Claude
+Remote control screenshot grounds the flat 48dp count link above the composer;
+there is no bordered pixel-grid capsule or inline creation form. The shared
+SheetHeader stays outside a LazyColumn of flat expandable task rows. Active tasks
+can be stopped from the fixed footer. ConversationTasks derives phone task rows
+from real top-level delegation events and counts only unfinished task rows,
+including remote settling. Ordinary child tools remain indented in the existing
+ConversationActivity trace. No evidence establishes Claude's server-side agent
+creation mechanism; this is Antigravity's own execution presented in that pattern.
+ConversationHeader exposes the same task sheet from the chat menu after the active
+count disappears. See SUBAGENTS_UI_RECHECK_2026-11-05.md for runtime evidence.
+
+ToolApprovalActions remains the single owner of permission controls in the existing
+activity trace and details sheet. It shows the redacted argument preview, a 48dp
+one-shot approval button and a denial button. Sending disables both controls;
+transport failure keeps the request pending and explains that acknowledgement
+was not received. An executor without a supported reply handle shows an honest
+explanation instead of nonfunctional buttons. This bridge protocol is our own;
+the supplied reference screenshots do not establish a vendor approval protocol.
+Argument previews explicitly use TextPrimary on the dark chat background. Below
+360dp available width or above 115% system font scale, approval choices stack at
+full width; otherwise they share a row. Labels are centered, each target is at
+least 48dp, and the preview scrolls independently above the choices.

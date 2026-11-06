@@ -312,11 +312,13 @@ async function executeBrokerToolCall(ref, args, { catalog, callPcTool, allowedRe
     }
     const call = await callPcTool(entry.serverId, entry.toolName, (args && typeof args === 'object') ? args : {}, { signal, timeoutMs });
     if (call && call.ok) {
-        return { ok: true, side: 'pc', serverId: entry.serverId, toolName: entry.toolName, result: call.result };
+        return { ok: true, side: 'pc', serverId: entry.serverId, toolName: entry.toolName, result: call.result,
+            ...(call.approvalDecision ? { approvalDecision: call.approvalDecision } : {}) };
     }
     return {
         ok: false,
         code: (call && call.errorCode) || 'tool_error',
+        ...(call?.approvalDecision ? { approvalDecision: call.approvalDecision } : {}),
         error: (call && call.error) || 'Вызов инструмента не выполнен',
         side: 'pc',
         serverId: entry.serverId,
@@ -461,7 +463,7 @@ async function runToolCallLoop({ messages, tools, nameToRef, chat, execute, maxR
                 if (pre && pre.args && typeof pre.args === 'object') callArgs = pre.args;
                 if (pre && pre.notice) hookNotice = pre.notice;
             }
-            const result = await execute(ref, callArgs, { signal });
+            const result = await execute(ref, callArgs, { signal, callId: c.id });
             if (hookRunner && typeof hookRunner.afterToolCall === 'function') {
                 const post = await hookRunner.afterToolCall({
                     ref, args: callArgs, callId: c.id, result, stepIdx: toolCalls.length,
@@ -469,7 +471,8 @@ async function runToolCallLoop({ messages, tools, nameToRef, chat, execute, maxR
                 });
                 if (post) emitHookRefusals(post.refusals);
             }
-            toolCalls.push({ callId: c.id, ref, ok: result.ok, code: result.code || null, serverId: result.serverId || null, toolName: result.toolName || null });
+            toolCalls.push({ callId: c.id, ref, ok: result.ok, code: result.code || null, serverId: result.serverId || null, toolName: result.toolName || null,
+                ...(result.approvalDecision ? { approvalDecision: result.approvalDecision } : {}) });
             if (typeof onToolEvent === 'function') {
                 try { onToolEvent({ type: 'end', callId: c.id, ref, result }); } catch (_) {}
             }

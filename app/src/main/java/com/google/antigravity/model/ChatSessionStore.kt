@@ -57,6 +57,10 @@ class ChatSessionStore(private val directory: File) {
                         put("details", t.details); put("status", t.status.name); put("durationMs", t.durationMs)
                         put("parentTaskId", t.parentTaskId ?: ""); put("executionTarget", t.executionTarget?.name ?: "")
                         put("leadingText", t.leadingText)
+                        put("unifiedDiff", t.unifiedDiff ?: JSONObject.NULL)
+                        put("toolTitleRu", t.toolTitleRu)
+                        put("requiresApproval", t.requiresApproval)
+                        put("approvalDecision", t.approvalDecision.name)
                     }) } })
                     put("diffs", JSONArray().apply { m.createdDiffs.forEach { d -> put(JSONObject().apply {
                         put("path", d.path); put("additions", d.additions); put("deletions", d.deletions)
@@ -99,17 +103,21 @@ class ChatSessionStore(private val directory: File) {
                     sizeBytes = a.optLong("sizeBytes"), mimeType = a.optString("mimeType"), textPreview = a.optString("textPreview"),
                     base64Data = a.optString("base64Data"), pcUploadedPath = a.optString("pcUploadedPath")
                 ) },
-                toolCalls = m.objects("tools").map { t -> ToolCallEvent(
+                toolCalls = interruptToolCalls(m.objects("tools").map { t -> ToolCallEvent(
                     id = t.getString("id"), toolName = t.getString("toolName"), summary = t.optString("summary"),
                     details = t.optString("details"), durationMs = t.optLong("durationMs"),
                     parentTaskId = t.optString("parentTaskId").takeIf { it.isNotBlank() },
                     leadingText = t.optString("leadingText"),
+                    unifiedDiff = if (t.isNull("unifiedDiff")) null else t.optString("unifiedDiff"),
+                    toolTitleRu = t.optString("toolTitleRu").ifBlank { humanizeToolNameRu(t.getString("toolName")) },
+                    requiresApproval = t.optBoolean("requiresApproval"),
+                    approvalDecision = t.optString("approvalDecision").takeIf { it.isNotBlank() }
+                        ?.let { runCatching { ApprovalDecision.valueOf(it) }.getOrDefault(ApprovalDecision.PENDING) }
+                        ?: ApprovalDecision.PENDING,
                     executionTarget = t.optString("executionTarget").takeIf { it.isNotBlank() }
                         ?.let { runCatching { AgentExecutionTarget.valueOf(it) }.getOrNull() },
-                    status = ToolCallStatus.valueOf(t.getString("status")).let {
-                        if (it == ToolCallStatus.RUNNING) ToolCallStatus.FAILED else it
-                    }
-                ) },
+                    status = ToolCallStatus.valueOf(t.getString("status"))
+                ) }, "Выполнение прервано при закрытии приложения. Задайте новый запрос, чтобы продолжить."),
                 createdDiffs = m.objects("diffs").map { d -> FileDiffItem(
                     path = d.getString("path"), additions = d.optInt("additions"), deletions = d.optInt("deletions"),
                     diffPatch = d.optString("diffPatch"), language = d.optString("language"), fullPath = d.optString("fullPath")

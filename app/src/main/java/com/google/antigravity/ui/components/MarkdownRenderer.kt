@@ -233,44 +233,6 @@ private fun buildCodeBlockAnnotatedString(code: String, lang: String): Annotated
     }
 }
 
-private data class MarkdownSegment(
-    val isCodeBlock: Boolean,
-    val language: String,
-    val text: String
-)
-
-private fun splitCodeAndProse(raw: String): List<MarkdownSegment> {
-    val result = mutableListOf<MarkdownSegment>()
-    val regex = Regex("```([a-zA-Z0-9_-]*)\\n?([\\s\\S]*?)```")
-    var lastIndex = 0
-    for (match in regex.findAll(raw)) {
-        if (match.range.first > lastIndex) {
-            val prose = raw.substring(lastIndex, match.range.first).trim('\n')
-            if (prose.isNotBlank()) {
-                result.add(MarkdownSegment(false, "", prose))
-            }
-        }
-        result.add(
-            MarkdownSegment(
-                isCodeBlock = true,
-                language = match.groupValues[1].trim(),
-                text = match.groupValues[2]
-            )
-        )
-        lastIndex = match.range.last + 1
-    }
-    if (lastIndex < raw.length) {
-        val tail = raw.substring(lastIndex).trim('\n')
-        if (tail.isNotBlank()) {
-            result.add(MarkdownSegment(false, "", tail))
-        }
-    }
-    if (result.isEmpty()) {
-        result.add(MarkdownSegment(false, "", raw))
-    }
-    return result
-}
-
 fun parseInlineMarkdown(text: String, baseColor: Color, fontScale: Float = 1f): AnnotatedString {
     return buildAnnotatedString {
         val lines = text.lines()

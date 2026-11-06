@@ -14,7 +14,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -32,12 +34,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -63,6 +72,17 @@ fun AppSettingsScreen(
     val root = page == "Настройки"
     val context = LocalContext.current
     val focus = LocalFocusManager.current
+    val searchFocus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    fun closeSearch() {
+        search = ""
+        searchVisible = false
+        focus.clearFocus()
+        keyboard?.hide()
+    }
+    LaunchedEffect(root, searchVisible) {
+        if (root && searchVisible) searchFocus.requestFocus()
+    }
     var notificationsEnabled by remember { mutableStateOf(NotificationManagerCompat.from(context).areNotificationsEnabled()) }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, context) {
@@ -81,7 +101,13 @@ fun AppSettingsScreen(
     val mic by viewModel.voiceEngine.micCheckState.collectAsState()
     val voiceError by viewModel.voiceEngine.voiceError.collectAsState()
     var verificationCandidate by remember { mutableStateOf<String?>(null) }
-    val back = { if (root) onBack() else page = "Настройки" }
+    val back: () -> Unit = {
+        when {
+            root && searchVisible -> closeSearch()
+            root -> onBack()
+            else -> { focus.clearFocus(); keyboard?.hide(); page = "Настройки" }
+        }
+    }
     BackHandler(onBack = back)
     fun open(uri: String) {
         runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(uri))) }
@@ -92,7 +118,7 @@ fun AppSettingsScreen(
         bridge.connected -> "Подключено · ${bridge.instanceName.ifBlank { pcInstanceName }}"
         else -> "Нет подключения"
     }
-    Column(Modifier.fillMaxSize().background(DesignColors.Bg).systemBarsPadding()) {
+    Column(Modifier.fillMaxSize().background(DesignColors.Bg).systemBarsPadding().imePadding()) {
         ReferencePageHeader(if (page == "Аккаунт") "Профиль" else page,
             navigationIcon = {
                 IconButton(onClick = if (root) onOpenDrawer else back) {
@@ -100,8 +126,9 @@ fun AppSettingsScreen(
                         if (root) "Открыть меню" else "Назад к настройкам")
                 }
             }, actions = {
-                if (root) IconButton(onClick = { searchVisible = !searchVisible; if (!searchVisible) search = "" }) {
-                    Icon(Icons.Default.Search, "Поиск настроек")
+                if (root) IconButton(onClick = { if (searchVisible) closeSearch() else searchVisible = true }) {
+                    Icon(if (searchVisible) Icons.Default.Close else Icons.Default.Search,
+                        if (searchVisible) "Закрыть поиск настроек" else "Поиск настроек")
                 }
             })
         key(page) {
@@ -111,13 +138,13 @@ fun AppSettingsScreen(
                 if (root) {
                     if (searchVisible || search.isNotBlank()) OutlinedTextField(value = search, onValueChange = { search = it },
                         label = { Text("Поиск по настройкам") }, singleLine = true,
-                        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth().focusRequester(searchFocus), shape = RoundedCornerShape(16.dp),
                         trailingIcon = {
                             if (search.isNotEmpty()) IconButton(onClick = { search = "" }) {
                                 Icon(Icons.Default.Close, "Очистить поиск")
                             }
                         })
-                    if (search.isNotBlank()) {
+                    if (search.trim().isNotEmpty()) {
                         val entries = listOf(
                             Triple("Внешний вид", "Размер текста и шрифт ответов", "размер текст шрифт чтение крупный мелкий font appearance"),
                             Triple("Профиль", "Google и веб-сессия", "профиль вход почта account google"),
@@ -135,8 +162,7 @@ fun AppSettingsScreen(
                             entries.forEachIndexed { index, (title, detail, _) ->
                                 if (index > 0) SettingsRule()
                                 SettingsLink(title, detail) {
-                                    focus.clearFocus()
-                                    search = ""
+                                    closeSearch()
                                     if (title == "Разрешения помощника") onOpenPermissions() else page = title
                                 }
                             }
@@ -266,9 +292,8 @@ fun AppSettingsScreen(
                     SettingsGroup("Antigravity на компьютере") {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                             Text(connection, color = Color.White, fontSize = 16.sp)
-                            OutlinedTextField(value = settings.pcBridgeUrl,
-                                onValueChange = { value -> onUpdate { it.copy(pcBridgeUrl = value.trim()) } },
-                                label = { Text("Адрес моста") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                            BridgeAddressField(value = settings.pcBridgeUrl,
+                                onChange = { value -> onUpdate { it.copy(pcBridgeUrl = value.trim()) } })
                         }
                         SettingsRule()
                         SettingsToggle("Подключаться через интернет", "Использовать только публичный HTTPS-адрес, без локальной сети", settings.forcePublicTunnelOnly) {
@@ -327,6 +352,43 @@ private fun voiceDescription(provider: VoiceProvider) = when (provider) {
     VoiceProvider.GEMINI_TTS -> "Чтение ответов · нужен ключ API"
     VoiceProvider.ON_DEVICE -> "Системный синтез речи устройства"
 }
+/** Echo IME edits synchronously; settings/connection updates must not reset the active edit. */
+@Composable private fun BridgeAddressField(value: String, onChange: (String) -> Unit) {
+    var edit by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue(value)) }
+    var focused by remember { mutableStateOf(false) }
+    val focus = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val save by rememberUpdatedState(onChange)
+    var pending by rememberSaveable { mutableStateOf(false) }
+    fun flush() {
+        if (pending) { pending = false; save(edit.text) }
+    }
+    LaunchedEffect(edit.text, edit.composition, pending) {
+        if (pending && edit.composition == null) {
+            kotlinx.coroutines.delay(250)
+            flush()
+        }
+    }
+    DisposableEffect(Unit) { onDispose { flush() } }
+    LaunchedEffect(value, focused) {
+        if (!focused && !pending && edit.text != value) edit = TextFieldValue(value, TextRange(value.length))
+    }
+    OutlinedTextField(value = edit,
+        onValueChange = { next ->
+            val changed = edit.text != next.text
+            edit = next
+            if (changed) pending = true
+        },
+        label = { Text("Адрес моста") },
+        modifier = Modifier.fillMaxWidth().onFocusChanged {
+            if (focused && !it.isFocused) flush()
+            focused = it.isFocused
+        },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { focus.clearFocus(); keyboard?.hide() }))
+}
+
 @Composable private fun SettingsGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (title.isNotBlank()) Text(title, color = SettingsMuted, fontSize = 13.sp, modifier = Modifier.padding(start = 4.dp))
@@ -344,12 +406,13 @@ private fun voiceDescription(provider: VoiceProvider) = when (provider) {
     }
 }
 @Composable private fun SettingsToggle(title: String, detail: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().toggleable(value = checked, role = Role.Switch, onValueChange = onChange)
+        .padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f).padding(end = 12.dp)) {
             Text(title, color = Color.White, fontSize = 16.sp)
             Text(detail, color = SettingsMuted, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
         }
-        Switch(colors = com.google.antigravity.ui.design.designSwitchColors(), checked = checked, onCheckedChange = onChange, modifier = Modifier.semantics { contentDescription = title })
+        Switch(colors = com.google.antigravity.ui.design.designSwitchColors(), checked = checked, onCheckedChange = null)
     }
 }
 @Composable private fun SettingsRule() { HorizontalDivider(color = DesignColors.Bg, thickness = 2.dp) }

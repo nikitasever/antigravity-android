@@ -867,6 +867,11 @@ fun humanizeToolNameRu(rawToolName: String): String {
     }
 }
 
+class ToolApprovalHandle(val requestId: String, val token: String, val turnId: String,
+    val conversationId: String, val bridgeUrl: String, val preview: String) {
+    override fun toString() = "ToolApprovalHandle(redacted)"
+}
+
 data class ToolCallEvent(
     val id: String = UUID.randomUUID().toString(),
     val toolName: String,
@@ -880,7 +885,11 @@ data class ToolCallEvent(
     val approvalDecision: ApprovalDecision = ApprovalDecision.PENDING,
     val parentTaskId: String? = null,
     val executionTarget: AgentExecutionTarget? = null,
-    val leadingText: String = ""
+    val leadingText: String = "",
+    // Transient capability: never serialize it into chat history.
+    val approvalHandle: ToolApprovalHandle? = null,
+    val approvalSending: Boolean = false,
+    val approvalError: String = ""
 )
 
 data class ArtifactDocument(

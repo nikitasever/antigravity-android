@@ -11,12 +11,14 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.antigravity.device.PhoneResourceController
 import com.google.antigravity.model.AVAILABLE_AGY_MODELS
+import com.google.antigravity.model.resolveSavedBridgeAddress
 import com.google.antigravity.model.AgentExecutionTarget
 import com.google.antigravity.model.AiPermissionsConfig
 import com.google.antigravity.model.AndroidCliCommandResult
 import com.google.antigravity.model.AntigravityModelOption
 import com.google.antigravity.model.AntigravitySettings
 import com.google.antigravity.model.ApprovalDecision
+import com.google.antigravity.model.ToolCallEvent
 import com.google.antigravity.model.ArtifactLibrary
 import com.google.antigravity.model.ArtifactDocument
 import com.google.antigravity.model.ArtifactType
@@ -547,6 +549,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
      * _isExtensionsLoading, пока выполняется более новый запрос.
      */
     private val extLoadSeq = com.google.antigravity.model.ExtLoadSequencer()
+    private var remoteSyncJob: Job? = null
 
     private val _phoneCurrentDir = MutableStateFlow("")
     val phoneCurrentDir: StateFlow<String> = _phoneCurrentDir.asStateFlow()
@@ -626,24 +629,27 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     val isSyncingGoogleDrive: StateFlow<Boolean> = _isSyncingGoogleDrive.asStateFlow()
 
     private val _isSwarmTaskActive = MutableStateFlow(false)
-    val isSwarmTaskActive: StateFlow<Boolean> = _isSwarmTaskActive.asStateFlow()
 
     private val _swarmAgents = MutableStateFlow<List<SwarmAgentNode>>(emptyList())
     // Панель субагентов «как у них»: счётчики/занятость/режимы каталогов из
     // снимка роя (в старых ответах моста полей нет — честные производные значения).
     private val _swarmPanelState = MutableStateFlow(SubagentPanelState.EMPTY)
-    val swarmPanelState: StateFlow<SubagentPanelState> = _swarmPanelState.asStateFlow()
     private var swarmPollingJob: Job? = null
     private var subagentRequestId: String = ""
     private val subagentSourceSession = MutableStateFlow("")
+    val isSwarmTaskActive: StateFlow<Boolean> = combine(
+        _isSwarmTaskActive, _settings, subagentSourceSession
+    ) { active, settings, source -> active && source.isNotBlank() && source == settings.activeConversationId
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val swarmPanelState: StateFlow<SubagentPanelState> = combine(
+        _swarmPanelState, _settings, subagentSourceSession
+    ) { panel, settings, source ->
+        if (source.isNotBlank() && source == settings.activeConversationId) panel else SubagentPanelState.EMPTY
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SubagentPanelState.EMPTY)
     val swarmAgents: StateFlow<List<SwarmAgentNode>> = combine(
         _swarmAgents, _messages, _settings, subagentSourceSession
     ) { remote, messages, settings, remoteSession ->
-        val local = messages.flatMap { message -> message.toolCalls.filter { it.toolName == "delegate_task" }.map { tool ->
-            SwarmAgentNode(id = tool.id, name = tool.summary, model = message.modelBadge,
-                status = tool.status.name.lowercase(), currentTask = tool.summary,
-                stepLogs = listOfNotNull(tool.details.takeIf { it.isNotBlank() }))
-        } }
+        val local = com.google.antigravity.model.conversationSubagents(messages)
         local + if (remoteSession.isNotBlank() && remoteSession == settings.activeConversationId) remote else emptyList()
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -685,12 +691,15 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
             _messages.update { list ->
                 list.map { msg ->
                     if (msg.isStreaming) {
-                        msg.copy(isStreaming = false, isThinkingExpanded = false)
+                        msg.copy(isStreaming = false, isThinkingExpanded = false,
+                            toolCalls = com.google.antigravity.model.interruptToolCalls(msg.toolCalls,
+                                "Работа остановлена голосовым прерыванием", cancelled = true))
                     } else {
                         msg
                     }
                 }
             }
+            cacheCurrentSession()
         }
         syncVoiceConfig()
         observeNotificationApprovalEvents()
@@ -785,11 +794,8 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     private fun resolveInitialBridgeUrl(): String {
         val savedVer = prefs.getInt("bridge_url_ver", 0)
         val savedUrl = prefs.getString("pc_bridge_url", null)
-        val isStaleTestUrl = savedUrl != null && (
-            savedUrl.contains("offline", ignoreCase = true) ||
-                savedUrl.contains("invalid", ignoreCase = true)
-            )
-        return if (savedUrl.isNullOrBlank() || isStaleTestUrl || (savedVer < BRIDGE_URL_VERSION && savedUrl == "https://cdd0a117b3ea350f-79-137-206-221.serveousercontent.com")) {
+        val initialUrl = resolveSavedBridgeAddress(savedUrl, savedVer, BRIDGE_URL_VERSION, CURRENT_DEFAULT_BRIDGE_URL)
+        return if (initialUrl != savedUrl) {
             prefs.edit()
                 .putString("pc_bridge_url", CURRENT_DEFAULT_BRIDGE_URL)
                 .putBoolean("force_public_tunnel_only", false)
@@ -797,7 +803,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                 .apply()
             CURRENT_DEFAULT_BRIDGE_URL
         } else {
-            savedUrl
+            initialUrl
         }
     }
 
@@ -935,10 +941,12 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun syncRemoteSessionsFromPc() {
-        viewModelScope.launch {
+        if (remoteSyncJob?.isActive == true) return
+        remoteSyncJob = viewModelScope.launch {
             var url = _settings.value.pcBridgeUrl
             val isExplicitOfflineTest = url.contains("offline", ignoreCase = true) || url.contains("invalid", ignoreCase = true)
             var st = backendClient.checkPcBridgeStatus(url)
+            if (_settings.value.pcBridgeUrl != url) return@launch
             if (st.connected && st.resolvedBaseUrl.startsWith("https://") && st.resolvedBaseUrl != url && !isExplicitOfflineTest) {
                 url = st.resolvedBaseUrl
                 prefs.edit().putString("pc_bridge_url", url).apply()
@@ -946,8 +954,10 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                 syncVoiceConfig()
             } else if (!st.connected && !isExplicitOfflineTest) {
                 val discovered = backendClient.discoverLatestBridgeUrl()
+                if (_settings.value.pcBridgeUrl != url) return@launch
                 if (!discovered.isNullOrBlank() && discovered != url) {
                     val discoveredStatus = backendClient.checkPcBridgeStatus(discovered)
+                    if (_settings.value.pcBridgeUrl != url) return@launch
                     if (discoveredStatus.connected) {
                         url = discovered
                         st = discoveredStatus
@@ -964,14 +974,17 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
             scheduleSyncPush()
 
             val models = backendClient.fetchAvailableModels(url)
+            if (_settings.value.pcBridgeUrl != url) return@launch
             if (models.isNotEmpty()) {
                 _availableModels.value = models
             }
 
             val liveSessions = backendClient.fetchRemoteSessions(url)
+            if (_settings.value.pcBridgeUrl != url) return@launch
             if (liveSessions.isNotEmpty()) {
                 val workingUrl = backendClient.getLastWorkingBridgeUrl()
                 if (workingUrl.startsWith("https://") && workingUrl != _settings.value.pcBridgeUrl) {
+                    url = workingUrl
                     prefs.edit().putString("pc_bridge_url", workingUrl).apply()
                     _settings.update { it.copy(pcBridgeUrl = workingUrl) }
                     syncVoiceConfig()
@@ -1375,10 +1388,10 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     private var lastStreamingSaveAt = 0L
-    private fun persistStreamingChat() {
+    private fun persistStreamingChat(force: Boolean = false) {
         if (_temporaryChatActive.value) return // временный чат не сохраняется
         val now = android.os.SystemClock.elapsedRealtime()
-        if (now - lastStreamingSaveAt < 1000L) return
+        if (!force && now - lastStreamingSaveAt < 1000L) return
         lastStreamingSaveAt = now
         val settings = _settings.value
         val snapshot = _messages.value
@@ -1523,6 +1536,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun setForcePublicTunnelOnly(enabled: Boolean) {
+        remoteSyncJob?.cancel()
         prefs.edit().putBoolean("force_public_tunnel_only", enabled).apply()
         backendClient.forcePublicTunnelOnly = enabled
         voiceEngine.forcePublicTunnelOnly = enabled
@@ -3407,7 +3421,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
             val settings = _settings.value
             if (_queuedFollowUps.value.count { it.conversationId == settings.activeConversationId } >= 10) {
                 android.widget.Toast.makeText(getApplication(), "В очереди уже 10 сообщений. Удалите лишние перед добавлением.", android.widget.Toast.LENGTH_LONG).show()
-                _composerDraft.value = rawPrompt
+                setComposerDraft(rawPrompt)
                 // Сообщение не ушло — фишки остаются (отправка не выдумывается).
                 return
             }
@@ -3565,6 +3579,9 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                     mcpConnections = _selectedMcpConnections.value.toList(),
                     onStreamingUpdate = { update ->
                         if (turnRevision != generationRevision) return@executeAgentTurn
+                        val nextTools = update.toolCalls.map { it.copy(executionTarget = it.executionTarget ?: currentSettings.executionTarget) }
+                        val toolsChanged = nextTools.isNotEmpty() &&
+                            nextTools != _messages.value.firstOrNull { it.id == streamingAgentMsgId }?.toolCalls
                         if (update.tokensPerSecond > 0f) {
                             _liveTokensPerSecond.value = update.tokensPerSecond
                         }
@@ -3581,7 +3598,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                                         thinking = nextThinking,
                                         thinkingDurationSec = update.thinkingDurationSec.coerceAtLeast(msg.thinkingDurationSec),
                                         isThinkingExpanded = expandThinking,
-                                        toolCalls = if (update.toolCalls.isNotEmpty()) update.toolCalls.map { it.copy(executionTarget = it.executionTarget ?: currentSettings.executionTarget) } else msg.toolCalls,
+                                        toolCalls = nextTools.ifEmpty { msg.toolCalls },
                                         createdDiffs = if (update.createdDiffs.isNotEmpty()) update.createdDiffs else msg.createdDiffs,
                                         generatedMedia = if (update.generatedMedia.isNotEmpty()) update.generatedMedia else msg.generatedMedia,
                                         tokensPerSecond = if (update.tokensPerSecond > 0f) update.tokensPerSecond else msg.tokensPerSecond,
@@ -3594,7 +3611,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                                 }
                             }
                         }
-                        persistStreamingChat()
+                        persistStreamingChat(force = toolsChanged)
                         if (_aiPermissions.value.runInBackgroundKeepAwake) {
                             val stepDesc = when {
                                 update.toolCalls.isNotEmpty() -> "Инструмент: ${update.toolCalls.last().summary}"
@@ -3638,14 +3655,16 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                     list.map { msg ->
                         if (msg.id == streamingAgentMsgId) {
                             msg.copy(
-                                content = result.responseMarkdown,
-                                thinking = finalThinking,
-                                thinkingDurationSec = result.thinkingDurationSec,
+                                content = result.responseMarkdown.ifBlank { msg.content },
+                                thinking = finalThinking ?: msg.thinking,
+                                thinkingDurationSec = result.thinkingDurationSec.coerceAtLeast(msg.thinkingDurationSec),
                                 isThinkingExpanded = msg.isThinkingExpanded,
                                 isStreaming = false,
-                                toolCalls = result.toolCalls.map { it.copy(executionTarget = it.executionTarget ?: currentSettings.executionTarget) },
-                                createdDiffs = result.createdDiffs,
-                                generatedMedia = result.generatedMedia,
+                                toolCalls = com.google.antigravity.model.finishTurnTools(msg.toolCalls, result.toolCalls,
+                                    failed = result.isError, target = currentSettings.executionTarget),
+                                createdDiffs = (msg.createdDiffs + result.createdDiffs).distinct(),
+                                generatedMedia = (msg.generatedMedia + result.generatedMedia)
+                                    .distinctBy { it.mediaUrl.ifBlank { it.localPhonePath ?: it.fileName } },
                                 tokensPerSecond = result.tokensPerSecond,
                                 outputTokensCount = result.outputTokensCount,
                                 firstTokenLatencyMs = result.firstTokenLatencyMs,
@@ -3723,8 +3742,8 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                 val offline = e is java.net.UnknownHostException || e is java.net.ConnectException ||
                     e is java.net.SocketTimeoutException || e is java.io.IOException
                 val errorText = if (offline) {
-                    "Мост ПК недоступен — запрос не отправлен. Переписка сохранена на телефоне; " +
-                        "после восстановления связи нажмите «Повторить»."
+                    "Связь прервалась — ответ не завершён. Переписка и результаты действий сохранены на телефоне. " +
+                        "Проверьте подключение и нажмите «Повторить»."
                 } else {
                     "Не удалось получить ответ (${e.localizedMessage ?: "ошибка"}). " +
                         "Переписка сохранена на телефоне; попробуйте ещё раз."
@@ -3733,6 +3752,8 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                     list.map { msg ->
                         if (msg.id == streamingAgentMsgId) msg.copy(
                             isStreaming = false, isThinkingExpanded = false,
+                            toolCalls = com.google.antigravity.model.interruptToolCalls(msg.toolCalls,
+                                "Ответ прерван из-за ошибки. Это действие не завершено."),
                             content = msg.content.ifBlank { errorText }
                         ) else msg
                     }
@@ -3769,7 +3790,8 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                     msg.copy(
                         isStreaming = false,
                         isThinkingExpanded = false,
-                        toolCalls = msg.toolCalls.map { if (it.status == ToolCallStatus.RUNNING) it.copy(status = ToolCallStatus.CANCELLED, details = "Работа остановлена") else it },
+                        toolCalls = com.google.antigravity.model.interruptToolCalls(msg.toolCalls,
+                            "Работа остановлена", cancelled = true),
                         content = if (msg.content.isBlank() || msg.content == "Думаю…") {
                             "Генерация ответа остановлена."
                         } else {
@@ -3858,27 +3880,44 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
         refreshPhoneFiles()
     }
 
-    fun decideToolCallApproval(@Suppress("UNUSED_PARAMETER") messageId: String, toolCallId: String, decision: ApprovalDecision) {
-        resolveToolApproval(toolCallId, decision)
+    fun decideToolCallApproval(messageId: String, toolCallId: String, decision: ApprovalDecision) {
+        if (decision !in setOf(ApprovalDecision.APPROVED, ApprovalDecision.DENIED)) return
+        val message = _messages.value.singleOrNull { it.id == messageId } ?: return
+        val tool = message.toolCalls.singleOrNull { it.id == toolCallId } ?: return
+        if (tool.status != ToolCallStatus.AWAITING_APPROVAL || !tool.requiresApproval ||
+            tool.approvalDecision != ApprovalDecision.PENDING || tool.approvalSending) return
+        val handle = tool.approvalHandle ?: return
+        val sourceChat = _settings.value.activeConversationId
+        val revision = generationRevision
+        fun updateTool(change: (ToolCallEvent) -> ToolCallEvent) {
+            if (revision != generationRevision || _settings.value.activeConversationId != sourceChat) return
+            _messages.update { messages -> messages.map { msg ->
+                if (msg.id != messageId) msg else msg.copy(toolCalls = msg.toolCalls.map { current ->
+                    if (current.id == toolCallId && current.approvalHandle === handle &&
+                        current.status == ToolCallStatus.AWAITING_APPROVAL) change(current) else current
+                })
+            } }
+        }
+        updateTool { it.copy(approvalSending = true, approvalError = "") }
+        viewModelScope.launch {
+            if (revision != generationRevision) return@launch
+            val acknowledged = backendClient.replyToolApproval(handle, decision)
+            updateTool { current ->
+                if (acknowledged) current.copy(approvalSending = false, approvalDecision = decision,
+                    status = if (decision == ApprovalDecision.APPROVED) ToolCallStatus.APPROVED else ToolCallStatus.DENIED)
+                else current.copy(approvalSending = false,
+                    approvalError = "Решение не подтверждено мостом. Запрос мог истечь; проверьте соединение.")
+            }
+            if (revision == generationRevision && _settings.value.activeConversationId == sourceChat) cacheCurrentSession()
+        }
     }
 
     fun resolveToolApproval(requestId: String, decision: ApprovalDecision, comment: String? = null) {
-        _messages.update { list ->
-            list.map { msg ->
-                val req = msg.approvalRequest
-                val updatedCalls = msg.toolCalls.map { tc ->
-                    if (tc.id == requestId) tc.copy(approvalDecision = decision) else tc
-                }
-                if (req != null && req.id == requestId) {
-                    msg.copy(
-                        approvalRequest = req.copy(decision = decision, reviewerComment = comment),
-                        toolCalls = updatedCalls
-                    )
-                } else {
-                    msg.copy(toolCalls = updatedCalls)
-                }
-            }
-        }
+        // Notification actions never approve another message with a reused tool id.
+        val matches = _messages.value.flatMap { msg -> msg.toolCalls.filter {
+            it.id == requestId || it.approvalHandle?.requestId == requestId
+        }.map { msg.id to it.id } }
+        if (matches.size == 1) decideToolCallApproval(matches.single().first, matches.single().second, decision)
     }
 
     private suspend fun handleGeminiLiveToolCall(toolName: String, argsJson: JSONObject): String {
@@ -3948,6 +3987,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun updateSettings(transform: (AntigravitySettings) -> AntigravitySettings) {
+        val previousBridgeUrl = _settings.value.pcBridgeUrl
         _settings.update { current ->
             val updated = transform(current)
             val resolvedTransport = if (updated.voiceProvider == VoiceProvider.GEMINI_LIVE) {
@@ -3958,6 +3998,10 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
             updated.copy(voiceTransportMode = resolvedTransport)
         }
         val s = _settings.value
+        if (s.pcBridgeUrl != previousBridgeUrl) {
+            remoteSyncJob?.cancel()
+            backendClient.clearWorkingBridgeCache()
+        }
         prefs.edit()
             .putString("chat_text_size", s.chatTextSize.name)
             .putString("response_font", s.responseFont.name)

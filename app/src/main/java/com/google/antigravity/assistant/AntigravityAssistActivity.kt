@@ -97,11 +97,12 @@ class AntigravityAssistActivity : ComponentActivity() {
         }
 
         setContent {
+            com.google.antigravity.ui.design.FixedDarkAppearance {
             MaterialTheme(
                 colorScheme = darkColorScheme(
-                    primary = Color(0xFF3B82F6),
+                    primary = com.google.antigravity.ui.design.DesignColors.AccentBlue,
                     background = Color.Transparent,
-                    surface = Color(0xFF171717),
+                    surface = com.google.antigravity.ui.design.DesignColors.Surface,
                     onSurface = Color.White
                 )
             ) {
@@ -125,6 +126,7 @@ class AntigravityAssistActivity : ComponentActivity() {
                         finish()
                     }
                 )
+            }
             }
         }
     }

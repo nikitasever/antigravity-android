@@ -7,6 +7,119 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class PhoneAgentEngineTest {
+    @Test fun growingToolOutputsStayBoundedWithoutLosingCompletedEvidence() = runBlocking {
+        var rounds = 0
+        var executed = 0
+        val observationSizes = mutableListOf<Int>()
+        val engine = PhoneAgentEngine(model = { prompt, child ->
+            assertFalse(child)
+            if (rounds > 0) {
+                val context = prompt.substringAfter("Реальные результаты предыдущих шагов:\n")
+                observationSizes.add(context.length)
+                assertEquals(rounds * 4, Regex("read_file: успешно").findAll(context).count())
+                assertTrue(context.contains("RESULT-${rounds * 4} "))
+                assertTrue(context.contains("Вывод сокращён"))
+            }
+            if (rounds++ < 5) (1..4).joinToString("\n") {
+                "```phone_action {\"action\":\"read_file\",\"path\":\"notes.txt\"} ```"
+            } else "Done using recent evidence"
+        }, execute = {
+            executed++
+            PhoneToolOutput(true, "Read", "RESULT-$executed " + "x".repeat(20_000) + " END-$executed")
+        }, publish = {})
+        val reply = engine.run("Review files")
+        println("OBSERVATION_MAX_CHARS=${observationSizes.maxOrNull()}")
+        assertEquals(20, executed)
+        assertTrue(reply.completed)
+        assertEquals(20, reply.tools.size)
+        assertTrue(reply.tools.all { it.status == ToolCallStatus.COMPLETED })
+        assertTrue(reply.tools.first().details.endsWith("END-1"))
+        assertTrue(reply.tools.last().details.endsWith("END-20"))
+        assertTrue("Observation section has ${observationSizes.maxOrNull()} chars", observationSizes.all { it <= 16_000 })
+    }
+
+    @Test fun oversizedFailureAndMalformedJsonAreBoundedWithoutFurtherExecution() = runBlocking {
+        var rounds = 0
+        var executions = 0
+        val engine = PhoneAgentEngine(model = { prompt, _ ->
+            when (rounds++) {
+                0 -> "```phone_action {broken} ```\n```phone_action {\"action\":\"read_file\"} ```"
+                else -> {
+                    val context = prompt.substringAfter("Реальные результаты предыдущих шагов:\n")
+                    assertTrue(context.length <= 16_000)
+                    assertTrue(context.contains("некорректный JSON"))
+                    assertTrue(context.contains("read_file: ошибка"))
+                    assertTrue(context.contains("Вывод сокращён"))
+                    "Read failed; no retry"
+                }
+            }
+        }, execute = { executions++; throw IllegalStateException("Failure " + "x".repeat(20_000)) }, publish = {})
+        val reply = engine.run("Read")
+        assertEquals(1, executions)
+        assertEquals(ToolCallStatus.FAILED, reply.tools.single().status)
+        assertTrue(reply.tools.single().details.length > 4_000)
+    }
+
+    @Test fun childObservationsAreBoundedAndLeaderReceivesOnlyTheChildResult() = runBlocking {
+        var roots = 0
+        var children = 0
+        val engine = PhoneAgentEngine(model = { prompt, child ->
+            if (child) {
+                if (children++ == 0) (1..4).joinToString("\n") {
+                    "```phone_action {\"action\":\"read_file\",\"path\":\"notes.txt\"} ```"
+                } else {
+                    assertTrue(prompt.substringAfter("Реальные результаты предыдущих шагов:\n").length <= 16_000)
+                    "Actual child summary"
+                }
+            } else if (roots++ == 0) "```phone_action {\"action\":\"delegate_task\",\"task\":\"Review\"} ```"
+            else {
+                assertTrue(prompt.contains("Actual child summary"))
+                assertFalse(prompt.contains("CHILD_RAW_OUTPUT"))
+                "Done"
+            }
+        }, execute = { PhoneToolOutput(true, "Read", "CHILD_RAW_OUTPUT " + "x".repeat(20_000)) }, publish = {})
+        val reply = engine.run("Review")
+        assertTrue(reply.completed)
+        assertEquals(5, reply.tools.size)
+        assertTrue(reply.tools.all { it.status == ToolCallStatus.COMPLETED })
+    }
+
+    @Test fun exhaustedLeaderIsIncompleteAndPreservesCompletedReads() = runBlocking {
+        var modelCalls = 0
+        var reads = 0
+        val engine = PhoneAgentEngine(model = { _, child ->
+            assertFalse(child)
+            modelCalls++
+            "```phone_action {\"action\":\"read_file\",\"path\":\"notes.txt\"} ```"
+        }, execute = {
+            reads++
+            PhoneToolOutput(true, "Read", "Actual read $reads")
+        }, publish = {})
+        val reply = engine.run("Review notes")
+        assertFalse(reply.completed)
+        assertEquals(6, modelCalls)
+        assertEquals(6, reads)
+        assertTrue(reply.text.contains("Достигнут лимит шагов"))
+        assertTrue(reply.tools.all { it.status == ToolCallStatus.COMPLETED })
+        assertEquals("Actual read 6", reply.tools.last().details)
+    }
+
+    @Test fun exhaustedChildIsFailedAndLeaderReceivesTheFailure() = runBlocking {
+        var roots = 0
+        val engine = PhoneAgentEngine(model = { prompt, child ->
+            if (child) "```phone_action {\"action\":\"list_dir\",\"path\":\".\"} ```"
+            else if (roots++ == 0) "```phone_action {\"action\":\"delegate_task\",\"task\":\"Inspect files\"} ```"
+            else {
+                assertTrue(prompt.contains("delegate_task: ошибка"))
+                assertTrue(prompt.contains("Достигнут лимит шагов"))
+                "The task did not finish"
+            }
+        }, execute = { PhoneToolOutput(true, "Read", "files") }, publish = {})
+        val reply = engine.run("Inspect")
+        assertEquals(ToolCallStatus.FAILED, reply.tools.first().status)
+        assertEquals(3, reply.tools.count { it.parentTaskId == reply.tools.first().id })
+    }
+
     @Test fun rootDiscoversExistingPhoneCliAndSandboxAndUsesActualOutput() = runBlocking {
         var calls = 0
         val engine = PhoneAgentEngine(model = { prompt, child ->
@@ -21,6 +134,7 @@ class PhoneAgentEngineTest {
         }, publish = {})
         val reply = engine.run("Проверь рабочую папку")
         assertEquals("Рабочая папка получена", reply.text)
+        assertTrue(reply.completed)
         assertEquals(ToolCallStatus.COMPLETED, reply.tools.single().status)
         assertEquals(AgentExecutionTarget.PHONE_LOCAL_RESOURCES, reply.tools.single().executionTarget)
     }

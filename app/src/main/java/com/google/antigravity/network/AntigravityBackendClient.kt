@@ -102,7 +102,8 @@ class AntigravityBackendClient(
         val resolvedBaseUrl: String = "",
         val tokensPerSecond: Float = 0f,
         val outputTokensCount: Int = 0,
-        val firstTokenLatencyMs: Long = 0L
+        val firstTokenLatencyMs: Long = 0L,
+        val isError: Boolean = false
     )
 
     data class OpenRouterSyncResult(
@@ -882,6 +883,27 @@ class AntigravityBackendClient(
             "Не удалось получить права инструментов"
         )
         return if (json == null) null to error else parseMcpToolPermissions(json) to null
+    }
+
+    /** Разовое решение по исходному адресу моста; без изменения постоянных прав. */
+    internal suspend fun replyToolApproval(handle: com.google.antigravity.model.ToolApprovalHandle,
+        decision: com.google.antigravity.model.ApprovalDecision): Boolean = withContext(Dispatchers.IO) {
+        if (decision !in setOf(com.google.antigravity.model.ApprovalDecision.APPROVED,
+                com.google.antigravity.model.ApprovalDecision.DENIED)) return@withContext false
+        try {
+            val body = JSONObject().put("requestId", handle.requestId).put("token", handle.token)
+                .put("turnId", handle.turnId).put("conversationId", handle.conversationId)
+                .put("decision", decision.name)
+            // Send only to the exact bridge that issued this capability, without discovery/fallback.
+            val request = Request.Builder().url(handle.bridgeUrl.trimEnd('/') + "/api/chat/tool-approval")
+                .post(body.toString().toRequestBody("application/json".toMediaType())).build()
+            httpClient.newCall(request).useCancellable { response ->
+                if (!response.isSuccessful) return@useCancellable false
+                val ack = JSONObject(response.body?.string().orEmpty())
+                ack.optBoolean("ok") && ack.optString("decision") == decision.name
+            }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+        catch (_: Exception) { false }
     }
 
     /** Смена права одного инструмента (allow/ask/deny). */
@@ -2153,7 +2175,7 @@ class AntigravityBackendClient(
                         }
                         append(stepUpdate.thinking.trim())
                     }.trim()
-                    val mergedTools = (allToolCalls + stepUpdate.toolCalls).distinctBy { "${it.toolName}:${it.summary}:${it.details}" }
+                    val mergedTools = (allToolCalls + stepUpdate.toolCalls).associateBy { it.id }.values.toList()
                     val mergedDiffs = (createdDiffs + stepUpdate.createdDiffs).distinctBy { "${it.path}:${it.additions}:${it.deletions}" }
                     val mergedMedia = (allGeneratedMedia + stepUpdate.generatedMedia).distinctBy { it.mediaUrl.ifBlank { it.fileName } }
                     onStreamingUpdate(
@@ -2178,6 +2200,21 @@ class AntigravityBackendClient(
                 break
             }
 
+            if (stepBridgeResp.isError) {
+                return@withContext AgentTurnResult(
+                    thinkingTrace = listOf(accumulatedThinking.toString(), stepBridgeResp.thinking)
+                        .filter { it.isNotBlank() }.joinToString("\n\n"),
+                    responseMarkdown = stepBridgeResp.reply,
+                    spokenSummaryRu = sanitizeSpokenSummary(stepBridgeResp.reply),
+                    updatedConversationId = stepBridgeResp.conversationId.ifBlank { currentConvId },
+                    toolCalls = com.google.antigravity.model.finishTurnTools(allToolCalls, stepBridgeResp.toolCalls,
+                        failed = true, target = executionTarget),
+                    createdDiffs = (createdDiffs + stepBridgeResp.createdDiffs).distinct(),
+                    generatedMedia = (allGeneratedMedia + stepBridgeResp.generatedMedia).distinctBy { it.id },
+                    isError = true
+                )
+            }
+
             anyStepSucceeded = true
             if (stepBridgeResp.tokensPerSecond > 0f) latestTokensPerSecond = stepBridgeResp.tokensPerSecond
             if (stepBridgeResp.outputTokensCount > 0) latestOutputTokensCount = stepBridgeResp.outputTokensCount
@@ -2187,9 +2224,8 @@ class AntigravityBackendClient(
 
             // Merge PC tools, diffs, and generated media if any
             for (pcTool in stepBridgeResp.toolCalls) {
-                if (allToolCalls.none { it.toolName == pcTool.toolName && it.summary == pcTool.summary && it.details == pcTool.details }) {
-                    allToolCalls.add(pcTool)
-                }
+                val existing = allToolCalls.indexOfFirst { it.id == pcTool.id }
+                if (existing >= 0) allToolCalls[existing] = pcTool else allToolCalls.add(pcTool)
             }
             for (pcDiff in stepBridgeResp.createdDiffs) {
                 if (createdDiffs.none { it.path == pcDiff.path && it.additions == pcDiff.additions && it.deletions == pcDiff.deletions }) {
@@ -2444,7 +2480,7 @@ class AntigravityBackendClient(
         val engine = com.google.antigravity.model.PhoneAgentEngine(
             model = { request, child ->
                 currentCoroutineContext().ensureActive()
-                val modelHistory = if (child) emptyList() else history
+                val modelHistory = com.google.antigravity.model.phoneHistoryForModel(history, child)
                 if (!child) reasoning.beginStep()
                 val answer = if (route == com.google.antigravity.model.PhoneModelRoute.PC_CLI) {
                     val cliPrompt = buildString {
@@ -2462,6 +2498,7 @@ class AntigravityBackendClient(
                         onUpdate = { publishReasoning(it.thinking, child) })
                         ?: throw java.io.IOException("Не удалось получить ответ $modelId через мост ПК. Проверьте соединение с Antigravity на ПК. Действия телефона выполняются в Android-приложении.")
                     publishReasoning(response.thinking, child)
+                    if (response.isError) throw java.io.IOException("Модель завершила запрос с ошибкой. Проверьте подключение и повторите запрос.")
                     response.reply
                 } else if (route == com.google.antigravity.model.PhoneModelRoute.OPENROUTER_API) {
                     val response = callDirectOpenRouterApi(request, routerKey, modelHistory, modelId, conversationId,
@@ -2498,7 +2535,7 @@ class AntigravityBackendClient(
             fullText = reply.text, toolCalls = reply.tools, isDone = true))
         return AgentTurnResult(thinkingTrace = reasoning.text, thinkingDurationSec = reasoningSeconds(), responseMarkdown = reply.text,
             spokenSummaryRu = sanitizeSpokenSummary(reply.text), updatedConversationId = conversationId,
-            toolCalls = reply.tools)
+            toolCalls = reply.tools, isError = !reply.completed)
     }
 
     private suspend fun callDirectOpenRouterApi(
@@ -2701,7 +2738,8 @@ class AntigravityBackendClient(
                 if (!json.optBoolean("found", json.optBoolean("ok", false))) continue
                 val cid = json.optString("conversationId", "")
                 if (cid.isNotBlank()) resolvedConvId = cid
-                val status = json.optString("status", "running")
+                val status = json.optString("status", "running").lowercase(Locale.ROOT)
+                val pollTerminal = status in setOf("done", "error", "completed", "failed", "cancelled", "canceled") || bridgeTurnFailed(json)
                 val srvThinking = json.optString("thinking", "")
                 if (srvThinking.isNotBlank()) latestThinking = srvThinking
                 val srvReply = json.optString("reply", "")
@@ -2714,20 +2752,7 @@ class AntigravityBackendClient(
                 if (tcArr != null) {
                     for (i in 0 until tcArr.length()) {
                         val to = tcArr.optJSONObject(i) ?: continue
-                        val tId = to.optString("id", "poll_tc_$i")
-                        val tName = to.optString("name", to.optString("toolName", "pc_tool"))
-                        val tSummary = to.optString("summary", tName)
-                        val tDetails = to.optString("output", to.optString("details", ""))
-                        val existingIdx = streamTools.indexOfFirst { it.id == tId || (it.toolName == tName && it.summary == tSummary) }
-                        val item = ToolCallEvent(
-                            id = tId,
-                            toolName = tName,
-                            summary = tSummary,
-                            details = tDetails,
-                            status = ToolCallStatus.COMPLETED,
-                            durationMs = 80L
-                        )
-                        if (existingIdx >= 0) streamTools[existingIdx] = item else streamTools.add(item)
+                        mergeBridgeTool(streamTools, to, "poll_tc_$i", base)
                     }
                 }
                 val diffArr = json.optJSONArray("createdDiffs")
@@ -2754,10 +2779,10 @@ class AntigravityBackendClient(
                         textDelta = "",
                         fullText = latestText,
                         createdDiffs = streamDiffs.toList(),
-                        isDone = status != "running"
+                        isDone = pollTerminal
                     )
                 )
-                if (status in setOf("done", "error", "completed", "failed", "cancelled")) {
+                if (pollTerminal) {
                     val polledMedia = parseGeneratedMediaArray(
                         arr = json.optJSONArray("generatedMedia"),
                         baseUrl = base,
@@ -2772,7 +2797,8 @@ class AntigravityBackendClient(
                         toolCalls = streamTools.toList(),
                         createdDiffs = streamDiffs.toList(),
                         generatedMedia = polledMedia,
-                        resolvedBaseUrl = base
+                        resolvedBaseUrl = base,
+                        isError = bridgeTurnFailed(json)
                     )
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -2784,13 +2810,15 @@ class AntigravityBackendClient(
         if (latestText.isNotBlank() || streamTools.isNotEmpty() || latestThinking.isNotBlank()) {
             val elapsed = ((System.currentTimeMillis() - streamStartMs) / 1000L).toInt().coerceAtLeast(1)
             return PcBridgeChatResponse(
-                reply = latestText.trim(),
+                reply = listOf(latestText.trim(), "Ответ не завершён: не удалось подтвердить результат на ПК. Повторите запрос.")
+                    .filter { it.isNotBlank() }.joinToString("\n\n"),
                 conversationId = resolvedConvId,
                 thinking = latestThinking.trim(),
                 thinkingDurationSec = elapsed,
                 toolCalls = streamTools.toList(),
                 createdDiffs = streamDiffs.toList(),
-                resolvedBaseUrl = base
+                resolvedBaseUrl = base,
+                isError = true
             )
         }
         return null
@@ -2879,6 +2907,7 @@ class AntigravityBackendClient(
             var finalReply = ""
             var finalThinkingSec = 0
             var receivedDoneEvent = false
+            var terminalFailed = false
             var receivedAnyEvent = false
             val streamTools = mutableListOf<ToolCallEvent>()
             val streamDiffs = mutableListOf<FileDiffItem>()
@@ -2939,24 +2968,7 @@ class AntigravityBackendClient(
                             }
                             "tool" -> {
                                 val nested = ev.optJSONObject("tool")
-                                val tId = ev.optString("id", nested?.optString("id", "") ?: "").ifBlank { "tc_${streamTools.size}" }
-                                val tName = ev.optString("toolName", nested?.optString("name", "pc_tool") ?: "pc_tool")
-                                val tSummary = ev.optString("summary", nested?.optString("summary", "Инструмент ПК") ?: "Инструмент ПК")
-                                val tDetails = ev.optString("details", nested?.optString("output", "") ?: "")
-                                val existingIdx = streamTools.indexOfFirst { it.id == tId || (it.toolName == tName && it.summary == tSummary) }
-                                val eventItem = ToolCallEvent(
-                                    id = tId,
-                                    toolName = tName,
-                                    summary = tSummary,
-                                    details = tDetails,
-                                    status = ToolCallStatus.COMPLETED,
-                                    durationMs = 80L
-                                )
-                                if (existingIdx >= 0) {
-                                    streamTools[existingIdx] = eventItem
-                                } else {
-                                    streamTools.add(eventItem)
-                                }
+                                mergeBridgeTool(streamTools, ev, "tc_${streamTools.size}", base)
                                 val diffObj = ev.optJSONObject("diff") ?: nested?.optJSONObject("diff")
                                 if (diffObj != null) {
                                     val diffItem = FileDiffItem(
@@ -3029,9 +3041,11 @@ class AntigravityBackendClient(
                             }
                             "done" -> {
                                 receivedDoneEvent = true
+                                terminalFailed = bridgeTurnFailed(ev)
                                 val cid = ev.optString("conversationId", "")
                                 if (cid.isNotBlank()) returnedConvId = cid
-                                val doneReply = ev.optString("reply", ev.optString("error", ""))
+                                val doneReply = ev.optString("reply").ifBlank {
+                                    if (ev.isNull("error")) "" else ev.optString("error") }
                                 if (doneReply.isNotBlank()) finalReply = doneReply
                                 val doneThink = ev.optString("thinking", "")
                                 if (doneThink.isNotBlank()) liveThinking = doneThink
@@ -3044,24 +3058,7 @@ class AntigravityBackendClient(
                                 if (doneTools != null) {
                                     for (ti in 0 until doneTools.length()) {
                                         val to = doneTools.optJSONObject(ti) ?: continue
-                                        val tId = to.optString("id", "done_tc_$ti")
-                                        val tName = to.optString("name", to.optString("toolName", "pc_tool"))
-                                        val tSummary = to.optString("summary", tName)
-                                        val tDetails = to.optString("output", to.optString("details", ""))
-                                        val existingIdx = streamTools.indexOfFirst { it.id == tId || (it.toolName == tName && it.summary == tSummary) }
-                                        val item = ToolCallEvent(
-                                            id = tId,
-                                            toolName = tName,
-                                            summary = tSummary,
-                                            details = tDetails,
-                                            status = ToolCallStatus.COMPLETED,
-                                            durationMs = 80L
-                                        )
-                                        if (existingIdx >= 0) {
-                                            streamTools[existingIdx] = item
-                                        } else {
-                                            streamTools.add(item)
-                                        }
+                                        mergeBridgeTool(streamTools, to, "done_tc_$ti", base)
                                     }
                                 }
                                 val doneDiffs = ev.optJSONArray("createdDiffs")
@@ -3097,7 +3094,8 @@ class AntigravityBackendClient(
                 }
 
                 if (receivedDoneEvent) activeRemoteTurn.compareAndSet(activeRemoteTurn.get()?.takeIf { it.second == clientTurnId }, null)
-                val effectiveReply = finalReply.ifBlank { liveFullText }.trim()
+                val effectiveReply = finalReply.ifBlank { liveFullText }.trim().ifBlank {
+                    if (terminalFailed) "Запрос завершился с ошибкой. Проверьте подключение и повторите запрос." else "" }
                 if (success && receivedDoneEvent && (effectiveReply.isNotEmpty() || (receivedDoneEvent && (liveThinking.isNotBlank() || streamTools.isNotEmpty() || streamMedia.isNotEmpty())))) {
                     lastWorkingBridgeUrl = base
                     val elapsedMs = (System.currentTimeMillis() - streamStartMs).coerceAtLeast(180L)
@@ -3113,7 +3111,8 @@ class AntigravityBackendClient(
                         generatedMedia = streamMedia,
                         resolvedBaseUrl = base,
                         tokensPerSecond = tps.coerceAtLeast(0f),
-                        outputTokensCount = outTok
+                        outputTokensCount = outTok,
+                        isError = terminalFailed
                     )
                 }
 

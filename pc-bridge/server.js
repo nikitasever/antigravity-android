@@ -5,6 +5,8 @@ const mcpClientLib = require('./lib/mcp-client');
 const { McpOAuth, CredentialVault } = require('./lib/mcp-oauth');
 const { createMcpOAuthApi, normalizeOAuthAction } = require('./lib/mcp-oauth-api');
 const extensionRuntime = require('./lib/extension-runtime');
+const { ToolApprovalBroker, callWithApproval, approvalPreview } = require('./lib/tool-approval');
+const toolApprovalBroker = new ToolApprovalBroker();
 // Этап 5: собственный исполнитель hooks и адаптеры компонентов плагинов.
 const hookEngine = require('./lib/hook-engine');
 const componentAdapters = require('./lib/component-adapters');
@@ -4043,11 +4045,23 @@ async function executeOpenRouterStreamingTurn(options, onEvent = () => {}) {
                     }
                     return { message: choice };
                 },
-                execute: (ref, args, { signal } = {}) => {
+                execute: (ref, args, { signal, callId } = {}) => {
                     return extensionRuntime.executeBrokerToolCall(ref, args, {
                         catalog: toolSet.catalog,
                         allowedRefs: toolSet.allowedRefs,
-                        callPcTool: callMcpToolViaRegistry,
+                        callPcTool: (serverId, toolName, args, callOptions) => callWithApproval({
+                            broker: toolApprovalBroker, call: callMcpToolViaRegistry,
+                            serverId, toolName, args, options: callOptions,
+                            turnId, conversationId: resolvedConvId,
+                            onRequest: (approval, immutableArgs) => {
+                                const raw = findRawMcpEntry(serverId);
+                                const descriptor = raw ? mcpClientLib.buildMcpDescriptor(serverId, raw.cfg) : {};
+                                onEvent({ type: 'tool', turnId, id: `or_${callId}`,
+                                    toolName: `${serverId}:${toolName}`, summary: `${serverId} · ${toolName}`,
+                                    status: 'AWAITING_APPROVAL', requiresApproval: true,
+                                    approval: { ...approval, preview: approvalPreview(immutableArgs, mcpClientLib.collectSecrets(descriptor)) } });
+                            }
+                        }),
                         signal
                     });
                 },
@@ -4078,7 +4092,9 @@ async function executeOpenRouterStreamingTurn(options, onEvent = () => {}) {
                             toolName: evt.ref,
                             summary: formatToolSummary(evt.ref.split(':').pop() || evt.ref, {}),
                             details: summary,
-                            status: evt.result && evt.result.ok ? 'COMPLETED' : 'FAILED',
+                            status: evt.result && evt.result.ok ? 'COMPLETED' : evt.result?.code === 'tool_denied' ? 'DENIED' : 'FAILED',
+                            requiresApproval: false,
+                            approvalDecision: evt.result?.approvalDecision,
                             elapsedMs: Date.now() - startMs
                         });
                     } catch (_) {}
@@ -4126,11 +4142,12 @@ async function executeOpenRouterStreamingTurn(options, onEvent = () => {}) {
                     thinkingDurationSec: Math.max(1, Math.round(totalMs / 1000)),
                     reply: finalReplyText,
                     toolCalls: loop.toolCalls.map(tc => ({
-                        id: tc.callId,
+                        id: `or_${tc.callId}`,
                         name: tc.ref,
                         summary: tc.ref,
                         output: tc.ok ? 'выполнен' : (tc.code || 'ошибка'),
-                        status: tc.ok ? 'COMPLETED' : 'FAILED'
+                        approvalDecision: tc.approvalDecision,
+                        status: tc.ok ? 'COMPLETED' : tc.code === 'tool_denied' ? 'DENIED' : 'FAILED'
                     })),
                     createdDiffs: [],
                     generatedMedia: [],
@@ -5416,6 +5433,10 @@ const server = http.createServer(async (req, res) => {
         try { payload = await readJsonBody(req); }
         catch (error) { return sendJson(res, error.statusCode || 400, { ok: false, error: error.message }); }
         try {
+            if (urlObj.pathname === '/api/chat/tool-approval') {
+                const result = toolApprovalBroker.decide(payload, { origin: req.headers.origin });
+                return sendJson(res, result.status || 200, result);
+            }
             if (urlObj.pathname === '/api/chat/cancel') {
                 const cancel = turnCancellations.get(String(payload.turnId || ''));
                 if (cancel) cancel();

@@ -63,6 +63,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -126,7 +127,7 @@ private val WhiteBtnText = Color(0xFF09090B)
 /** Приглушённый фон кнопки «Удалить» (тонированный AccentCoral). */
 private val DangerBtnBg = Color(0x26FF8066)
 
-private enum class ExtensionsTab(val title: String) {
+enum class ExtensionsTab(val title: String) {
     CONNECTIONS("Подключения"),
     SKILLS("Навыки"),
     PLUGINS("Плагины")
@@ -199,11 +200,12 @@ fun ExtensionsScreen(
     onStartSkillEdit: (String) -> Unit,
     onSkillEditNameChange: (String) -> Unit,
     onSkillEditContentChange: (String) -> Unit,
-    onSaveSkillEdit: (String, String, String) -> Unit
+    onSaveSkillEdit: (String, String, String) -> Unit,
+    initialTab: ExtensionsTab = ExtensionsTab.CONNECTIONS
 ) {
-    var activeTab by remember { mutableIntStateOf(0) } // 0=Подключения, 1=Навыки, 2=Плагины
-    var scopeMine by remember { mutableStateOf(true) } // true=Мои, false=Каталог
-    var searchQuery by remember { mutableStateOf("") }
+    var activeTab by rememberSaveable(initialTab) { mutableIntStateOf(initialTab.ordinal) }
+    var scopeMine by rememberSaveable { mutableStateOf(true) } // true=Мои, false=Каталог
+    var searchQuery by rememberSaveable { mutableStateOf("") }
     var showAddDialog by remember { mutableStateOf(false) }
     var mcpToolCallServer by remember { mutableStateOf<PcMcpServerItem?>(null) }
     var detailTarget by remember { mutableStateOf<ExtensionDetailTarget?>(null) }
@@ -220,12 +222,14 @@ fun ExtensionsScreen(
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             TwoLineMenuCircleButton(onClick = onOpenDrawer)
             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                Row(Modifier.clip(CircleShape).clickable { sectionMenuOpen = true }
+                Row(Modifier.clip(CircleShape).clickable(role = androidx.compose.ui.semantics.Role.Button) { sectionMenuOpen = true }
                     .heightIn(min = 48.dp).padding(horizontal = 8.dp),
                     verticalAlignment = Alignment.CenterVertically) {
-                    Text(ExtensionsTab.entries[activeTab].title,
+                    Text(ExtensionsTab.entries[activeTab].title, modifier = Modifier.weight(1f, fill = false),
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
                         color = DesignColors.TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-                    Icon(Icons.Default.KeyboardArrowDown, "Выбрать раздел", tint = DesignColors.TextPrimary)
+                    Icon(Icons.Default.KeyboardArrowDown, "Выбрать раздел", tint = DesignColors.TextPrimary,
+                        modifier = Modifier.size(24.dp))
                 }
                 DropdownMenu(sectionMenuOpen, onDismissRequest = { sectionMenuOpen = false },
                     containerColor = DesignColors.SurfaceHigh) {
@@ -238,6 +242,7 @@ fun ExtensionsScreen(
                     HorizontalDivider(color = DesignColors.Border)
                     DropdownMenuItem(text = { Text("Обновить") },
                         leadingIcon = { Icon(Icons.Default.Refresh, null) },
+                        enabled = !isLoading,
                         onClick = { sectionMenuOpen = false; onRefresh() })
                 }
             }
@@ -247,37 +252,6 @@ fun ExtensionsScreen(
             }
         }
         if (isLoading) Text("Обновление…", color = DesignColors.TextSecondary, fontSize = 13.sp)
-
-        // Плашка ошибки (если есть).
-        if (!errorText.isNullOrBlank()) {
-            Surface(
-                color = Color(0xFF2D1618),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, Color(0xFF5C2327), RoundedCornerShape(12.dp))
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "⚠ $errorText",
-                        color = Color(0xFFFCA5A5),
-                        fontSize = 12.sp,
-                        modifier = Modifier.weight(1f)
-                    )
-                    IconButton(onClick = onDismissError, modifier = Modifier.size(24.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Закрыть",
-                            tint = Color(0xFFFCA5A5),
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-            }
-        }
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -306,15 +280,12 @@ fun ExtensionsScreen(
                 )
             }
 
-            // Поиск на оставшуюся ширину.
-            Box(modifier = Modifier.weight(1f)) {
-                ClaudeSearchField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    placeholder = "Поиск"
-                )
-            }
         }
+        ClaudeSearchField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            placeholder = "Поиск"
+        )
 
         val query = searchQuery.trim().lowercase()
         LazyColumn(
@@ -322,6 +293,9 @@ fun ExtensionsScreen(
             verticalArrangement = Arrangement.spacedBy(1.dp),
             contentPadding = PaddingValues(bottom = 16.dp)
         ) {
+            if (!errorText.isNullOrBlank()) item(key = "extension_error") {
+                ExtensionErrorBanner(errorText, isLoading, onRefresh, onDismissError)
+            }
             if (scopeMine) {
                 when (activeTab) {
                     0 -> {
@@ -330,9 +304,10 @@ fun ExtensionsScreen(
                         }
                         if (filtered.isEmpty()) {
                             item {
-                                EmptyExtensionsCard(
-                                    title = "Подключения не добавлены",
-                                    subtitle = "Добавьте сервер кнопкой «+». После проверки подключения здесь появятся его инструменты."
+                                ExtensionEmptyState(
+                                    defaultTitle = "Подключения не добавлены", defaultDetail = "Добавьте сервер кнопкой «+». После проверки подключения здесь появятся его инструменты.",
+                                    query = query, loading = isLoading, failed = !errorText.isNullOrBlank(),
+                                    hasItems = mcpServers.isNotEmpty()
                                 )
                             }
                         } else {
@@ -358,9 +333,10 @@ fun ExtensionsScreen(
                         val filtered = skills.filter { matchesQuery(query, it.name, it.description, it.path) }
                         if (filtered.isEmpty()) {
                             item {
-                                EmptyExtensionsCard(
-                                    title = "Навыки не найдены",
-                                    subtitle = "Навыки — SKILL.md в каталогах рабочей станции. Нажмите «+ Установить» для создания навыка или вызовите его в чате через /имя."
+                                ExtensionEmptyState(
+                                    defaultTitle = "Навыки не найдены", defaultDetail = "Навыки — SKILL.md в каталогах рабочей станции. Нажмите «+ Установить» для создания навыка или вызовите его в чате через /имя.",
+                                    query = query, loading = isLoading, failed = !errorText.isNullOrBlank(),
+                                    hasItems = skills.isNotEmpty()
                                 )
                             }
                         } else {
@@ -382,9 +358,10 @@ fun ExtensionsScreen(
                         }
                         if (filtered.isEmpty()) {
                             item {
-                                EmptyExtensionsCard(
-                                    title = "Плагины не установлены",
-                                    subtitle = "Выберите плагин из каталога или добавьте свой кнопкой «+»."
+                                ExtensionEmptyState(
+                                    defaultTitle = "Плагины не установлены", defaultDetail = "Выберите плагин из каталога или добавьте свой кнопкой «+».",
+                                    query = query, loading = isLoading, failed = !errorText.isNullOrBlank(),
+                                    hasItems = plugins.isNotEmpty()
                                 )
                             }
                         } else {
@@ -400,32 +377,18 @@ fun ExtensionsScreen(
                 }
             } else {
                 // Catalog uses the same mobile list vocabulary, without promotional hero artwork.
-                val tabCategories = when (activeTab) {
-                    0 -> setOf("mcp-server", "connector", "app")
-                    1 -> setOf("skill", "skill-assets", "command", "agent", "output-style")
-                    else -> null // «Плагины» — все прочие категории
-                }
                 val filtered = catalog.filter { item ->
-                    val catOk = tabCategories == null || tabCategories.contains(item.category) ||
-                        (activeTab == 2 && !setOf(
-                            "mcp-server",
-                            "connector",
-                            "app",
-                            "skill",
-                            "skill-assets",
-                            "command",
-                            "agent",
-                            "output-style"
-                        ).contains(item.category))
-                    catOk && matchesQuery(query, item.name, item.sourceProduct, item.category, item.compatibility)
+                    com.google.antigravity.model.extensionCatalogTab(item.category) == activeTab &&
+                        matchesQuery(query, item.name, item.sourceProduct, item.category, item.compatibility)
                 }
 
                 if (filtered.isEmpty()) {
                     item {
-                        EmptyExtensionsCard(
-                            title = "В каталоге ничего не найдено",
-                            subtitle = "Измените поисковый запрос или обновите список."
-                        )
+                        ExtensionEmptyState(
+                                    defaultTitle = "В каталоге ничего не найдено", defaultDetail = "Измените поисковый запрос или обновите список.",
+                                    query = query, loading = isLoading, failed = !errorText.isNullOrBlank(),
+                                    hasItems = catalog.isNotEmpty()
+                                )
                     }
                 } else if (activeTab == 0) {
                     // Пункт 5: «Подключения» в каталоге — компактная таблица
@@ -1411,7 +1374,7 @@ private fun ComponentRecordLine(record: ComponentAdapterRecord) {
 }
 
 @Composable
-private fun EmptyExtensionsCard(title: String, subtitle: String) {
+internal fun EmptyExtensionsCard(title: String, subtitle: String) {
     Surface(
         color = CardBg,
         shape = RoundedCornerShape(12.dp),

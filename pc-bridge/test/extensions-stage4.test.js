@@ -319,7 +319,7 @@ test('дочерняя задача получает только нужный �
 // из server.js (vm-извлечение, как в chat-integrity) с управляемым HTTP-слоем.
 // ---------------------------------------------------------------------------
 
-test('адаптер OpenRouter: реальные схемы → вызов инструмента → ответ из результата', async () => {
+for (const needsApproval of [false, true]) test(`адаптер OpenRouter: реальные схемы → ${needsApproval ? 'разовое разрешение → ' : ''}вызов инструмента → ответ из результата`, async () => {
     const source = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
     const start = source.indexOf('async function executeOpenRouterStreamingTurn(');
     const end = source.indexOf('function loadAiPermissionsConfig(', start);
@@ -373,6 +373,7 @@ test('адаптер OpenRouter: реальные схемы → вызов ин
         }
     };
 
+    let actualExecutions = 0;
     const context = {
         require, Date, AbortController, Math, JSON,
         INSTANCE_NAME: 'test',
@@ -388,10 +389,16 @@ test('адаптер OpenRouter: реальные схемы → вызов ин
         formatToolSummary: (n) => n,
         extensionRuntime: runtime,
         buildOpenRouterToolSet: async () => ({ tools, nameToRef, catalog, allowedRefs: new Set(allowed.map(t => t.ref)) }),
-        callMcpToolViaRegistry: async (serverId, toolName, args) => ({
-            ok: true,
-            result: { content: [{ type: 'text', text: `ответ-${serverId}` }], isError: false }
-        }),
+        callMcpToolViaRegistry: async (serverId, toolName, args, options) => {
+            if (needsApproval && !options.userInitiated) return { ok: false, errorCode: 'tool_needs_approval' };
+            actualExecutions++;
+            return { ok: true, result: { content: [{ type: 'text', text: `ответ-${serverId}` }], isError: false } };
+        },
+        callWithApproval: require('../lib/tool-approval').callWithApproval,
+        toolApprovalBroker: new (require('../lib/tool-approval').ToolApprovalBroker)(),
+        approvalPreview: require('../lib/tool-approval').approvalPreview,
+        findRawMcpEntry: () => null,
+        mcpClientLib: require('../lib/mcp-client'),
         https: fakeHttps
     };
     const execute = vm.runInNewContext(
@@ -405,6 +412,16 @@ test('адаптер OpenRouter: реальные схемы → вызов ин
         (e) => {
             events.push(e);
             if (e.type === 'tool') toolEvents.push(e);
+            if (e.type === 'tool' && e.status === 'AWAITING_APPROVAL') {
+                assert.equal(actualExecutions, 0);
+                assert.equal(e.id, 'or_c1');
+                assert.equal(e.approval.turnId, 't4');
+                assert.equal(e.approval.conversationId, 'conv-1');
+                assert.equal(e.approval.preview, '{}');
+                const decision = { ...e.approval, decision: 'APPROVED' };
+                assert.equal(context.toolApprovalBroker.decide(decision).ok, true);
+                assert.equal(context.toolApprovalBroker.decide(decision).ok, true);
+            }
         }
     );
 
@@ -421,7 +438,11 @@ test('адаптер OpenRouter: реальные схемы → вызов ин
     assert.match(result.reply, /ИТОГ: ответ-srvX/);
     assert.equal(result.toolCalls.length, 1);
     assert.equal(result.toolCalls[0].name, 'srvX:whoami');
-    assert.equal(toolEvents.length, 1);
-    assert.equal(toolEvents[0].status, 'COMPLETED');
+    assert.equal(actualExecutions, 1);
+    assert.equal(toolEvents.length, needsApproval ? 2 : 1);
+    assert.equal(toolEvents.at(-1).status, 'COMPLETED');
+    assert.equal(toolEvents.at(-1).id, result.toolCalls[0].id, 'поток и done обновляют один вызов');
+    assert.equal(toolEvents.at(-1).approvalDecision, needsApproval ? 'APPROVED' : undefined);
+    assert.equal(result.toolCalls[0].approvalDecision, needsApproval ? 'APPROVED' : undefined);
     assert.equal(context.turnCancellations.size, 0, 'turnCancellations очищен после хода');
 });

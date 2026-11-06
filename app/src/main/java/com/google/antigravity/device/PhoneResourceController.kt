@@ -1532,9 +1532,11 @@ class PhoneResourceController(private val context: Context) {
             } else {
                 val ext = file.extension.lowercase(Locale.getDefault())
                 val text = if (ext == "pdf" || ext == "docx" || ext == "doc") {
-                    extractCleanReadableText(file, 15000).ifBlank { file.readText().take(15000) }
+                    extractCleanReadableText(file, 15000).ifBlank {
+                        file.bufferedReader().use { readPhoneTextPage(it, 0, 15000).text }
+                    }
                 } else {
-                    file.readText().take(15000)
+                    file.bufferedReader().use { readPhoneTextPage(it, 0, 15000).text }
                 }
                 PhoneActionExecutionResult(
                     actionType = "read_file",
@@ -1553,6 +1555,32 @@ class PhoneResourceController(private val context: Context) {
                 summaryRu = "Ошибка чтения файла: ${e.localizedMessage}",
                 outputOrDiff = "Ошибка чтения файла $path: ${e.localizedMessage}"
             )
+        }
+    }
+
+    private fun readFileForAgent(path: String, obj: JSONObject): PhoneActionExecutionResult {
+        return try {
+            val range = PhoneTextReadRange.fromJson(obj)
+            val file = resolvePhonePath(path)
+            val document = file.extension.lowercase(Locale.ROOT) in setOf("pdf", "docx", "doc")
+            if (document) {
+                require(!obj.has("offset") && !obj.has("limit")) {
+                    "Диапазоны offset/limit поддерживаются только для текстовых файлов, не PDF/DOC/DOCX"
+                }
+                val result = readFile(path)
+                if (!result.success) result else result.copy(outputOrDiff =
+                    "Извлечённый текст документа ограничен 15000 символами. Диапазоны offset/limit недоступны.\n" + result.outputOrDiff)
+            } else {
+                require(file.exists() && file.isFile) { "Текстовый файл не найден: ${file.absolutePath}" }
+                val page = file.bufferedReader().use { readPhoneTextPage(it, range.offset, range.limit) }
+                PhoneActionExecutionResult(actionType = "read_file", targetPathOrCmd = file.absolutePath,
+                    success = true, summaryRu = "Прочитан фрагмент ${file.name}: ${page.offset}–${page.nextOffset}",
+                    outputOrDiff = page.toolOutput())
+            }
+        } catch (failure: Exception) {
+            if (failure is kotlinx.coroutines.CancellationException) throw failure
+            PhoneActionExecutionResult(actionType = "read_file", targetPathOrCmd = path, success = false,
+                summaryRu = "Не удалось прочитать фрагмент файла", outputOrDiff = failure.message ?: "Ошибка чтения")
         }
     }
 
@@ -2627,7 +2655,7 @@ class PhoneResourceController(private val context: Context) {
             "delete_file" -> deleteFile(path)
             "move_file" -> copyOrMoveFileOnPhone(path, dst, move = true)
             "copy_file" -> copyOrMoveFileOnPhone(path, dst, move = false)
-            "read_file" -> readFile(path.ifEmpty { query })
+            "read_file" -> readFileForAgent(path.ifEmpty { query }, obj)
             "list_dir", "ls" -> listDirectoryAction(path.ifEmpty { query })
             "search_files" -> searchFilesOnPhone(
                 query = query.ifEmpty { path },

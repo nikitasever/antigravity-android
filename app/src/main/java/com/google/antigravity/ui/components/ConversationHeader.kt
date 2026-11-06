@@ -41,7 +41,8 @@ internal fun ConversationHeader(
     onOutline: () -> Unit,
     hasConversation: Boolean = false,
     title: String = "",
-    executionLabel: String = ""
+    executionLabel: String = "",
+    onTasks: (() -> Unit)? = null
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val actions: @Composable () -> Unit = {
@@ -64,36 +65,30 @@ internal fun ConversationHeader(
                 HorizontalDivider(color = DesignColors.Border)
                 DropdownMenuItem(text = { Text("Поиск в чате") }, onClick = { menuOpen = false; onSearch() })
                 DropdownMenuItem(text = { Text("Содержание разговора") }, onClick = { menuOpen = false; onOutline() })
+                if (onTasks != null) DropdownMenuItem(text = { Text("Фоновые задачи") },
+                    onClick = { menuOpen = false; onTasks() })
             }
         }
     }
     if (hasConversation) {
-        // ChatGPT recording f_0043: back circle, conversation capsule, actions capsule.
+        // Claude Remote control: flat navigation and title. ChatGPT Work capsules
+        // are not the ordinary-conversation header.
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            FilledIconButton(onClick = onDrawer, modifier = Modifier.size(48.dp),
-                colors = IconButtonDefaults.filledIconButtonColors(containerColor = DesignColors.SurfaceHigh)) {
+            IconButton(onClick = onDrawer, modifier = Modifier.size(48.dp)) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, "Открыть список чатов", tint = DesignColors.TextPrimary)
             }
-            Surface(modifier = Modifier.weight(1f).heightIn(min = 48.dp), shape = CircleShape,
-                color = DesignColors.SurfaceHigh, onClick = onModel) {
-                Column(Modifier.padding(horizontal = 18.dp, vertical = 6.dp),
+            Box(modifier = Modifier.weight(1f).heightIn(min = 48.dp).clickable(onClick = onModel)) {
+                Column(Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
                     verticalArrangement = Arrangement.Center) {
-                    Text(title.ifBlank { "Новый чат" }, fontSize = 14.sp, lineHeight = 18.sp, maxLines = 1,
+                    Text(title.ifBlank { "Новый чат" }, fontSize = 16.sp, lineHeight = 22.sp, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, color = DesignColors.TextPrimary)
                     Text(executionLabel.ifBlank { modelName }, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 1,
                         overflow = TextOverflow.Ellipsis, color = DesignColors.TextSecondary)
                 }
             }
-            Surface(shape = CircleShape, color = DesignColors.SurfaceHigh) {
-                Row {
-                    IconButton(onClick = onNewChat) {
-                        Icon(Icons.Default.Edit, "Новый чат", tint = DesignColors.TextPrimary)
-                    }
-                    actions()
-                }
-            }
+            actions()
         }
     } else ChatModeHeader(workSelected, onDrawer, onSelectWork, actions)
 }

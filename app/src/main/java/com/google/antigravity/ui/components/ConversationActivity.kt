@@ -2,6 +2,8 @@ package com.google.antigravity.ui.components
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -14,7 +16,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -47,12 +51,14 @@ internal fun ConversationActivity(
         ActivityRow("Ход рассуждений", null, onToggleThinking, null, reasoning = true)
     }
     if (tools.isNotEmpty()) {
-        val active = tools.lastOrNull { it.status == ToolCallStatus.RUNNING || it.status == ToolCallStatus.AWAITING_APPROVAL }
-        val failed = tools.count { it.status == ToolCallStatus.FAILED || it.status == ToolCallStatus.DENIED }
+        val active = tools.lastOrNull { it.status == ToolCallStatus.RUNNING || it.status == ToolCallStatus.AWAITING_APPROVAL || it.status == ToolCallStatus.APPROVED }
+        val failed = tools.count { it.status == ToolCallStatus.FAILED }
+        val denied = tools.count { it.status == ToolCallStatus.DENIED }
         val cancelled = tools.count { it.status == ToolCallStatus.CANCELLED }
         val label = when {
             active != null -> active.summary.ifBlank { active.toolTitleRu }
             failed > 0 -> "Действия: ${tools.size} · с ошибкой: $failed"
+            denied > 0 -> "Действия: ${tools.size} · отклонено: $denied"
             cancelled > 0 -> "Действия: ${tools.size} · остановлено: $cancelled"
             tools.size == 1 -> tools.first().toolTitleRu
             else -> "Выполнено действий: ${tools.size}"
@@ -60,8 +66,8 @@ internal fun ConversationActivity(
         ActivityRow(label, if (failed > 0) Icons.Default.ErrorOutline else null,
             { toolsOpen = true }, null)
         // Approval must remain visible even while the summary is collapsed.
-        tools.filter { it.requiresApproval && it.approvalDecision == ApprovalDecision.PENDING }.forEach { tool ->
-            Text(tool.summary, color = DesignColors.TextPrimary, fontSize = 15.sp)
+        tools.filter { it.status == ToolCallStatus.AWAITING_APPROVAL && it.requiresApproval && it.approvalDecision == ApprovalDecision.PENDING }.forEach { tool ->
+            if (tool.id != active?.id) Text(tool.summary, color = DesignColors.TextPrimary, fontSize = 15.sp)
             ToolApprovalActions(tool, onDecideToolCall)
         }
     }
@@ -97,12 +103,13 @@ internal fun ConversationActivity(
                     }
                 }
                 items(tools, key = { it.id }) { tool ->
-                    Column {
+                    Column(Modifier.padding(start = if (tool.parentTaskId != null) 16.dp else 0.dp)) {
                         Row(Modifier.fillMaxWidth().clickable {
                             expandedTool = if (expandedTool == tool.id) null else tool.id
                         }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(if (tool.status == ToolCallStatus.FAILED || tool.status == ToolCallStatus.DENIED)
-                                Icons.Default.ErrorOutline else Icons.Default.Terminal, null,
+                                Icons.Default.ErrorOutline else if (tool.toolName == "delegate_task") Icons.Default.AccountTree
+                                else Icons.Default.Terminal, null,
                                 tint = DesignColors.TextSecondary, modifier = Modifier.size(20.dp))
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
@@ -112,7 +119,7 @@ internal fun ConversationActivity(
                             Icon(if (expandedTool == tool.id) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                                 "Подробности действия", tint = DesignColors.TextSecondary)
                         }
-                        if (tool.requiresApproval && tool.approvalDecision == ApprovalDecision.PENDING)
+                        if (tool.status == ToolCallStatus.AWAITING_APPROVAL && tool.requiresApproval && tool.approvalDecision == ApprovalDecision.PENDING)
                             ToolApprovalActions(tool, onDecideToolCall)
                         if (expandedTool == tool.id) {
                             if (tool.leadingText.isNotBlank()) Text(tool.leadingText, fontSize = 16.sp)
@@ -154,10 +161,33 @@ private fun ActivityRow(label: String, icon: androidx.compose.ui.graphics.vector
 
 @Composable
 private fun ToolApprovalActions(tool: ToolCallEvent, decide: (String, ApprovalDecision) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Button(onClick = { decide(tool.id, ApprovalDecision.APPROVED) },
-            colors = ButtonDefaults.buttonColors(containerColor = DesignColors.AccentBlue)) { Text("Разрешить") }
-        OutlinedButton(onClick = { decide(tool.id, ApprovalDecision.DENIED) }) { Text("Отклонить") }
+    val handle = tool.approvalHandle
+    if (handle == null) {
+        Text("Этот исполнитель не поддерживает ответ на запрос разрешения. Действие не разрешено.",
+            color = DesignColors.TextSecondary, fontSize = 14.sp)
+        return
+    }
+    if (handle.preview.isNotBlank()) androidx.compose.foundation.text.selection.SelectionContainer {
+        Text(handle.preview, color = DesignColors.TextPrimary,
+            fontFamily = FontFamily.Monospace, fontSize = 13.sp, lineHeight = 19.sp,
+            modifier = Modifier.fillMaxWidth().heightIn(max = 160.dp).verticalScroll(rememberScrollState()).padding(vertical = 8.dp))
+    }
+    if (tool.approvalError.isNotBlank()) Text(tool.approvalError, color = DesignColors.TextSecondary, fontSize = 14.sp)
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val stack = maxWidth < 360.dp || LocalDensity.current.fontScale > 1.15f
+        val choices: @Composable (Modifier) -> Unit = { choiceModifier ->
+        Button(onClick = { decide(tool.id, ApprovalDecision.APPROVED) }, enabled = !tool.approvalSending,
+            modifier = choiceModifier.heightIn(min = 48.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = DesignColors.AccentBlue)) {
+            Text(if (tool.approvalSending) "Отправка…" else "Разрешить один раз", fontSize = 14.sp, textAlign = TextAlign.Center) }
+        OutlinedButton(onClick = { decide(tool.id, ApprovalDecision.DENIED) }, enabled = !tool.approvalSending,
+            modifier = choiceModifier.heightIn(min = 48.dp)) { Text("Отклонить", fontSize = 14.sp, textAlign = TextAlign.Center) }
+        }
+        if (stack) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            choices(Modifier.fillMaxWidth())
+        } else Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            choices(Modifier.weight(1f))
+        }
     }
 }
 
