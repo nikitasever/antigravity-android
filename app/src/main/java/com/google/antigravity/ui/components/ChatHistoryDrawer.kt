@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
@@ -63,7 +64,7 @@ fun ChatHistoryDrawer(
     }
     val muted = Color(0xFF9E9E9E)
     ModalDrawerSheet(
-        modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth().imePadding(),
+        modifier = Modifier.fillMaxWidth(0.9f).widthIn(max = 420.dp).imePadding(),
         drawerContainerColor = Color(0xFF111111), drawerContentColor = Color.White
     ) {
         Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 12.dp, top = 16.dp, bottom = 12.dp),
@@ -89,17 +90,17 @@ fun ChatHistoryDrawer(
             if (query.isBlank()) {
                 item {
                     HistoryDestination(Icons.Default.VisibilityOff, "Временный чат", onTemporaryChat)
-                    HistoryDestination(Icons.Default.Folder, "Проекты") { onSection(DrawerSection.PROJECTS) }
-                    HistoryDestination(Icons.Default.Description, "Библиотека") { onSection(DrawerSection.LIBRARY) }
-                    HistoryDestination(Icons.Default.Computer, "Рабочие сессии") { onSection(DrawerSection.REMOTE_SESSIONS) }
+                    HistoryDestination(Icons.Outlined.Folder, "Проекты") { onSection(DrawerSection.PROJECTS) }
+                    HistoryDestination(Icons.Outlined.Description, "Библиотека") { onSection(DrawerSection.LIBRARY) }
+                    HistoryDestination(Icons.Outlined.Computer, "Рабочие сессии") { onSection(DrawerSection.REMOTE_SESSIONS) }
                     HistoryDestination(if (toolsExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                         "Инструменты", { toolsExpanded = !toolsExpanded })
                     if (toolsExpanded) {
                         HistoryDestination(Icons.Default.PhoneAndroid, "Файлы телефона") { onSection(DrawerSection.PHONE_EXPLORER) }
-                        HistoryDestination(Icons.Default.Cloud, "Модели OpenRouter", onModels)
-                        HistoryDestination(Icons.Default.FolderOpen, "Файлы рабочего пространства", onFiles)
-                        HistoryDestination(Icons.Default.Image, "Изображения") { onSection(DrawerSection.IMAGES) }
-                        HistoryDestination(Icons.Default.Extension, "Плагины и MCP") { onSection(DrawerSection.PLUGINS) }
+                        HistoryDestination(Icons.Outlined.Cloud, "Модели OpenRouter", onModels)
+                        HistoryDestination(Icons.Outlined.FolderOpen, "Файлы проекта", onFiles)
+                        HistoryDestination(Icons.Outlined.Image, "Изображения") { onSection(DrawerSection.IMAGES) }
+                        HistoryDestination(Icons.Outlined.Extension, "Плагины и MCP") { onSection(DrawerSection.PLUGINS) }
                         HistoryDestination(Icons.Default.Terminal, "Терминал и песочница", onTerminal)
                         HistoryDestination(Icons.Default.Security, "Доступ ИИ", onPermissions)
                         HistoryDestination(Icons.Default.DataUsage, "Контекст чата", onContext)
@@ -216,6 +217,6 @@ private fun HistoryDestination(icon: ImageVector, label: String, onClick: () -> 
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 52.dp).padding(horizontal = 24.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, null, tint = Color(0xFFC4C3BB), modifier = Modifier.size(24.dp))
-        Text(label, color = Color.White, fontSize = 18.sp, modifier = Modifier.padding(start = 16.dp))
+        Text(label, color = Color.White, fontSize = 16.sp, modifier = Modifier.padding(start = 16.dp))
     }
 }

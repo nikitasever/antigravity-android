@@ -11,6 +11,10 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.antigravity.device.PhoneResourceController
 import com.google.antigravity.model.AVAILABLE_AGY_MODELS
+import com.google.antigravity.model.VideoRun
+import com.google.antigravity.model.VideoRunStore
+import com.google.antigravity.network.VideoJobFailure
+import com.google.antigravity.model.SwarmRunOrigin
 import com.google.antigravity.model.resolveSavedBridgeAddress
 import com.google.antigravity.model.AgentExecutionTarget
 import com.google.antigravity.model.AiPermissionsConfig
@@ -86,6 +90,8 @@ import com.google.antigravity.service.AntigravityAgentSessionService
 import com.google.antigravity.service.AntigravityVoiceForegroundService
 import com.google.antigravity.voice.RealtimeVoiceEngine
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -107,6 +113,9 @@ import com.google.antigravity.model.selectMessageVersion
 import com.google.antigravity.model.conversationExecutionId
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.NonCancellable
+import com.google.antigravity.model.VideoTransport
+import com.google.antigravity.network.DirectOpenRouterVideoClient
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -117,7 +126,42 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class AntigravityViewModel(application: Application) : AndroidViewModel(application) {
+class AntigravityViewModel internal constructor(application: Application,
+    private val directVideoClient: DirectOpenRouterVideoClient,
+    private val directImageClient: com.google.antigravity.network.DirectOpenRouterImageClient = com.google.antigravity.network.DirectOpenRouterImageClient()) : AndroidViewModel(application) {
+
+    constructor(application: Application) : this(application, DirectOpenRouterVideoClient())
+
+    private val _bridgePairingStatus = MutableStateFlow("")
+    val bridgePairingStatus = _bridgePairingStatus.asStateFlow()
+    private val _bridgePairingBusy = MutableStateFlow(false)
+    val bridgePairingBusy = _bridgePairingBusy.asStateFlow()
+    fun pairBridge(code: String) {
+        if (_bridgePairingBusy.value) return
+        val address = _settings.value.pcBridgeUrl
+        if (_settings.value.forcePublicTunnelOnly && !address.startsWith("https://", true)) {
+            _bridgePairingStatus.value = "Для подключения через интернет укажите HTTPS-адрес ПК."
+            return
+        }
+        _bridgePairingBusy.value = true
+        _bridgePairingStatus.value = "Сопряжение…"
+        viewModelScope.launch {
+            try {
+                val paired = com.google.antigravity.network.BridgePairingClient(
+                    com.google.antigravity.network.BridgeCredentials(getApplication())).pair(address, code.trim())
+                _bridgePairingStatus.value = if (_settings.value.pcBridgeUrl != address) "Адрес изменён. Проверьте подключение к выбранному ПК."
+                    else if (paired) "Телефон сопряжён с ПК."
+                    else "Не удалось выполнить сопряжение. Проверьте адрес и код; код действует 5 минут."
+                if (paired && _settings.value.pcBridgeUrl == address) {
+                    backendClient.clearWorkingBridgeCache()
+                    val status = backendClient.checkPcBridgeStatus(address)
+                    if (_settings.value.pcBridgeUrl == address) _pcBridgeStatus.value = status
+                }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (_: Exception) { _bridgePairingStatus.value = "Сопряжение не завершено. Проверьте адрес ПК и соединение." }
+            finally { _bridgePairingBusy.value = false }
+        }
+    }
 
     companion object {
         private const val CURRENT_DEFAULT_BRIDGE_URL = "https://4707a629450f018e-79-137-206-221.serveousercontent.com"
@@ -177,6 +221,16 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
 
     private val historyStore = ChatSessionStore(File(application.filesDir, "chat_history"))
     private val historyWriter = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private val videoRunStore = VideoRunStore(File(application.filesDir, VideoRunStore.FILE_NAME))
+    private val mediaJobs = mutableMapOf<String, Job>()
+    private val mediaJobConversations = mutableMapOf<String, String>()
+    private val videoRunContexts = mutableMapOf<String, VideoRun>()
+    private val temporaryVideoRuns = mutableSetOf<String>()
+    private val pausingMediaJobs = mutableSetOf<String>()
+    private val resumingVideoTasks = mutableSetOf<String>()
+    private val resumeAfterMediaPause = mutableSetOf<String>()
+    private val _pendingVideoTaskIds = MutableStateFlow<Set<String>>(emptySet())
+    val pendingVideoTaskIds: StateFlow<Set<String>> = _pendingVideoTaskIds.asStateFlow()
     val phoneController = PhoneResourceController(application.applicationContext)
     val backendClient = AntigravityBackendClient(phoneController)
 
@@ -574,7 +628,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     private val _openRouterModels = MutableStateFlow<List<OpenRouterModelItem>>(emptyList())
     val openRouterModels: StateFlow<List<OpenRouterModelItem>> = _openRouterModels.asStateFlow()
 
-    private val _openRouterTotalCount = MutableStateFlow(prefs.getInt("openrouter_cached_count", 452))
+    private val _openRouterTotalCount = MutableStateFlow(prefs.getInt("openrouter_cached_count", 0))
     val openRouterTotalCount: StateFlow<Int> = _openRouterTotalCount.asStateFlow()
 
     private val _openRouterSyncedAt = MutableStateFlow(prefs.getString("openrouter_cached_at", "") ?: "")
@@ -586,7 +640,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     private val _openRouterFromCache = MutableStateFlow(true)
     val openRouterFromCache: StateFlow<Boolean> = _openRouterFromCache.asStateFlow()
 
-    private val _openRouterCacheStatusText = MutableStateFlow("Кэш синхронизирован (0 мс) • openrouter_models_cache.json")
+    private val _openRouterCacheStatusText = MutableStateFlow("Локальный кэш • актуальность проверяется через API")
     val openRouterCacheStatusText: StateFlow<String> = _openRouterCacheStatusText.asStateFlow()
 
     private val _openRouterApiKey = MutableStateFlow(prefs.getString("openrouter_api_key", "") ?: "")
@@ -636,6 +690,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     private val _swarmPanelState = MutableStateFlow(SubagentPanelState.EMPTY)
     private var swarmPollingJob: Job? = null
     private var subagentRequestId: String = ""
+    private var subagentOrigin: SwarmRunOrigin? = null
     private val subagentSourceSession = MutableStateFlow("")
     val isSwarmTaskActive: StateFlow<Boolean> = combine(
         _isSwarmTaskActive, _settings, subagentSourceSession
@@ -705,13 +760,13 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
         observeNotificationApprovalEvents()
         observeSubagentNotificationActions()
         viewModelScope.launch(Dispatchers.IO) {
-            // Section 11.3: Мгновенная загрузка 452 моделей OpenRouter из локального дискового кэша за 0-2 мс при старте
+            // Section 11.3: Загрузка последнего известного каталога; актуальность проверяется через API
             val cachedModels = loadOpenRouterDiskCache()
             if (cachedModels.isNotEmpty()) {
                 _openRouterModels.value = cachedModels
-                _openRouterTotalCount.value = maxOf(cachedModels.size, prefs.getInt("openrouter_cached_count", 452))
+                _openRouterTotalCount.value = cachedModels.size
                 _openRouterFromCache.value = true
-                _openRouterCacheStatusText.value = "Кэш синхронизирован (0 мс) • openrouter_models_cache.json"
+                _openRouterCacheStatusText.value = "Локальный кэш • актуальность проверяется через API"
             }
 
             // Инициализируем виртуальную песочницу и начальную CLI-историю на устройстве
@@ -735,6 +790,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                 _messages.value = sessionHistoryCache[startupSettings.activeConversationId].orEmpty()
                 _composerDraft.value = prefs.getString("draft:" + startupSettings.activeConversationId, "").orEmpty()
             }
+            restoreVideoRuns(savedChats)
             loadEmbeddedPcSnapshot()
             refreshPhoneFiles()
             syncRemoteSessionsFromPc()
@@ -1429,15 +1485,14 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     fun startNewChat() {
         stopActiveGeneration()
         cacheCurrentSession()
+        if (_isSwarmTaskActive.value) cancelSubagentAnalysis()
         _temporaryChatActive.value = false
         _settings.update { it.copy(activeConversationId = "", activeSessionTitle = "") }
         prefs.edit().remove("active_conversation_id").remove("active_session_title").apply()
         _messages.value = emptyList()
         setComposerDraft("")
         _pendingAttachments.value = emptyList()
-        if (_isSwarmTaskActive.value) cancelSubagentAnalysis()
         _isSwarmTaskActive.value = false
-        _swarmAgents.update { list -> list.map { it.copy(status = "ready") } }
         _topModeTab.value = TopModeTab.CHAT
         _drawerSection.value = DrawerSection.CHAT
     }
@@ -2439,6 +2494,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                 if (isImg) cats.add(OpenRouterCategory.IMAGE_GEN)
                 if (isVid) cats.add(OpenRouterCategory.VIDEO_GEN)
                 if (isFree) cats.add(OpenRouterCategory.FREE)
+                if (m.optBoolean("isAudio", false)) cats.add(OpenRouterCategory.AUDIO)
                 out.add(
                     OpenRouterModelItem(
                         id = m.optString("id", ""),
@@ -2453,6 +2509,9 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                         isVision = isVis,
                         isImageGen = isImg,
                         isVideoGen = isVid,
+                        isAudio = m.optBoolean("isAudio", false),
+                        modality = m.optString("modality", "text->text"),
+                        generationCapabilitiesJson = m.optJSONObject("generationCapabilities")?.toString() ?: "{}",
                         description = m.optString("description", ""),
                         pricingPrompt = m.optString("pricingPrompt", "0"),
                         pricingCompletion = m.optString("pricingCompletion", "0"),
@@ -2488,6 +2547,9 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                         put("isVision", m.isVision)
                         put("isImageGen", m.isImageGen)
                         put("isVideoGen", m.isVideoGen)
+                        put("isAudio", m.isAudio)
+                        put("modality", m.modality)
+                        put("generationCapabilities", JSONObject(m.generationCapabilitiesJson))
                         put("description", m.description)
                         put("pricingPrompt", m.pricingPrompt)
                         put("pricingCompletion", m.pricingCompletion)
@@ -2499,9 +2561,18 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                 put("cachedAt", syncedAt.ifBlank { currentTimeFormatted() })
                 put("totalCount", totalCount)
                 put("source", source)
+                put("catalogVersion", 2)
                 put("models", arr)
             }
-            getOpenRouterCacheFile().writeText(root.toString(), Charsets.UTF_8)
+            val target = getOpenRouterCacheFile()
+            val temporary = File(target.parentFile, target.name + ".tmp")
+            temporary.writeText(root.toString(), Charsets.UTF_8)
+            try {
+                java.nio.file.Files.move(temporary.toPath(), target.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE)
+            } catch (_: java.nio.file.AtomicMoveNotSupportedException) {
+                java.nio.file.Files.move(temporary.toPath(), target.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+            }
             prefs.edit()
                 .putString("openrouter_cached_at", syncedAt.ifBlank { currentTimeFormatted() })
                 .putInt("openrouter_cached_count", totalCount)
@@ -2517,11 +2588,11 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                 val diskCached = loadOpenRouterDiskCache()
                 if (diskCached.isNotEmpty() && _openRouterModels.value.isEmpty()) {
                     val elapsedDiskMs = (System.currentTimeMillis() - startMs).coerceAtLeast(0L)
-                    val cnt = maxOf(diskCached.size, prefs.getInt("openrouter_cached_count", 452))
+                    val cnt = diskCached.size
                     _openRouterModels.value = diskCached
                     _openRouterTotalCount.value = cnt
                     _openRouterFromCache.value = true
-                    _openRouterCacheStatusText.value = "Кэш синхронизирован (${elapsedDiskMs} мс) • openrouter_models_cache.json"
+                    _openRouterCacheStatusText.value = "Локальный кэш • актуальность проверяется через API"
                 }
             }
             if (forceRefresh || _openRouterModels.value.isEmpty()) {
@@ -2529,17 +2600,18 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
             }
             val res = backendClient.fetchLiveOpenRouterModels(_settings.value.pcBridgeUrl, forceRefresh)
             if (res.models.isNotEmpty()) {
-                val effectiveCount = maxOf(res.totalCount, res.models.size)
-                _openRouterModels.value = res.models
+                val models = if (res.partial) com.google.antigravity.model.mergePartialOpenRouterModels(_openRouterModels.value, res.models) else res.models
+                val effectiveCount = models.size
+                _openRouterModels.value = models
                 _openRouterTotalCount.value = effectiveCount
                 _openRouterSyncedAt.value = res.syncedAt
                 _openRouterSyncSource.value = res.source
-                _openRouterFromCache.value = res.fromCache && !forceRefresh
-                saveOpenRouterDiskCache(res.models, effectiveCount, res.syncedAt, res.source)
-                _openRouterCacheStatusText.value = if (forceRefresh) {
-                    "Кэш обновлён (${currentTimeFormatted()}) • openrouter_models_cache.json"
-                } else {
-                    "Кэш синхронизирован (0 мс) • openrouter_models_cache.json"
+                _openRouterFromCache.value = res.fromCache || res.partial
+                if (!res.partial) saveOpenRouterDiskCache(models, effectiveCount, res.syncedAt, res.source)
+                _openRouterCacheStatusText.value = when {
+                    res.partial -> "Каталог загружен частично • сохранены последние известные модели"
+                    res.fromCache -> "Локальный кэш • актуальность проверяется через API"
+                    else -> "Каталог обновлён из API • ${models.size} моделей"
                 }
             }
             _isSyncingOpenRouter.value = false
@@ -2646,11 +2718,13 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
         val clean = apiKey.trim()
         prefs.edit().putString("openrouter_api_key", clean).apply()
         _openRouterApiKey.value = clean
+        val source = _settings.value
+        if (source.executionTarget == AgentExecutionTarget.PHONE_LOCAL_RESOURCES) return
         viewModelScope.launch {
             backendClient.saveOpenRouterConfig(
-                pcBridgeUrl = _settings.value.pcBridgeUrl,
+                pcBridgeUrl = source.pcBridgeUrl,
                 apiKey = clean,
-                selectedModel = _settings.value.selectedModelId
+                selectedModel = source.selectedModelId
             )
         }
     }
@@ -2668,10 +2742,12 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
         setSelectedModel(model.id)
         _topModeTab.value = TopModeTab.CHAT
         _drawerSection.value = DrawerSection.CHAT
+        val source = _settings.value
+        val key = _openRouterApiKey.value
         viewModelScope.launch {
-            backendClient.saveOpenRouterConfig(
-                pcBridgeUrl = _settings.value.pcBridgeUrl,
-                apiKey = _openRouterApiKey.value,
+            if (source.executionTarget != AgentExecutionTarget.PHONE_LOCAL_RESOURCES) backendClient.saveOpenRouterConfig(
+                pcBridgeUrl = source.pcBridgeUrl,
+                apiKey = key,
                 selectedModel = model.id
             )
             refreshContextWindowStatus()
@@ -2697,114 +2773,332 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
         setSelectedModel(clean)
         _topModeTab.value = TopModeTab.CHAT
         _drawerSection.value = DrawerSection.CHAT
+        val source = _settings.value
+        val key = _openRouterApiKey.value
         viewModelScope.launch {
-            backendClient.saveOpenRouterConfig(
-                pcBridgeUrl = _settings.value.pcBridgeUrl,
-                apiKey = _openRouterApiKey.value,
+            if (source.executionTarget != AgentExecutionTarget.PHONE_LOCAL_RESOURCES) backendClient.saveOpenRouterConfig(
+                pcBridgeUrl = source.pcBridgeUrl,
+                apiKey = key,
                 selectedModel = clean
             )
             refreshContextWindowStatus()
         }
     }
 
-    fun generateOpenRouterMediaInChat(
-        prompt: String,
-        modelId: String,
-        isVideo: Boolean
-    ) {
-        val cleanPrompt = prompt.trim().ifBlank {
-            if (isVideo) "Орбитальная станция Antigravity 2026 над неоновым мегаполисом"
-            else "Футуристический нейроинтерфейс Antigravity 2026 в высоком разрешении"
-        }
-        val effectiveModel = modelId.trim().ifBlank {
-            if (isVideo) "google/veo-3.1-video" else "black-forest-labs/flux.2-pro"
-        }
+    private fun videoKeyHash(key: String): String = java.security.MessageDigest.getInstance("SHA-256")
+        .digest(key.trim().toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
 
-        _topModeTab.value = TopModeTab.CHAT
-        _drawerSection.value = DrawerSection.CHAT
+    private fun registerMediaJob(id: String, block: suspend () -> Unit) {
+        if (mediaJobs.containsKey(id)) return
+        val task = agentExecutionScope.launch(start = CoroutineStart.LAZY) {
+            try { block() } finally {
+                if (mediaJobs[id] === currentCoroutineContext()[Job]) {
+                    mediaJobs.remove(id)
+                    mediaJobConversations.remove(id)
+                }
+                _isGeneratingMedia.value = mediaJobs.isNotEmpty()
+            }
+        }
+        mediaJobs[id] = task
         _isGeneratingMedia.value = true
-        _mediaGenerationStatus.value = if (isVideo) {
-            "Генерация H.264 MP4 видео через $effectiveModel…"
-        } else {
-            "Генерация PNG изображения через $effectiveModel…"
+        task.start()
+    }
+
+    private suspend fun commitMediaMessage(conversationId: String, title: String, target: AgentExecutionTarget,
+        messageId: String, transform: (ChatMessage) -> ChatMessage): Boolean {
+        val (snapshot, durable) = withContext(Dispatchers.Main) {
+            val visible = _settings.value.activeConversationId == conversationId
+            val messages = (if (visible) _messages.value else sessionHistoryCache[conversationId].orEmpty())
+                .map { if (it.id == messageId) transform(it) else it }
+            if (visible) _messages.value = messages
+            sessionHistoryCache[conversationId] = messages
+            val persist = conversationId !in temporaryChatIds
+            if (persist && messages.isNotEmpty()) {
+                val local = RemoteSessionItem(id = conversationId, title = title.ifBlank { "Новый чат" },
+                    hostType = if (target == AgentExecutionTarget.PHONE_LOCAL_RESOURCES) "PHONE" else "PC",
+                    host = if (target == AgentExecutionTarget.PHONE_LOCAL_RESOURCES) "Телефон" else "Компьютер",
+                    workspacePath = "", messageCount = messages.size)
+                _remoteSessions.update { listOf(local) + it.filterNot { item -> item.id == conversationId } }
+            }
+            messages to persist
         }
+        if (!durable) return true
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                historyWriter.submit { historyStore.save(SavedChat(conversationId, title, target, snapshot)) }.get()
+                true
+            }.getOrDefault(false)
+        }
+    }
 
-        val userMsg = ChatMessage(
-            role = MessageRole.USER,
-            content = "${if (isVideo) "Сгенерируй видео" else "Сгенерируй фото"} ($effectiveModel): $cleanPrompt",
-            timestamp = currentTimeFormatted()
-        )
-        val genMsgId = "media_gen_${System.currentTimeMillis()}"
-        val placeholderMsg = ChatMessage(
-            id = genMsgId,
-            role = MessageRole.AGENT,
-            content = _mediaGenerationStatus.value,
-            thinking = null,
-            thinkingDurationSec = 0,
-            isThinkingExpanded = false,
-            isStreaming = true,
-            timestamp = currentTimeFormatted()
-        )
-        _messages.update { it + userMsg + placeholderMsg }
+    private suspend fun deliverMedia(run: VideoRun, media: GeneratedMediaAttachment): Boolean {
+        val existing = media.localPath.takeIf { it.isNotBlank() }?.let(::File)?.takeIf {
+            it.isFile && it.length() > 0 && (media.sizeBytes <= 0 || it.length() == media.sizeBytes)
+        }
+        val (saved, localPath) = if (existing != null) true to existing.absolutePath else
+            phoneController.downloadMediaToPhone(media.mediaUrl, media.fileName, media.sizeBytes)
+        val result = if (saved) media.copy(localPath = localPath, localPhonePath = localPath) else media
+        _mediaGenerationStatus.value = "Готово: ${result.fileName}"
+        val content = if (saved) "Видео готово." else
+            "Видео готово. Сохранить на телефон не удалось; файл доступен в карточке."
+        val committed = commitMediaMessage(run.conversationId, run.title, run.target, run.requestId) {
+            it.copy(content = content, isStreaming = false, isThinkingExpanded = false, generatedMedia = listOf(result))
+        }
+        refreshPhoneFiles()
+        return saved && committed
+    }
 
+    private fun launchVideoRun(run: VideoRun, resume: Boolean, initialKey: String? = null, durable: Boolean = true) {
+        videoRunContexts[run.requestId] = run
+        if (!durable) temporaryVideoRuns.add(run.requestId)
+        _pendingVideoTaskIds.update { it + run.requestId }
+        mediaJobConversations[run.requestId] = run.conversationId
+        registerMediaJob(run.requestId) {
+            try {
+                val key = if (run.keyHash.isEmpty()) "" else (initialKey ?: _openRouterApiKey.value).trim().also {
+                    if (it.isEmpty() || videoKeyHash(it) != run.keyHash) throw java.io.IOException("Для этой видеозадачи восстановите исходный ключ OpenRouter")
+                }
+                val progress: suspend (String) -> Unit = { state ->
+                    _mediaGenerationStatus.value = when (state) {
+                        "pending", "submitting" -> "Видео поставлено в очередь…"
+                        "in_progress" -> "Видео создаётся…"
+                        "completed" -> "Видео готово. Скачивание…"
+                        else -> "Видеозадача: $state"
+                    }
+                    commitMediaMessage(run.conversationId, run.title, run.target, run.requestId) {
+                        it.copy(content = _mediaGenerationStatus.value, isStreaming = state !in setOf("failed", "cancelled", "expired", "unknown"))
+                    }
+                }
+                val media = if (run.transport == VideoTransport.PHONE_API) {
+                    directVideoClient.execute(run, key, File(getApplication<Application>().filesDir, "generated_media"),
+                        onSubmitting = {
+                            withContext(NonCancellable + Dispatchers.Main) {
+                                val updated = (videoRunContexts[run.requestId] ?: run).copy(submissionAttempted = true)
+                                if (durable) withContext(Dispatchers.IO) { videoRunStore.save(updated) }
+                                withContext(Dispatchers.Main) { videoRunContexts[run.requestId] = updated }
+                            }
+                        }, onAccepted = { id ->
+                            withContext(NonCancellable + Dispatchers.Main) {
+                                val updated = (videoRunContexts[run.requestId] ?: run).copy(submissionAttempted = true, providerJobId = id)
+                                withContext(Dispatchers.Main) { videoRunContexts[run.requestId] = updated }
+                                if (durable) withContext(Dispatchers.IO) { videoRunStore.save(updated) }
+                            }
+                        }, onProgress = progress)
+                } else backendClient.runBridgeVideo(run.bridgeUrl, run.requestId, run.model, run.prompt, key, resume, progress)
+                if (deliverMedia(run, media)) {
+                    if (durable) withContext(Dispatchers.IO) { runCatching { videoRunStore.remove(run.requestId) } }
+                    forgetVideoRun(run.requestId)
+                }
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure
+                val safeDetail = (failure.message ?: "Нет связи с видеозадачей").take(1000).let {
+                    val secret = initialKey ?: _openRouterApiKey.value
+                    if (secret.isBlank()) it else it.replace(secret, "[скрыто]")
+                }
+                val terminal = failure is VideoJobFailure && failure.terminal
+                val content = if (terminal) "Видеозадача завершилась с ошибкой: $safeDetail" else
+                    "Ожидание приостановлено: $safeDetail. Новый платный запуск не выполнялся."
+                _mediaGenerationStatus.value = content
+                val committed = commitMediaMessage(run.conversationId, run.title, run.target, run.requestId) {
+                    it.copy(content = content, isStreaming = false, isThinkingExpanded = false)
+                }
+                val failedRun = videoRunContexts[run.requestId] ?: run
+                if (durable) withContext(Dispatchers.IO) { runCatching {
+                    if (terminal && committed) videoRunStore.remove(run.requestId)
+                    else videoRunStore.save(failedRun.copy(lastError = safeDetail,
+                        paused = failure is VideoJobFailure && failure.state == "unknown"))
+                } }
+                if (terminal && committed) forgetVideoRun(run.requestId)
+            }
+        }
+    }
+
+    private fun forgetVideoRun(requestId: String) {
+        videoRunContexts.remove(requestId)
+        temporaryVideoRuns.remove(requestId)
+        _pendingVideoTaskIds.update { it - requestId }
+    }
+
+    /** Explicit stop only: navigation and onCleared keep durable observation recoverable. */
+    fun stopVisibleGeneration() {
+        val conversationId = _settings.value.activeConversationId
+        val jobs = mediaJobs.filterKeys { mediaJobConversations[it] == conversationId && it !in pausingMediaJobs }
+        jobs.forEach { (id, job) -> pausingMediaJobs.add(id); job.cancel() }
+        stopActiveGeneration()
         agentExecutionScope.launch {
-            val (media, replyOrErr) = backendClient.generateOpenRouterMedia(
-                pcBridgeUrl = _settings.value.pcBridgeUrl,
-                prompt = cleanPrompt,
-                modelId = effectiveModel,
-                isVideo = isVideo,
-                openRouterApiKey = _openRouterApiKey.value
-            )
-            _isGeneratingMedia.value = false
-            if (media != null) {
-                val (dlOk, dlPath) = phoneController.downloadMediaToPhone(media.mediaUrl, media.fileName)
-                val updatedMedia = if (dlOk) {
-                    media.copy(localPath = dlPath, localPhonePath = dlPath)
+            for ((id, job) in jobs) try {
+                job.join()
+                val run = videoRunContexts[id]
+                if (run != null) {
+                    val paused = run.copy(paused = true, lastError = "Ожидание остановлено")
+                    videoRunContexts[id] = paused
+                    val stored = id in temporaryVideoRuns || withContext(Dispatchers.IO) {
+                        runCatching { videoRunStore.save(paused); true }.getOrDefault(false)
+                    }
+                    val content = "Ожидание видео остановлено. Генерация у провайдера может продолжаться. " +
+                        "Выберите «Продолжить ожидание», чтобы проверить эту же задачу." +
+                        if (stored) "" else " Не удалось сохранить паузу на устройстве."
+                    _mediaGenerationStatus.value = content
+                    commitMediaMessage(run.conversationId, run.title, run.target, id) {
+                        it.copy(content = content, isStreaming = false, isThinkingExpanded = false)
+                    }
+                } else if (_settings.value.activeConversationId == conversationId) {
+                    _messages.update { messages -> messages.map { if (it.id == id && it.generatedMedia.isEmpty()) it.copy(
+                        content = "Ожидание медиа остановлено. Повторный запуск не выполнялся.", isStreaming = false) else it } }
+                    cacheCurrentSession()
+                }
+            } finally {
+                pausingMediaJobs.remove(id)
+                if (resumeAfterMediaPause.remove(id)) resumeVideoTask(id)
+            }
+        }
+    }
+
+    private fun restoreVideoRuns(savedChats: List<SavedChat>) {
+        agentExecutionScope.launch {
+            val runs = try { withContext(Dispatchers.IO) { videoRunStore.load() } }
+            catch (_: Exception) { _mediaGenerationStatus.value = "Не удалось прочитать журнал видеозадач. Платные запуски не повторялись."; return@launch }
+            for (run in runs) {
+                // Only a committed history record plus an existing phone file proves delivery.
+                val delivered = savedChats.firstOrNull { it.id == run.conversationId }?.messages
+                    ?.firstOrNull { it.id == run.requestId }?.generatedMedia?.any {
+                        it.localPath.isNotBlank() && File(it.localPath).isFile && File(it.localPath).length() > 0 &&
+                            (it.sizeBytes <= 0 || File(it.localPath).length() == it.sizeBytes)
+                    } == true
+                if (delivered) { withContext(Dispatchers.IO) { runCatching { videoRunStore.remove(run.requestId) } }; continue }
+                val visible = _settings.value.activeConversationId == run.conversationId
+                val messages = (if (visible) _messages.value else sessionHistoryCache[run.conversationId].orEmpty()).toMutableList()
+                if (messages.none { it.id == run.userMessageId }) messages.add(ChatMessage(id = run.userMessageId, role = MessageRole.USER,
+                    content = "Сгенерируй видео (${run.model}): ${run.prompt}", timestamp = run.timestamp))
+                if (messages.none { it.id == run.requestId }) messages.add(ChatMessage(id = run.requestId, role = MessageRole.AGENT,
+                    content = "Восстановление ожидания видео…", timestamp = run.timestamp))
+                sessionHistoryCache[run.conversationId] = messages
+                if (visible) _messages.value = messages
+                videoRunContexts[run.requestId] = run
+                _pendingVideoTaskIds.update { it + run.requestId }
+                if (run.paused) commitMediaMessage(run.conversationId, run.title, run.target, run.requestId) {
+                    it.copy(content = "Ожидание приостановлено: ${run.lastError}", isStreaming = false)
+                } else launchVideoRun(run, resume = true)
+            }
+        }
+    }
+
+    fun resumeVideoTask(requestId: String) {
+        if (requestId in pausingMediaJobs) {
+            if (videoRunContexts.containsKey(requestId)) resumeAfterMediaPause.add(requestId)
+            return
+        }
+        if (mediaJobs.containsKey(requestId) || !resumingVideoTasks.add(requestId)) return
+        agentExecutionScope.launch {
+            try {
+            val run = videoRunContexts[requestId] ?: withContext(Dispatchers.IO) { runCatching { videoRunStore.load().firstOrNull { it.requestId == requestId } }.getOrNull() }
+                ?: return@launch
+            if (mediaJobs.containsKey(requestId) || requestId in pausingMediaJobs) return@launch
+            val durable = requestId !in temporaryVideoRuns
+            val resumed = run.copy(paused = false, lastError = "")
+            try {
+                if (durable) withContext(Dispatchers.IO) { videoRunStore.save(resumed) }
+                // Another click may have resumed while the checkpoint write suspended.
+                if (mediaJobs.containsKey(requestId) || requestId in pausingMediaJobs) return@launch
+                launchVideoRun(resumed, resume = true, durable = durable)
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure
+                _mediaGenerationStatus.value = "Не удалось восстановить ожидание. Новый платный запуск не выполнялся."
+            }
+            } finally { resumingVideoTasks.remove(requestId) }
+        }
+    }
+
+    fun generateOpenRouterMediaInChat(prompt: String, modelId: String, isVideo: Boolean) {
+        if (_isGeneratingMedia.value || pausingMediaJobs.isNotEmpty()) return
+        val cleanPrompt = prompt.trim()
+        val model = modelId.trim()
+        if (cleanPrompt.isBlank() || model.isBlank()) {
+            android.widget.Toast.makeText(getApplication(), "Выберите модель и опишите, что сгенерировать.", android.widget.Toast.LENGTH_LONG).show(); return
+        }
+        if (_settings.value.activeConversationId.isBlank()) updateSettings { it.copy(
+            activeConversationId = java.util.UUID.randomUUID().toString(), activeSessionTitle = cleanPrompt.take(48)) }
+        val source = _settings.value
+        val key = _openRouterApiKey.value.trim()
+        val durable = source.activeConversationId !in temporaryChatIds
+        _topModeTab.value = TopModeTab.CHAT; _drawerSection.value = DrawerSection.CHAT
+        val timestamp = currentTimeFormatted()
+        val user = ChatMessage(role = MessageRole.USER,
+            content = "${if (isVideo) "Сгенерируй видео" else "Сгенерируй фото"} ($model): $cleanPrompt", timestamp = timestamp)
+        val id = "media_gen_" + java.util.UUID.randomUUID().toString()
+        _mediaGenerationStatus.value = "Подготовка ${if (isVideo) "видео" else "изображения"}…"
+        _messages.update { it + user + ChatMessage(id = id, role = MessageRole.AGENT, content = _mediaGenerationStatus.value,
+            isStreaming = true, timestamp = timestamp) }
+        cacheCurrentSession()
+        mediaJobConversations[id] = source.activeConversationId
+        registerMediaJob(id) {
+            if (isVideo) {
+                try {
+                    val direct = source.executionTarget == AgentExecutionTarget.PHONE_LOCAL_RESOURCES && key.isNotBlank()
+                    val base = if (direct) VideoRun.DIRECT_API_BASE else backendClient.resolveVideoBridge(source.pcBridgeUrl)
+                        ?: throw java.io.IOException("Мост ПК недоступен. Для работы без ПК выберите телефон и укажите ключ OpenRouter")
+                    val run = VideoRun(id, user.id, source.activeConversationId, source.activeSessionTitle, source.executionTarget,
+                        base, model, cleanPrompt, timestamp, if (key.isBlank()) "" else videoKeyHash(key),
+                        transport = if (direct) VideoTransport.PHONE_API else VideoTransport.PC_BRIDGE)
+                    videoRunContexts[id] = run
+                    if (!durable) temporaryVideoRuns.add(id)
+                    _pendingVideoTaskIds.update { it + id }
+                    if (durable) withContext(Dispatchers.IO) { videoRunStore.save(run) } // Must commit before the paid start.
+                    // The finalizer checks identity so this handoff cannot remove the new monitor.
+                    mediaJobs.remove(id)
+                    launchVideoRun(run, resume = false, initialKey = key, durable = durable)
+                } catch (failure: Throwable) {
+                    if (failure is kotlinx.coroutines.CancellationException) throw failure
+                    forgetVideoRun(id)
+                    _mediaGenerationStatus.value = "Видеозапуск не отправлен: ${failure.message}"
+                    commitMediaMessage(source.activeConversationId, source.activeSessionTitle, source.executionTarget, id) {
+                        it.copy(content = _mediaGenerationStatus.value, isStreaming = false)
+                    }
+                }
+            } else if (source.executionTarget == AgentExecutionTarget.PHONE_LOCAL_RESOURCES) try {
+                val known = _openRouterModels.value.firstOrNull { it.id == model }
+                directImageClient.execute(model, cleanPrompt, key, File(getApplication<Application>().filesDir, "generated_media"),
+                    knownChatImageModel = known?.isImageGen == true,
+                    onSaved = { image ->
+                        withContext(Dispatchers.Main.immediate) {
+                            _mediaGenerationStatus.value = "Готово: ${image.fileName}"
+                            commitMediaMessage(source.activeConversationId, source.activeSessionTitle, source.executionTarget, id) {
+                                it.copy(content = "Изображение готово и сохранено на телефоне.",
+                                    isStreaming = false, generatedMedia = listOf(image))
+                            }
+                            refreshPhoneFiles()
+                        }
+                    })
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure
+                val message = if (failure is com.google.antigravity.network.OpenRouterImageFailure) failure.message.orEmpty()
+                    else "Не удалось получить или сохранить изображение. Автоматический повтор не отправлялся."
+                _mediaGenerationStatus.value = message
+                commitMediaMessage(source.activeConversationId, source.activeSessionTitle, source.executionTarget, id) {
+                    it.copy(content = message, isStreaming = false)
+                }
+            } else try {
+                val (media, error) = backendClient.generateOpenRouterMedia(source.pcBridgeUrl, cleanPrompt, model, false, key, id)
+                if (media != null) {
+                    val (saved, path) = phoneController.downloadMediaToPhone(media.mediaUrl, media.fileName, media.sizeBytes)
+                    val result = if (saved) media.copy(localPath = path, localPhonePath = path) else media
+                    _mediaGenerationStatus.value = "Готово: ${result.fileName}"
+                    commitMediaMessage(source.activeConversationId, source.activeSessionTitle, source.executionTarget, id) {
+                        it.copy(content = if (saved) "Изображение готово." else "Изображение готово. Сохранить на телефон не удалось; файл доступен в карточке.",
+                            isStreaming = false, generatedMedia = listOf(result))
+                    }
+                    refreshPhoneFiles()
                 } else {
-                    media
-                }
-                _mediaGenerationStatus.value = "Готово: ${updatedMedia.fileName}"
-                val finalContent = buildString {
-                    if (!replyOrErr.isNullOrBlank()) {
-                        appendLine(replyOrErr.trim())
-                    } else {
-                        appendLine(
-                            if (isVideo) "### Сгенерировано видео MP4 (`${updatedMedia.resolution}`, ${updatedMedia.durationSec} сек)"
-                            else "### Сгенерировано изображение PNG (`${updatedMedia.resolution}`)"
-                        )
-                        appendLine("- **Модель:** `${updatedMedia.modelId}`")
-                        appendLine("- **Прямая ссылка:** [Скачать ${updatedMedia.fileName}](${updatedMedia.mediaUrl})")
-                    }
-                    if (updatedMedia.localPath.isNotBlank()) {
-                        appendLine("- **Сохранено на смартфон:** `file:///${updatedMedia.localPath.replace('\\', '/').trimStart('/')}`")
-                    }
-                }.trim()
-                _messages.update { list ->
-                    list.map { msg ->
-                        if (msg.id == genMsgId) {
-                            msg.copy(
-                                content = finalContent,
-                                isThinkingExpanded = false,
-                                isStreaming = false,
-                                generatedMedia = listOf(updatedMedia)
-                            )
-                        } else msg
+                    _mediaGenerationStatus.value = "Не удалось получить изображение: $error"
+                    commitMediaMessage(source.activeConversationId, source.activeSessionTitle, source.executionTarget, id) {
+                        it.copy(content = _mediaGenerationStatus.value, isStreaming = false)
                     }
                 }
-                refreshPhoneFiles()
-            } else {
-                val errText = "Не удалось сгенерировать медиа: ${replyOrErr ?: "ошибка соединения"}"
-                _mediaGenerationStatus.value = errText
-                _messages.update { list ->
-                    list.map { msg ->
-                        if (msg.id == genMsgId) {
-                            msg.copy(
-                                content = errText,
-                                isThinkingExpanded = false,
-                                isStreaming = false
-                            )
-                        } else msg
-                    }
+            } catch (failure: Throwable) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure
+                _mediaGenerationStatus.value = "Ожидание изображения прервано. Повторный запуск не выполнялся."
+                commitMediaMessage(source.activeConversationId, source.activeSessionTitle, source.executionTarget, id) {
+                    it.copy(content = _mediaGenerationStatus.value, isStreaming = false)
                 }
             }
         }
@@ -2812,7 +3106,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
 
     fun downloadGeneratedMediaToPhone(media: GeneratedMediaAttachment) {
         viewModelScope.launch(Dispatchers.IO) {
-            val (dlOk, dlPath) = phoneController.downloadMediaToPhone(media.mediaUrl, media.fileName)
+            val (dlOk, dlPath) = phoneController.downloadMediaToPhone(media.mediaUrl, media.fileName, media.sizeBytes)
             if (dlOk) {
                 _messages.update { list ->
                     list.map { msg ->
@@ -2834,7 +3128,8 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
 
     // --- Панель субагентов «как у них» и уведомления о пачках ----------------
 
-    private fun applySwarmSnapshot(snapshot: SwarmSnapshot) {
+    private fun applySwarmSnapshot(snapshot: SwarmSnapshot, origin: SwarmRunOrigin) {
+        if (!origin.isCurrent(subagentOrigin) || !origin.accepts(snapshot)) return
         // Пустой ответ моста не перетирает известное состояние (прежнее поведение).
         if (snapshot.agents.isEmpty()) return
         _swarmAgents.value = snapshot.agents
@@ -2843,25 +3138,31 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
 
     private fun observeSubagentNotificationActions() {
         viewModelScope.launch {
-            SubagentActionReceiver.events.collect {
+            SubagentActionReceiver.events.collect { requestId ->
                 // «Отменить» из шторки — честный аналог их notification-действий
                 // (SessionAnswer/Reply); переписки с сессиями у нас нет.
-                cancelSubagentAnalysis()
+                cancelSubagentAnalysis(requestId)
             }
         }
     }
 
     fun refreshSwarmAgents() {
-        if (_settings.value.executionTarget == AgentExecutionTarget.PHONE_LOCAL_RESOURCES || subagentRequestId.isBlank()) return
+        val origin = subagentOrigin ?: return
+        if (_settings.value.executionTarget == AgentExecutionTarget.PHONE_LOCAL_RESOURCES ||
+            origin.conversationId != _settings.value.activeConversationId) return
         viewModelScope.launch {
-            val remote = backendClient.fetchMultiAgentSwarmSnapshot(_settings.value.pcBridgeUrl, subagentRequestId)
-            if (remote.agents.isNotEmpty()) applySwarmSnapshot(remote)
+            val remote = backendClient.fetchMultiAgentSwarmSnapshot(origin.bridgeUrl, origin.requestId)
+            if (remote.agents.isNotEmpty()) applySwarmSnapshot(remote, origin)
         }
     }
 
     fun dispatchSwarmTask(taskPrompt: String, prepareChanges: Boolean = false) {
         val clean = taskPrompt.trim()
         if (clean.isEmpty() || _isSwarmTaskActive.value) return
+        if (_settings.value.pcBridgeUrl.isBlank()) {
+            android.widget.Toast.makeText(getApplication(), "Укажите адрес моста ПК в настройках.", android.widget.Toast.LENGTH_LONG).show()
+            return
+        }
         if (_temporaryChatActive.value) {
             android.widget.Toast.makeText(getApplication(), "Субагенты недоступны во временном чате: задания сохраняются на ПК.", android.widget.Toast.LENGTH_LONG).show()
             return
@@ -2872,28 +3173,43 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
         val sourceSession = sourceSettings.activeConversationId
         subagentSourceSession.value = sourceSession
         val requestId = java.util.UUID.randomUUID().toString()
+        val origin = SwarmRunOrigin(requestId, sourceSession, sourceSettings.pcBridgeUrl)
+        subagentOrigin = origin
         subagentRequestId = requestId
+        _swarmAgents.value = emptyList()
+        _swarmPanelState.value = SubagentPanelState.EMPTY
         _isSwarmTaskActive.value = true
         swarmPollingJob = viewModelScope.launch {
             try {
-                val acceptedSnap = backendClient.manageMultiAgentSwarmSnapshot(
-                    pcBridgeUrl = _settings.value.pcBridgeUrl, action = if (prepareChanges) "dispatch_code_task" else "dispatch_task", task = clean,
-                    model = _settings.value.selectedModelId, requestId = requestId
+                var acceptedSnap = backendClient.manageMultiAgentSwarmSnapshot(
+                    pcBridgeUrl = origin.bridgeUrl, action = if (prepareChanges) "dispatch_code_task" else "dispatch_task", task = clean,
+                    model = sourceSettings.selectedModelId, requestId = origin.requestId
                 )
+                // The first cancel may have arrived before the bridge knew this ID.
+                // Replay once after dispatch returns, including after a chat/run switch.
+                // Routing stays with the old origin; only the UI update needs current ownership.
+                if (origin.cancellationRequested) {
+                    val cancelled = backendClient.manageMultiAgentSwarmSnapshot(
+                        origin.bridgeUrl, "cancel_task", requestId = origin.requestId
+                    )
+                    if (origin.accepts(cancelled) && cancelled.agents.isNotEmpty()) acceptedSnap = cancelled
+                }
+                if (!origin.isCurrent(subagentOrigin) || !origin.accepts(acceptedSnap)) return@launch
                 val accepted = acceptedSnap.agents
                 if (accepted.isEmpty()) {
                     android.widget.Toast.makeText(getApplication(), "Не удалось запустить субагентов. Проверьте мост и выбранную модель CLI.", android.widget.Toast.LENGTH_LONG).show()
                     return@launch
                 }
-                applySwarmSnapshot(acceptedSnap)
+                applySwarmSnapshot(acceptedSnap, origin)
                 // Уведомление «как у них»: «Выполняется N задач…», действие «Отменить».
-                SubagentNotifier.notifyStarted(
+                if (accepted.any { it.isInProgress }) SubagentNotifier.notifyStarted(
                     getApplication(),
                     acceptedSnap.runningTasks ?: accepted.count { it.isInProgress },
                     requestId
                 )
                 val pollingStarted = android.os.SystemClock.elapsedRealtime()
                 while (_swarmAgents.value.any { it.isInProgress }) {
+                    if (!origin.isCurrent(subagentOrigin)) return@launch
                     if (android.os.SystemClock.elapsedRealtime() - pollingStarted > 360000L) {
                         // Статус задач неизвестен — ongoing-уведомление честно
                         // убираем (без выдуманного «завершено»), факт — в Toast.
@@ -2902,9 +3218,11 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                         return@launch
                     }
                     delay(1500)
-                    val fresh = backendClient.fetchMultiAgentSwarmSnapshot(_settings.value.pcBridgeUrl, subagentRequestId)
-                    if (fresh.agents.isNotEmpty()) applySwarmSnapshot(fresh)
+                    val fresh = backendClient.fetchMultiAgentSwarmSnapshot(origin.bridgeUrl, origin.requestId)
+                    if (!origin.isCurrent(subagentOrigin)) return@launch
+                    if (fresh.agents.isNotEmpty()) applySwarmSnapshot(fresh, origin)
                 }
+                if (!origin.isCurrent(subagentOrigin)) return@launch
                 val report = _swarmAgents.value.joinToString("\n\n") { agent ->
                     "## ${agent.name} (${agent.status})\n" + agent.stepLogs.joinToString("\n") + if (agent.changeReview.isNotBlank()) "\n\n${agent.changeReview}" else ""
                 }
@@ -2936,18 +3254,28 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                 } else if (cancelledRun) {
                     android.widget.Toast.makeText(getApplication(), "Анализ остановлен. Результаты не добавлены в чат.", android.widget.Toast.LENGTH_LONG).show()
                 }
-            } finally { _isSwarmTaskActive.value = false }
+            } finally { if (origin.isCurrent(subagentOrigin)) _isSwarmTaskActive.value = false }
         }
     }
 
-    fun cancelSubagentAnalysis() {
-        if (_messages.value.any { msg -> msg.toolCalls.any { it.toolName == "delegate_task" && it.status == ToolCallStatus.RUNNING } }) {
+    fun cancelSubagentAnalysis() = cancelSubagentAnalysis(null)
+
+    private fun cancelSubagentAnalysis(notificationRequestId: String?) {
+        if (notificationRequestId == null && _messages.value.any { msg -> msg.toolCalls.any { it.toolName == "delegate_task" && it.status == ToolCallStatus.RUNNING } }) {
             stopActiveGeneration()
             return
         }
+        val origin = subagentOrigin ?: return
+        if (notificationRequestId != null) {
+            if (!origin.matchesCancellation(notificationRequestId)) return
+        } else if (origin.conversationId != _settings.value.activeConversationId) return
+        origin.requestCancellation()
         viewModelScope.launch {
-            val state = backendClient.manageMultiAgentSwarmSnapshot(_settings.value.pcBridgeUrl, "cancel_task", requestId = subagentRequestId)
-            if (state.agents.isNotEmpty()) applySwarmSnapshot(state)
+            val state = backendClient.manageMultiAgentSwarmSnapshot(origin.bridgeUrl, "cancel_task", requestId = origin.requestId)
+            if (origin.isCurrent(subagentOrigin) && origin.accepts(state) && state.agents.isNotEmpty()) {
+                applySwarmSnapshot(state, origin)
+                if (notificationRequestId != null) SubagentNotifier.cancel(getApplication())
+            }
         }
     }
 
@@ -3230,7 +3558,7 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                 SlashMentionSuggestionItem("cmd_boost", "/boost", "/boost ", "Ускоренный режим глубокого рассуждения Stages A–I", "Команда", "⚡"),
                 SlashMentionSuggestionItem("cmd_compact", "/compact", "/compact", "Сжать контекстное окно и свернуть выводы инструментов", "Контекст", "📦"),
                 SlashMentionSuggestionItem("cmd_reset", "/reset", "/reset", "Сбросить контекстное окно (начать с чистого контекста)", "Контекст", "🧹"),
-                SlashMentionSuggestionItem("cmd_openrouter", "/openrouter", "/openrouter ", "Открыть каталог 452+ моделей OpenRouter (Дисковый кэш 0 мс), Фото и Видео", "OpenRouter", "🌐"),
+                SlashMentionSuggestionItem("cmd_openrouter", "/openrouter", "/openrouter ", "Открыть каталог моделей OpenRouter, изображений и видео", "OpenRouter", "🌐"),
                 SlashMentionSuggestionItem("cmd_gdrive", "/gdrive", "/gdrive ", "Создать или прочитать файл на Google Диске (Gemini & OpenRouter)", "Google Диск", "☁️"),
                 SlashMentionSuggestionItem("cmd_sandbox", "/sandbox", "/sandbox ", "Запустить тест в изолированной песочнице Android", "Песочница", "🧪"),
                 SlashMentionSuggestionItem("cmd_cli", "/cli", "/cli ", "Выполнить команду в Android CLI терминале смартфона", "CLI", "💻"),
@@ -3416,6 +3744,30 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
             }
         }
         if (prompt.isEmpty() && currentAttachments.isEmpty()) return
+
+        // The model picker and composer must dispatch to the same output API.
+        // A video/image model cannot be sent through text chat/completions.
+        if (queuedTurn == null && versionAnchor == null && !viaVoice && !prompt.startsWith("/")) {
+            val selected = _openRouterModels.value.firstOrNull { it.id == _settings.value.selectedModelId }
+            val route = com.google.antigravity.model.openRouterComposerRoute(selected)
+            if (route != com.google.antigravity.model.OpenRouterComposerRoute.TEXT) {
+                if (currentAttachments.isNotEmpty()) {
+                    android.widget.Toast.makeText(getApplication(),
+                        "Генерация по вложениям пока не поддерживается. Уберите вложения для генерации по описанию.",
+                        android.widget.Toast.LENGTH_LONG).show()
+                    setComposerDraft(rawPrompt)
+                    return
+                }
+                if (_isGeneratingMedia.value || pausingMediaJobs.isNotEmpty()) {
+                    setComposerDraft(rawPrompt)
+                    return
+                }
+                _composerTokens.value = ComposerTokensState()
+                generateOpenRouterMediaInChat(prompt, _settings.value.selectedModelId,
+                    route == com.google.antigravity.model.OpenRouterComposerRoute.VIDEO)
+                return
+            }
+        }
 
         if (queuedTurn == null && !viaVoice && activeGenerationJob?.isActive == true) {
             val settings = _settings.value
@@ -3741,12 +4093,13 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
                 // Честное состояние ошибки: сетевые сбои отделены от прочих.
                 val offline = e is java.net.UnknownHostException || e is java.net.ConnectException ||
                     e is java.net.SocketTimeoutException || e is java.io.IOException
-                val errorText = if (offline) {
-                    "Связь прервалась — ответ не завершён. Переписка и результаты действий сохранены на телефоне. " +
+                val saved = if (_temporaryChatActive.value) "Временный чат не сохраняется в историю. "
+                    else "Переписка сохранена на телефоне. "
+                val errorText = when {
+                    e is com.google.antigravity.network.OpenRouterChatFailure -> e.message.orEmpty()
+                    offline -> "Связь прервалась — ответ не завершён. " + saved +
                         "Проверьте подключение и нажмите «Повторить»."
-                } else {
-                    "Не удалось получить ответ (${e.localizedMessage ?: "ошибка"}). " +
-                        "Переписка сохранена на телефоне; попробуйте ещё раз."
+                    else -> "Не удалось получить ответ. " + saved + "Попробуйте ещё раз."
                 }
                 _messages.update { list ->
                     list.map { msg ->
@@ -3821,6 +4174,10 @@ class AntigravityViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun regenerateResponseForMessage(messageId: String) {
+        if (messageId.startsWith("media_gen_")) {
+            if (messageId in _pendingVideoTaskIds.value) resumeVideoTask(messageId)
+            return // Never send a media prompt to the text model or silently purchase a new generation.
+        }
         val responseIndex = _messages.value.indexOfFirst { it.id == messageId && it.role == MessageRole.AGENT }
         if (responseIndex < 0) return
         val anchor = _messages.value.take(responseIndex).lastOrNull {

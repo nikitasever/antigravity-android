@@ -50,9 +50,9 @@ if (-not $watchdogAlive) {
 # 3. Wait up to 10s for bridge health
 for ($i = 0; $i -lt 10; $i++) {
     try {
-        $h = Invoke-RestMethod -Uri "http://127.0.0.1:8787/api/status" -Method Get -TimeoutSec 2 -ErrorAction Stop
+        $h = Invoke-RestMethod -Uri "http://127.0.0.1:8787/api/health" -Method Get -TimeoutSec 2 -ErrorAction Stop
         if ($h.ok -eq $true) {
-            Write-Host "[ensure-bridge] Bridge is ONLINE on port 8787 (publicUrl=$($h.publicTunnelUrl))"
+            Write-Host "[ensure-bridge] Bridge is ONLINE on port 8787"
             exit 0
         }
     } catch {}

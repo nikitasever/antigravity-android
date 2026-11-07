@@ -213,7 +213,7 @@ class RealtimeVoiceEngine(
         .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
         .build()
 
-    private val okHttpClient = OkHttpClient.Builder()
+    private val okHttpClient = OkHttpClient.Builder().addInterceptor(com.google.antigravity.network.BridgeCredentials(context).interceptor()).followRedirects(false).followSslRedirects(false)
         .connectTimeout(8, TimeUnit.SECONDS)
         .readTimeout(25, TimeUnit.SECONDS)
         .build()
@@ -1199,16 +1199,11 @@ class RealtimeVoiceEngine(
             return null
         }
 
-        val candidateBaseUrls = buildList {
-            if (!forcePublicTunnelOnly) {
-                add("http://10.0.2.2:8787")
-                add("http://127.0.0.1:8787")
-            }
-            if (cleanBridge.isNotBlank() && (!forcePublicTunnelOnly || (!cleanBridge.contains("10.0.2.2") && !cleanBridge.contains("127.0.0.1")))) {
-                add(cleanBridge)
-            }
-            addAll(com.google.antigravity.network.AntigravityBackendClient.DEFAULT_PUBLIC_BRIDGE_URLS)
-        }.distinct()
+        val candidateBaseUrls = com.google.antigravity.network.bridgeCandidatesForDevice(
+            configured = cleanBridge,
+            emulator = android.os.Build.HARDWARE in setOf("ranchu", "goldfish"),
+            publicOnly = forcePublicTunnelOnly, cached = "", discovered = emptyList(),
+            publicDefaults = com.google.antigravity.network.AntigravityBackendClient.DEFAULT_PUBLIC_BRIDGE_URLS)
 
         for (base in candidateBaseUrls) {
             val url = "$base/api/tts?voice=${URLEncoder.encode(voiceName, "UTF-8")}&rate=$speechRate&text=$encoded"

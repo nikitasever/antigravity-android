@@ -931,10 +931,10 @@ data class GeneratedMediaAttachment(
     val localPath: String = "",
     val prompt: String = "",
     val modelId: String = "",
-    val mimeType: String = "video/mp4",
-    val resolution: String = "640x360",
-    val width: Int = 640,
-    val height: Int = 360,
+    val mimeType: String = "",
+    val resolution: String = "",
+    val width: Int = 0,
+    val height: Int = 0,
     val durationSec: Int = 0,
     val sizeBytes: Long = 0L,
     val localPhonePath: String? = null
@@ -1097,7 +1097,8 @@ data class OpenRouterModelItem(
     val categories: List<OpenRouterCategory> = listOf(OpenRouterCategory.ALL),
     val pricingPrompt: String = "0",
     val pricingCompletion: String = "0",
-    val priceLabel: String = "Бесплатно (Free)"
+    val priceLabel: String = "Тариф OpenRouter",
+    val generationCapabilitiesJson: String = "{}"
 )
 
 data class SwarmAgentNode(
@@ -1124,7 +1125,8 @@ data class SwarmAgentNode(
     val workspaceMode: String? = null,
     val sharedDirectoryWarning: String? = null
 ) {
-    val isInProgress: Boolean get() = isSettling || status in setOf("queued", "running")
+    val isRunning: Boolean get() = status in setOf("running", "active", "working")
+    val isInProgress: Boolean get() = isSettling || status == "queued" || isRunning
 }
 
 typealias SwarmSubAgentItem = SwarmAgentNode

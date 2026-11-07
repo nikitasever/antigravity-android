@@ -26,7 +26,7 @@ Write-WatchdogLog "Watchdog started (PID=$PID) watching $ServerJs using $NodeExe
 while ($true) {
     $healthy = $false
     try {
-        $resp = Invoke-RestMethod -Uri "http://127.0.0.1:8787/api/status" -Method Get -TimeoutSec 2 -ErrorAction Stop
+        $resp = Invoke-RestMethod -Uri "http://127.0.0.1:8787/api/health" -Method Get -TimeoutSec 2 -ErrorAction Stop
         if ($resp -and $resp.ok -eq $true) {
             $healthy = $true
         }

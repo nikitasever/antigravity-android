@@ -54,6 +54,13 @@ scrolls up; do not pull someone away from older messages while reading.
 
 ## Elevation & Depth
 
+Generated-media cards use the existing `DesignColors.Surface`, `Border` and text
+roles. Show a real bounded local image preview or a neutral file tile. No drawn
+orbital scene, synthetic playback progress, invented codec/HD badge or fixed
+duration/FPS is a media preview. Format labels come from the attachment MIME;
+unknown dimensions/duration remain absent. Opening a saved result uses the
+phone file through FileProvider so an unavailable bridge is not required.
+
 Use existing tonal surfaces for navigation and modal sheets.
 
 ## Shapes
@@ -354,3 +361,15 @@ Argument previews explicitly use TextPrimary on the dark chat background. Below
 360dp available width or above 115% system font scale, approval choices stack at
 full width; otherwise they share a row. Labels are centered, each target is at
 least 48dp, and the preview scrolls independently above the choices.
+
+## Каталог моделей и меню — 07.11.2026
+
+Сверены оригинальные `Screenshot_20261104_090907_Claude.jpg` (меню) и
+`Screenshot_20261104_091526_ChatGPT.jpg` (нейтральная поверхность меню), а также
+новые пользовательские скриншоты 17:39/17:41. Каталог OpenRouter — собственная
+функция: точный аналог в этих двух кадрах отсутствует. Он использует общие
+нейтральные токены, строки выбора с галочкой, поиск и один refresh; без
+технических имён файлов, зелёной строки кэша, отдельных синих кнопок каждой модели
+и Markdown-описаний, показанных как сырой текст. API-ключ скрыт по умолчанию.
+Меню оставляет 10% ширины для контекста чата, использует контурные основные
+иконки и 16sp подписи; дополнительные функции остаются в сворачиваемой группе.

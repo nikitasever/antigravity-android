@@ -13,9 +13,9 @@ const source = block[1].replace(/^          /gm, '');
 const request = JSON.parse(fs.readFileSync(path.join(root, '.github/release.json'), 'utf8'));
 const gradle = fs.readFileSync(path.join(root, 'app/build.gradle.kts'), 'utf8');
 
-async function validate({ changed = true, tagStatus = 404, tagSha = 'older', manifest = request } = {}) {
+async function validate({ changed = true, tagStatus = 404, tagSha = 'older', manifest = request, ref = 'refs/heads/main' } = {}) {
     let output = '', calls = 0, error = '';
-    const proc = { env: { GITHUB_SHA: 'current', GITHUB_REPOSITORY: 'nikitasever/antigravity-android', GH_TOKEN: 'test-only', GITHUB_OUTPUT: 'output' }, exitCode: 0, exit: () => { throw new Error('EXIT'); } };
+    const proc = { env: { GITHUB_SHA: 'current', GITHUB_REF: ref, GITHUB_REPOSITORY: 'nikitasever/antigravity-android', GH_TOKEN: 'test-only', GITHUB_OUTPUT: 'output' }, exitCode: 0, exit: () => { throw new Error('EXIT'); } };
     const files = { readFileSync: p => p.endsWith('release.json') ? JSON.stringify(manifest) : gradle,
         appendFileSync: (p, text) => { assert.equal(p, 'output'); output += text; } };
     try {
@@ -61,4 +61,14 @@ test('release: failed tag authorization is not treated as an absent tag', async 
 test('release: rerunning the same commit keeps the same release target', async () => {
     const r = await validate({ tagStatus: 200, tagSha: 'current' });
     assert.equal(r.code, 0); assert.match(r.output, /publish=true/);
+});
+
+
+test('release: a pushed tag must match the request', async () => {
+    const r = await validate({ ref: 'refs/tags/v0.0.1' });
+    assert.equal(r.code, 1); assert.equal(r.calls, 0); assert.match(r.error, /Tag does not match/);
+});
+test('release: unchanged request on a matching tag still verifies target', async () => {
+    const r = await validate({ changed: false, ref: `refs/tags/${request.tag}` });
+    assert.equal(r.code, 0); assert.equal(r.calls, 1); assert.match(r.output, /publish=true/);
 });

@@ -1,6 +1,7 @@
 package com.google.antigravity.ui.components
 
 import android.annotation.SuppressLint
+import androidx.compose.foundation.layout.imePadding
 import android.graphics.BitmapFactory
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -464,314 +465,6 @@ fun ReferenceDiffCard(
 // Section 8.1: Generated Photo (PNG) & Video (MP4) Attachment Card
 // ---------------------------------------------------------------------------
 
-@SuppressLint("SetJavaScriptEnabled")
-@Composable
-fun GeneratedMediaCard(
-    media: GeneratedMediaAttachment,
-    onDownloadToPhone: (GeneratedMediaAttachment) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val context = LocalContext.current
-    val clipboard = LocalClipboardManager.current
-    val isVideo = media.type.equals("video", ignoreCase = true) || media.fileName.endsWith(".mp4", ignoreCase = true)
-
-    val localBitmap = remember(media.localPath) {
-        if (!isVideo && media.localPath.isNotBlank()) {
-            runCatching {
-                val file = File(media.localPath)
-                if (file.exists()) BitmapFactory.decodeFile(file.absolutePath)?.asImageBitmap() else null
-            }.getOrNull()
-        } else null
-    }
-
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(Color(0xFF15171E))
-            .border(1.dp, Color(0xFF2E3446), RoundedCornerShape(14.dp))
-            .padding(12.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(if (isVideo) Color(0xFF2E1A47) else Color(0xFF132F2B))
-                    .padding(horizontal = 8.dp, vertical = 3.dp)
-            ) {
-                Text(
-                    text = if (isVideo) "MP4 ВИДЕО • H.264" else "PNG ФОТО • HD",
-                    color = if (isVideo) Color(0xFFC084FC) else Color(0xFF34D399),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = media.modelId,
-                color = Color(0xFF93C5FD),
-                fontSize = 11.5.sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
-            Text(
-                text = media.resolution,
-                color = Color(0xFF8B949E),
-                fontSize = 11.sp
-            )
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Встроенное превью (Bitmap или WebView для MP4/PNG)
-        if (localBitmap != null) {
-            Image(
-                bitmap = localBitmap,
-                contentDescription = media.fileName,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(175.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .border(1.dp, Color(0xFF2A2E39), RoundedCornerShape(10.dp))
-            )
-        } else if (media.mediaUrl.isNotBlank()) {
-            var isPlayingInlineWebView by remember { mutableStateOf(false) }
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(172.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Color(0xFF0A0F1D))
-                    .border(1.dp, Color(0xFF2D3B55), RoundedCornerShape(10.dp))
-                    .clickable { isPlayingInlineWebView = !isPlayingInlineWebView }
-            ) {
-                // Skia-composited Orbital H.264 Frame (always visible in UI and screencap)
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    val cx = size.width * 0.5f
-                    val cy = size.height * 0.46f
-                    drawCircle(
-                        color = Color(0xFF172554),
-                        radius = size.minDimension * 0.58f,
-                        center = androidx.compose.ui.geometry.Offset(cx, cy)
-                    )
-                    drawOval(
-                        color = Color(0xFF38BDF8),
-                        topLeft = androidx.compose.ui.geometry.Offset(cx - 190f, cy - 68f),
-                        size = androidx.compose.ui.geometry.Size(380f, 136f),
-                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.5f)
-                    )
-                    drawOval(
-                        color = Color(0xFF818CF8).copy(alpha = 0.55f),
-                        topLeft = androidx.compose.ui.geometry.Offset(cx - 125f, cy - 42f),
-                        size = androidx.compose.ui.geometry.Size(250f, 84f),
-                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f)
-                    )
-                    drawCircle(
-                        color = DesignColors.AccentBlue,
-                        radius = 30f,
-                        center = androidx.compose.ui.geometry.Offset(cx, cy)
-                    )
-                    drawCircle(
-                        color = Color(0xFF34D399),
-                        radius = 13f,
-                        center = androidx.compose.ui.geometry.Offset(cx + 150f, cy - 38f)
-                    )
-                    drawCircle(
-                        color = Color(0xFFFBBF24),
-                        radius = 10f,
-                        center = androidx.compose.ui.geometry.Offset(cx - 110f, cy + 28f)
-                    )
-                }
-
-                // Top HUD overlay
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 10.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color(0xCC0F172A))
-                            .padding(horizontal = 8.dp, vertical = 3.dp)
-                    ) {
-                        Text(
-                            text = if (isVideo) "H.264 Baseline (avc1) • ${media.fileName}" else "PNG HD • ${media.fileName}",
-                            color = Color(0xFF93C5FD),
-                            fontSize = 10.5.sp,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    Text(
-                        text = if (isVideo) "00:03 / 12 FPS" else "HD",
-                        color = Color(0xFF4ADE80),
-                        fontSize = 10.5.sp,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                // Center Play button badge
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xCC2563EB))
-                        .border(1.5.dp, Color.White, CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = "Воспроизвести",
-                        tint = Color.White,
-                        modifier = Modifier.size(26.dp)
-                    )
-                }
-
-                // Bottom Video Scrubber Bar
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .background(Color(0xCC090D16))
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                ) {
-                    LinearProgressIndicator(
-                        progress = { 0.68f },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(4.dp)
-                            .clip(RoundedCornerShape(2.dp)),
-                        color = Color(0xFF38BDF8),
-                        trackColor = Color(0xFF1E293B)
-                    )
-                    Spacer(modifier = Modifier.height(3.dp))
-                    Text(
-                        text = media.prompt.ifBlank { "Орбитальная станция Antigravity 2026" },
-                        color = Color(0xFFE2E8F0),
-                        fontSize = 10.5.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                if (isPlayingInlineWebView) {
-                    AndroidView(
-                        factory = { ctx ->
-                            WebView(ctx).apply {
-                                settings.javaScriptEnabled = true
-                                settings.domStorageEnabled = true
-                                settings.mediaPlaybackRequiresUserGesture = false
-                                setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                                webChromeClient = WebChromeClient()
-                                webViewClient = WebViewClient()
-                                val html = if (isVideo) {
-                                    """
-                                    <!DOCTYPE html><html><body style="margin:0;background:#0B0D13;display:flex;align-items:center;justify-content:center;height:100vh;">
-                                    <video src="${media.mediaUrl}" controls autoplay loop muted playsinline style="max-width:100%;max-height:100%;border-radius:8px;"></video>
-                                    </body></html>
-                                    """.trimIndent()
-                                } else {
-                                    """
-                                    <!DOCTYPE html><html><body style="margin:0;background:#0B0D13;display:flex;align-items:center;justify-content:center;height:100vh;">
-                                    <img src="${media.mediaUrl}" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:8px;" />
-                                    </body></html>
-                                    """.trimIndent()
-                                }
-                                loadDataWithBaseURL(media.mediaUrl, html, "text/html", "UTF-8", null)
-                            }
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Подсвеченная кликабельная ссылка
-        Text(
-            text = media.mediaUrl,
-            color = Color(0xFF58A6FF),
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
-            textDecoration = TextDecoration.Underline,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { openClickableLink(context, clipboard, media.mediaUrl) }
-        )
-
-        if (media.localPath.isNotBlank()) {
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "✓ Сохранено на телефон: ${media.localPath.substringAfterLast('/')}",
-                color = Color(0xFF4ADE80),
-                fontSize = 11.5.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xFF1F6FEB))
-                    .clickable { onDownloadToPhone(media) }
-                    .padding(vertical = 8.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = if (media.localPath.isNotBlank()) "Скачать повторно" else "Скачать на телефон",
-                    color = Color.White,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xFF21262D))
-                    .border(1.dp, Color(0xFF363B42), RoundedCornerShape(8.dp))
-                    .clickable { openClickableLink(context, clipboard, media.mediaUrl) }
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Открыть",
-                    color = Color(0xFF58A6FF),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1
-                )
-            }
-        }
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Section 9: Context Window Badge & Inspector/Reset Sheet
 // ---------------------------------------------------------------------------
@@ -984,427 +677,108 @@ fun OpenRouterHubSheet(
     cacheStatusText: String = "Кэш синхронизирован • openrouter_models_cache.json"
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var selectedCategory by remember { mutableStateOf(OpenRouterCategory.ALL) }
-    var searchQuery by remember { mutableStateOf("") }
-    var showApiKeyPanel by remember { mutableStateOf(false) }
-    var apiKeyDraft by remember(openRouterApiKey) { mutableStateOf(openRouterApiKey) }
-    var customModelDraft by remember { mutableStateOf("") }
-    var mediaPromptDraft by remember {
-        mutableStateOf("Футуристическая орбитальная станция Antigravity 2026 над неоновым городом")
+    var category by remember { mutableStateOf(OpenRouterCategory.ALL) }
+    var query by remember { mutableStateOf("") }
+    var credentials by remember { mutableStateOf(false) }
+    var keyDraft by remember(openRouterApiKey) { mutableStateOf(openRouterApiKey) }
+    var customId by remember { mutableStateOf("") }
+    var showKey by remember { mutableStateOf(false) }
+    val filtered = remember(models, category, query) {
+        val search = query.trim()
+        models.filter { (category == OpenRouterCategory.ALL || category in it.categories) &&
+            (search.isBlank() || it.name.contains(search, true) || it.id.contains(search, true)) }
     }
-
-    val filteredModels = remember(models, selectedCategory, searchQuery) {
-        models.filter { m ->
-            val catMatch = selectedCategory == OpenRouterCategory.ALL || m.categories.contains(selectedCategory)
-            val q = searchQuery.trim().lowercase()
-            val queryMatch = q.isEmpty() ||
-                m.id.lowercase().contains(q) ||
-                m.name.lowercase().contains(q) ||
-                m.description.lowercase().contains(q)
-            catMatch && queryMatch
-        }
-    }
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = DesignColors.Bg,
-        contentColor = Color.White
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.92f)
-                .padding(horizontal = 16.dp)
-        ) {
-            // Top Header (Clean text "Openrouter", no icons or numbers on tabs/functions)
-            SheetHeader(title = "Openrouter", onClose = onDismiss)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = cacheStatusText.replace("⚡ ", ""),
-                        color = Color(0xFF34D399),
-                        fontSize = 10.8.sp,
-                        fontFamily = FontFamily.Monospace,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState,
+        containerColor = DesignColors.Bg, contentColor = DesignColors.TextPrimary) {
+        Column(Modifier.fillMaxWidth().fillMaxHeight(0.92f).imePadding().padding(horizontal = 16.dp)) {
+            SheetHeader(title = "Модели OpenRouter", onClose = onDismiss)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(if (isSyncing) "Обновление списка…" else "Моделей: ${models.size}",
+                    color = DesignColors.TextSecondary, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                IconButton(onClick = onSyncNow, enabled = !isSyncing) {
+                    if (isSyncing) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                    else Icon(Icons.Default.Refresh, "Обновить модели", tint = DesignColors.TextSecondary)
                 }
-                IconButton(onClick = onSyncNow) {
-                    if (isSyncing) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            strokeWidth = 2.dp,
-                            color = DesignColors.AccentBlue
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "Синхронизировать с OpenRouter",
-                            tint = DesignColors.AccentBlue
-                        )
-                    }
-                }
-
+                TextButton(onClick = { credentials = !credentials }) { Text("Ключ и модель", color = DesignColors.TextPrimary) }
             }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // Quick Actions Row: Sync + API Key / Custom Model Toggle
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xFF1B2436))
-                        .border(1.dp, Color(0xFF2D3F5E), RoundedCornerShape(10.dp))
-                        .clickable { onSyncNow() }
-                        .padding(vertical = 7.dp, horizontal = 10.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = if (isSyncing) "Обновление кэша…" else "Обновить кэш с OpenRouter",
-                        color = Color(0xFF93C5FD),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(if (showApiKeyPanel) DesignColors.AccentBlue else Color(0xFF1E2028))
-                        .border(1.dp, Color(0xFF323644), RoundedCornerShape(10.dp))
-                        .clickable { showApiKeyPanel = !showApiKeyPanel }
-                        .padding(vertical = 7.dp, horizontal = 12.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "Ключ и ID",
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        softWrap = false
-                    )
-                }
+            if (cacheStatusText.contains("ошиб", true) || cacheStatusText.contains("частич", true)) {
+                Text("Список обновлён не полностью. Можно выбрать сохранённую модель или повторить обновление.",
+                    color = DesignColors.TextSecondary, fontSize = 13.sp)
             }
-
-            // Collapsible API Key & Custom Model Input
-            AnimatedVisibility(visible = showApiKeyPanel) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFF181B23))
-                        .border(1.dp, Color(0xFF2B3040), RoundedCornerShape(12.dp))
-                        .padding(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedTextField(
-                            value = apiKeyDraft,
-                            onValueChange = { apiKeyDraft = it },
-                            placeholder = { Text("sk-or-v1-... (Ключ OpenRouter API)", fontSize = 12.sp) },
-                            singleLine = true,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedBorderColor = DesignColors.AccentBlue,
-                                unfocusedBorderColor = Color(0xFF343946)
-                            ),
-                            modifier = Modifier.weight(1f)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(DesignColors.AccentBlue)
-                                .clickable { onSaveApiKey(apiKeyDraft) }
-                                .padding(horizontal = 12.dp, vertical = 12.dp)
-                        ) {
-                            Text("Сохранить", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedTextField(
-                            value = customModelDraft,
-                            onValueChange = { customModelDraft = it },
-                            placeholder = { Text("Свой ID (напр. openai/gpt-6.1-terra-pro)", fontSize = 12.sp) },
-                            singleLine = true,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedBorderColor = DesignColors.AccentBlue,
-                                unfocusedBorderColor = Color(0xFF343946)
-                            ),
-                            modifier = Modifier.weight(1f)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(DesignColors.AccentBlue)
-                                .clickable {
-                                    if (customModelDraft.isNotBlank()) {
-                                        onSelectCustomModel(customModelDraft)
-                                        onDismiss()
-                                    }
-                                }
-                                .padding(horizontal = 12.dp, vertical = 12.dp)
-                        ) {
-                            Text("Выбрать", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        }
+            AnimatedVisibility(credentials) {
+                Column(Modifier.heightIn(max = 230.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(value = keyDraft, onValueChange = { keyDraft = it }, singleLine = true,
+                        label = { Text("Ключ OpenRouter") }, modifier = Modifier.fillMaxWidth(),
+                        visualTransformation = if (showKey) androidx.compose.ui.text.input.VisualTransformation.None
+                            else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        trailingIcon = { TextButton(onClick = { showKey = !showKey }) { Text(if (showKey) "Скрыть" else "Показать") } },
+                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = DesignColors.TextPrimary,
+                            unfocusedTextColor = DesignColors.TextPrimary, focusedBorderColor = DesignColors.AccentBlue,
+                            unfocusedBorderColor = DesignColors.Border))
+                    TextButton(onClick = { onSaveApiKey(keyDraft.trim()); credentials = false }) { Text("Сохранить ключ") }
+                    OutlinedTextField(value = customId, onValueChange = { customId = it }, singleLine = true,
+                        label = { Text("ID модели") }, placeholder = { Text("провайдер/модель") },
+                        modifier = Modifier.fillMaxWidth(), colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = DesignColors.TextPrimary, unfocusedTextColor = DesignColors.TextPrimary,
+                            focusedBorderColor = DesignColors.AccentBlue, unfocusedBorderColor = DesignColors.Border))
+                    TextButton(enabled = customId.trim().isNotEmpty(), onClick = { onSelectCustomModel(customId.trim()); onDismiss() }) {
+                        Text("Выбрать по ID")
                     }
                 }
             }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // Category Filter Chips (clean text without icons or numbers)
-            val categories = listOf(
-                OpenRouterCategory.ALL to "Новейшие",
-                OpenRouterCategory.REASONING to "Reasoning",
-                OpenRouterCategory.VISION to "Vision",
-                OpenRouterCategory.IMAGE_GEN to "Фото",
-                OpenRouterCategory.VIDEO_GEN to "Видео",
-                OpenRouterCategory.AUDIO to "Аудио",
-                OpenRouterCategory.FREE to "Бесплатные"
-            )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                categories.forEach { (cat, label) ->
-                    val selected = selectedCategory == cat
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(50))
-                            .background(if (selected) DesignColors.AccentBlue else Color(0xFF1C1F29))
-                            .border(
-                                1.dp,
-                                if (selected) DesignColors.AccentBlue else Color(0xFF2D3242),
-                                RoundedCornerShape(50)
-                            )
-                            .clickable { selectedCategory = cat }
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
-                    ) {
-                        Text(
-                            text = label,
-                            color = if (selected) Color.White else Color(0xFFB4BCD0),
-                            fontSize = 12.sp,
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                            maxLines = 1
-                        )
-                    }
+            OutlinedTextField(value = query, onValueChange = { query = it }, singleLine = true,
+                placeholder = { Text("Поиск моделей", fontSize = 15.sp) }, leadingIcon = { Icon(Icons.Default.Search, null) },
+                trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) {
+                    Icon(androidx.compose.material.icons.Icons.Default.Close, "Очистить поиск")
+                } }, shape = RoundedCornerShape(28.dp), modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = DesignColors.TextPrimary,
+                    unfocusedTextColor = DesignColors.TextPrimary, focusedContainerColor = DesignColors.Surface,
+                    unfocusedContainerColor = DesignColors.Surface, focusedBorderColor = DesignColors.Border,
+                    unfocusedBorderColor = Color.Transparent))
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(OpenRouterCategory.ALL to "Все", OpenRouterCategory.REASONING to "Рассуждение",
+                    OpenRouterCategory.VISION to "Зрение", OpenRouterCategory.IMAGE_GEN to "Фото",
+                    OpenRouterCategory.VIDEO_GEN to "Видео", OpenRouterCategory.AUDIO to "Аудио",
+                    OpenRouterCategory.FREE to "Бесплатные").forEach { (value, label) ->
+                    androidx.compose.material3.FilterChip(selected = category == value,
+                        onClick = { category = value }, label = { Text(label) },
+                        colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                            containerColor = DesignColors.Bg, labelColor = DesignColors.TextSecondary,
+                            selectedContainerColor = DesignColors.SurfaceHigh, selectedLabelColor = DesignColors.TextPrimary))
                 }
             }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Search input
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                leadingIcon = {
-                    Icon(Icons.Default.Search, contentDescription = null, tint = Color(0xFF8B949E))
-                },
-                placeholder = {
-                    Text(
-                        "Поиск моделей Openrouter (gpt-6, claude, gemini, flux, veo)…",
-                        fontSize = 12.5.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                },
-                singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                    focusedBorderColor = DesignColors.AccentBlue,
-                    unfocusedBorderColor = Color(0xFF2B303C)
-                ),
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Live Model List
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                contentPadding = PaddingValues(bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(filteredModels, key = { it.id }) { item ->
-                    val isSelected = item.id == selectedModelId
-                    val isImg = item.categories.contains(OpenRouterCategory.IMAGE_GEN)
-                    val isVid = item.categories.contains(OpenRouterCategory.VIDEO_GEN)
-
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (isSelected) Color(0xFF17233B) else Color(0xFF181A22))
-                            .border(
-                                1.dp,
-                                if (isSelected) DesignColors.AccentBlue else Color(0xFF272B38),
-                                RoundedCornerShape(12.dp)
-                            )
-                            .clickable {
-                                onSelectModel(item)
-                                onDismiss()
+            LazyColumn(Modifier.fillMaxWidth().weight(1f), contentPadding = PaddingValues(bottom = 24.dp)) {
+                if (filtered.isEmpty()) item {
+                    Text(if (models.isEmpty()) "Список моделей пока пуст. Обновите его или укажите ID модели."
+                        else "Модели не найдены. Измените поиск или фильтр.", color = DesignColors.TextSecondary,
+                        modifier = Modifier.padding(vertical = 24.dp))
+                }
+                items(filtered, key = { it.id }) { model ->
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                        .background(if (model.id == selectedModelId) DesignColors.Surface else Color.Transparent)
+                        .clickable { onSelectModel(model); onDismiss() }.padding(horizontal = 12.dp, vertical = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                            Text(model.name, color = DesignColors.TextPrimary, fontSize = 16.sp,
+                                fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text(model.id, color = DesignColors.TextSubtle, fontSize = 12.sp,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            val details = buildList {
+                                if (model.isFree) add("Бесплатная")
+                                if (model.isVideoGen) add("Видео") else if (model.isImageGen) add("Изображения")
+                                if (model.isReasoning) add("Рассуждение")
+                                if (model.isVision) add("Зрение")
+                                if (model.contextLength > 0) add("${model.contextLength / 1000} тыс. контекст")
                             }
-                            .padding(12.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = item.name,
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(Color(0xFF1E293B))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    text = item.createdDate,
-                                    color = Color(0xFF93C5FD),
-                                    fontSize = 10.5.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    maxLines = 1
-                                )
-                            }
-                            if (item.isFree) {
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(Color(0xFF0F291E))
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                                ) {
-                                    Text(
-                                        text = "FREE",
-                                        color = Color(0xFF4ADE80),
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
+                            if (details.isNotEmpty()) Text(details.joinToString(" · "), color = DesignColors.TextSecondary,
+                                fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         }
-
-                        Spacer(modifier = Modifier.height(3.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = item.id,
-                                color = DesignColors.AccentBlue,
-                                fontSize = 11.5.sp,
-                                fontFamily = FontFamily.Monospace,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "${item.contextLength / 1000}K ctx",
-                                color = Color(0xFF8B949E),
-                                fontSize = 11.sp
-                            )
-                        }
-
-                        if (item.description.isNotBlank()) {
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = item.description,
-                                color = Color(0xFF9CA3AF),
-                                fontSize = 11.5.sp,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                item.categories.filter { it != OpenRouterCategory.ALL }.take(3).forEach { cat ->
-                                    val badgeText = when (cat) {
-                                        OpenRouterCategory.REASONING -> "Reasoning"
-                                        OpenRouterCategory.VISION -> "Vision"
-                                        OpenRouterCategory.IMAGE_GEN -> "Фото"
-                                        OpenRouterCategory.VIDEO_GEN -> "Видео"
-                                        OpenRouterCategory.AUDIO -> "Аудио"
-                                        OpenRouterCategory.FREE -> "Free"
-                                        else -> ""
-                                    }
-                                    if (badgeText.isNotEmpty()) {
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(5.dp))
-                                                .background(Color(0xFF232734))
-                                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                                        ) {
-                                            Text(
-                                                text = badgeText,
-                                                color = Color(0xFFD1D5DB),
-                                                fontSize = 10.sp,
-                                                maxLines = 1
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(7.dp))
-                                    .background(if (isSelected) DesignColors.AccentBlue else DesignColors.AccentBlue)
-                                    .clickable {
-                                        onSelectModel(item)
-                                        onDismiss()
-                                    }
-                                    .padding(horizontal = 10.dp, vertical = 4.dp)
-                            ) {
-                                Text(
-                                    text = if (isSelected) "Активна" else "Выбрать",
-                                    color = Color.White,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
+                        if (model.id == selectedModelId) Icon(androidx.compose.material.icons.Icons.Default.Check,
+                            "Выбрана", tint = DesignColors.TextPrimary, modifier = Modifier.padding(start = 12.dp).size(22.dp))
                     }
+                    HorizontalDivider(color = DesignColors.Border.copy(alpha = 0.35f))
                 }
             }
         }

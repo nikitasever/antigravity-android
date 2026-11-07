@@ -29,6 +29,7 @@ import androidx.core.content.FileProvider
 import com.google.antigravity.model.AiPermissionsConfig
 import com.google.antigravity.model.AndroidCliCommandResult
 import com.google.antigravity.model.VirtualSandboxProject
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
@@ -124,6 +125,7 @@ data class PhoneQuestionScanReport(
  * Контроллер глубокой интеграции ИИ-ассистента с ресурсами смартфона Android.
  */
 class PhoneResourceController(private val context: Context) {
+    internal val bridgeCredentials by lazy { com.google.antigravity.network.BridgeCredentials(context) }
 
     fun loadAgentSystemPrompt(): String {
         return try {
@@ -2553,49 +2555,64 @@ class PhoneResourceController(private val context: Context) {
     /**
      * Скачивает сгенерированное фото, MP4-видео или файл по URL напрямую в папку `Download/Antigravity/` на смартфоне.
      */
-    suspend fun downloadMediaToPhone(mediaUrl: String, suggestedFileName: String = ""): Pair<Boolean, String> = withContext(Dispatchers.IO) {
+    suspend fun downloadMediaToPhone(mediaUrl: String, suggestedFileName: String = "", expectedBytes: Long = 0): Pair<Boolean, String> = withContext(Dispatchers.IO) {
+        var temporary: File? = null
         try {
-            val cleanFileName = suggestedFileName.ifBlank {
-                mediaUrl.substringBefore('?').substringAfterLast('/').ifBlank { "antigravity_media_${System.currentTimeMillis()}.mp4" }
-            }.replace(Regex("[^a-zA-Z0-9._-]"), "_")
-
-            val targetDir = File(publicDownloadDir, "Antigravity").apply { mkdirs() }
-            val destFile = if (targetDir.exists() && targetDir.canWrite()) {
-                File(targetDir, cleanFileName)
-            } else {
-                File(appSandboxWorkspace, cleanFileName)
-            }
-
-            val conn = (URL(mediaUrl).openConnection() as HttpURLConnection).apply {
-                connectTimeout = 15000
-                readTimeout = 30000
-                requestMethod = "GET"
-                setRequestProperty("User-Agent", "Antigravity-Android-2.0")
-            }
-            conn.connect()
-            if (conn.responseCode !in 200..299) {
-                return@withContext false to "Ошибка HTTP ${conn.responseCode} при скачивании $cleanFileName"
-            }
-            conn.inputStream.use { input ->
-                destFile.outputStream().use { output ->
-                    input.copyTo(output)
+            val cleanName = suggestedFileName.ifBlank { mediaUrl.substringBefore('?').substringAfterLast('/') }
+                .replace(Regex("[^a-zA-Z0-9._-]"), "_").take(180)
+                .takeIf { it.isNotBlank() && it != "." && it != ".." } ?: "media_${System.currentTimeMillis()}.bin"
+            val connection = (URL(mediaUrl).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 15000; readTimeout = 30000; requestMethod = "GET"
+                setRequestProperty("User-Agent", "Antigravity-Android")
+                bridgeCredentials.tokenFor(mediaUrl)?.let {
+                    instanceFollowRedirects = false
+                    setRequestProperty(com.google.antigravity.network.BRIDGE_TOKEN_HEADER, it)
                 }
             }
-            try {
-                MediaScannerConnection.scanFile(
-                    context,
-                    arrayOf(destFile.absolutePath),
-                    null,
-                    null
-                )
-            } catch (failure: Throwable) {
-                if (failure is kotlinx.coroutines.CancellationException) throw failure;
+            val cancellation = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.currentCoroutineContext()).launch(
+                Dispatchers.Unconfined, start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+                try { kotlinx.coroutines.awaitCancellation() } finally { connection.disconnect() }
             }
-            true to destFile.absolutePath
-        } catch (e: Throwable) {
-            if (e is kotlinx.coroutines.CancellationException) throw e;
-            false to "Не удалось сохранить файл: ${e.localizedMessage ?: "ошибка ввода-вывода"}"
-        }
+            try {
+                connection.connect()
+                if (connection.responseCode !in 200..299) return@withContext false to "Ошибка HTTP ${connection.responseCode} при скачивании"
+                val expected = connection.contentLengthLong
+                val maximum = 256L * 1024 * 1024
+                if (expected > maximum) return@withContext false to "Файл превышает лимит скачивания 256 МБ"
+                val downloads = File(publicDownloadDir, "Antigravity").apply { mkdirs() }
+                temporary = try { File.createTempFile("media-download-", ".part", downloads) }
+                    catch (_: java.io.IOException) { File.createTempFile("media-download-", ".part", appSandboxWorkspace) }
+                val temp = temporary!!
+                var received = 0L
+                connection.inputStream.use { input -> temp.outputStream().use { output ->
+                    val buffer = ByteArray(16384)
+                    while (true) {
+                        kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        received += count
+                        if (received > maximum) throw java.io.IOException("Файл превышает лимит скачивания 256 МБ")
+                        output.write(buffer, 0, count)
+                    }
+                    output.fd.sync()
+                } }
+                if (received == 0L || expected >= 0 && received != expected || expectedBytes > 0 && received != expectedBytes) throw java.io.EOFException("Файл получен не полностью")
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                val destination = File(temp.parentFile, cleanName)
+                try { java.nio.file.Files.move(temp.toPath(), destination.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE) }
+                catch (_: java.nio.file.AtomicMoveNotSupportedException) {
+                    java.nio.file.Files.move(temp.toPath(), destination.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+                }
+                temporary = null
+                runCatching { MediaScannerConnection.scanFile(context, arrayOf(destination.absolutePath), null, null) }
+                true to destination.absolutePath
+            } finally { cancellation.cancel(); connection.disconnect() }
+        } catch (error: Throwable) {
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            if (error is kotlinx.coroutines.CancellationException) throw error
+            false to "Не удалось сохранить файл: ${error.localizedMessage ?: "ошибка ввода-вывода"}"
+        } finally { temporary?.delete() }
     }
 
     fun executeSinglePhoneActionObject(obj: JSONObject): PhoneActionExecutionResult? {

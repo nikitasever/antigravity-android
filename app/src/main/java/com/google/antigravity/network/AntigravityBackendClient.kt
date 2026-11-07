@@ -40,6 +40,8 @@ import com.google.antigravity.model.ToolCallEvent
 import com.google.antigravity.model.ToolCallStatus
 import com.google.antigravity.model.mapToDirectGeminiModelId
 import com.google.antigravity.model.normalizeMcpAuthStatus
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -59,7 +61,8 @@ import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 
 class AntigravityBackendClient(
-    private val phoneController: PhoneResourceController
+    private val phoneController: PhoneResourceController,
+    private val directChatTransport: OkHttpClient? = null
 ) {
 
     data class StreamingTurnUpdate(
@@ -114,7 +117,8 @@ class AntigravityBackendClient(
         val fromCache: Boolean = false,
         val hasApiKey: Boolean = false,
         val maskedApiKey: String = "",
-        val selectedModel: String = ""
+        val selectedModel: String = "",
+        val partial: Boolean = false
     )
 
     data class PcBridgeStatus(
@@ -135,25 +139,25 @@ class AntigravityBackendClient(
         )
     }
 
-    private val httpClient = OkHttpClient.Builder()
+    private val httpClient = OkHttpClient.Builder().addInterceptor(phoneController.bridgeCredentials.interceptor()).followRedirects(false).followSslRedirects(false)
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(240, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
-    private val uploadHttpClient = OkHttpClient.Builder()
+    private val uploadHttpClient = OkHttpClient.Builder().addInterceptor(phoneController.bridgeCredentials.interceptor()).followRedirects(false).followSslRedirects(false)
         .connectTimeout(5, TimeUnit.SECONDS)
         .readTimeout(12, TimeUnit.SECONDS)
         .writeTimeout(12, TimeUnit.SECONDS)
         .build()
 
-    private val fastLocalHttpClient = OkHttpClient.Builder()
+    private val fastLocalHttpClient = OkHttpClient.Builder().addInterceptor(phoneController.bridgeCredentials.interceptor()).followRedirects(false).followSslRedirects(false)
         .connectTimeout(1200, TimeUnit.MILLISECONDS)
         .readTimeout(240, TimeUnit.SECONDS)
         .writeTimeout(25, TimeUnit.SECONDS)
         .build()
 
-    private val fastProbeClient = OkHttpClient.Builder()
+    private val fastProbeClient = OkHttpClient.Builder().addInterceptor(phoneController.bridgeCredentials.interceptor()).followRedirects(false).followSslRedirects(false)
         .connectTimeout(3000, TimeUnit.MILLISECONDS)
         .readTimeout(4000, TimeUnit.MILLISECONDS)
         .writeTimeout(2500, TimeUnit.MILLISECONDS)
@@ -199,12 +203,7 @@ class AntigravityBackendClient(
     }
 
     private fun isLocalOrLoopbackUrl(url: String): Boolean {
-        val u = url.trim().lowercase()
-        return u.contains("10.0.2.2") ||
-            u.contains("127.0.0.1") ||
-            u.contains("localhost") ||
-            u.contains("192.168.") ||
-            u.contains("10.0.")
+        return isLocalBridgeUrl(url)
     }
 
     private fun isSupportedPublicTunnelUrl(url: String): Boolean {
@@ -228,8 +227,8 @@ class AntigravityBackendClient(
 
     /**
      * Формирует список адресов моста ПК:
-     * - Если `forcePublicTunnelOnly == true` или устройство — реальный смартфон,
-     *   НИКОГДА не обращается к `10.0.2.2` или `127.0.0.1`, а использует исключительно публичные HTTPS-туннели.
+     * - В public-only используются публичные HTTPS-адреса. Иначе явно выбранный
+     *   LAN-адрес разрешён и на телефоне; автоматические loopback defaults — только в эмуляторе.
      * - Если пользователь явно указал недопустимый/недоступный URL (например, для теста Offline Scenario G
      *   `https://offline-invalid-bridge.example.com`), то при `pcBridgeUrl.contains("offline")` не подставляет дефолтные туннели.
      */
@@ -239,15 +238,13 @@ class AntigravityBackendClient(
             return listOf(clean)
         }
         val cached = lastWorkingBridgeUrl.trim().trimEnd('/')
-        val allowLocal = isEmulatorDevice() && !forcePublicTunnelOnly
+        val allowLocal = !forcePublicTunnelOnly
         if (!allowLocal && isLocalOrLoopbackUrl(lastWorkingBridgeUrl)) {
             lastWorkingBridgeUrl = ""
         }
-        return prioritizedBridgeUrls(
-            configured = clean.takeIf { allowLocal || !isLocalOrLoopbackUrl(it) }.orEmpty(),
-            localDefaults = if (allowLocal) listOf("http://10.0.2.2:8787", "http://127.0.0.1:8787") else emptyList(),
-            cached = cached.takeIf { allowLocal || !isLocalOrLoopbackUrl(it) }.orEmpty(),
-            discovered = knownDynamicTunnels.filter { allowLocal || !isLocalOrLoopbackUrl(it) },
+        return bridgeCandidatesForDevice(
+            configured = clean, emulator = isEmulatorDevice(), publicOnly = forcePublicTunnelOnly,
+            cached = cached, discovered = knownDynamicTunnels.toList(),
             publicDefaults = DEFAULT_PUBLIC_BRIDGE_URLS
         )
     }
@@ -357,7 +354,7 @@ class AntigravityBackendClient(
                 val json = JSONObject(resp.body?.string() ?: "{}")
                 if (!json.optBoolean("ok", false)) return null
                 val tunnels = extractTunnelUrlsFromStatusJson(json)
-                val usePublicOnly = !isEmulatorDevice() || forcePublicTunnelOnly
+                val usePublicOnly = forcePublicTunnelOnly
                 val resolved = if (usePublicOnly && tunnels.isNotEmpty()) {
                     if (base.startsWith("https://")) base else tunnels.first()
                 } else {
@@ -583,7 +580,7 @@ class AntigravityBackendClient(
         val now = System.currentTimeMillis()
         val explicit = clean.trimEnd('/')
         if (explicit.isNotBlank() && explicit != cached &&
-            (!isLocalOrLoopbackUrl(explicit) || isEmulatorDevice() && !forcePublicTunnelOnly)) {
+            (!isLocalOrLoopbackUrl(explicit) || !forcePublicTunnelOnly)) {
             probeSingleBridgeUrl(explicit)?.let { return it.resolvedBaseUrl }
         }
         if (cached.isNotBlank() && !(forcePublicTunnelOnly && isLocalOrLoopbackUrl(cached))) {
@@ -1207,59 +1204,8 @@ class AntigravityBackendClient(
         }
     }
 
-    private fun classifyDirectOpenRouterModel(obj: JSONObject): List<OpenRouterCategory> {
-        val id = obj.optString("id", "").lowercase()
-        val name = obj.optString("name", "").lowercase()
-        val desc = obj.optString("description", "").lowercase()
-        val arch = obj.optJSONObject("architecture")
-        val modality = arch?.optString("modality", "")?.lowercase().orEmpty()
-        val inputModalities = mutableListOf<String>()
-        val outputModalities = mutableListOf<String>()
-        arch?.optJSONArray("input_modalities")?.let { arr ->
-            for (i in 0 until arr.length()) inputModalities.add(arr.optString(i, "").lowercase())
-        }
-        arch?.optJSONArray("output_modalities")?.let { arr ->
-            for (i in 0 until arr.length()) outputModalities.add(arr.optString(i, "").lowercase())
-        }
-        val params = mutableListOf<String>()
-        obj.optJSONArray("supported_parameters")?.let { arr ->
-            for (i in 0 until arr.length()) params.add(arr.optString(i, "").lowercase())
-        }
-        val pricing = obj.optJSONObject("pricing")
-        val promptPrice = pricing?.optString("prompt", "1")?.toDoubleOrNull() ?: 1.0
-        val completionPrice = pricing?.optString("completion", "1")?.toDoubleOrNull() ?: 1.0
-        val isFree = id.endsWith(":free") || (promptPrice == 0.0 && completionPrice == 0.0)
-
-        val cats = LinkedHashSet<OpenRouterCategory>()
-        cats.add(OpenRouterCategory.ALL)
-        if (isFree) cats.add(OpenRouterCategory.FREE)
-        if (params.contains("reasoning") || params.contains("include_reasoning") ||
-            Regex("(thinking|reason|r1|o1|o3|o4|qwq|deepthink)").containsMatchIn("$id $name")
-        ) {
-            cats.add(OpenRouterCategory.REASONING)
-        }
-        if (inputModalities.contains("image") || modality.contains("image->") ||
-            Regex("(vision|vl|multimodal|pixtral|gemini|gpt-4o|gpt-5|claude-3|claude-4|qwen.*vl)").containsMatchIn("$id $name")
-        ) {
-            cats.add(OpenRouterCategory.VISION)
-        }
-        if (outputModalities.contains("image") || modality.contains("->image") ||
-            Regex("(flux|sdxl|stable-diffusion|dall-e|imagen|recraft|ideogram|midjourney|playground|gpt-image|riverflow|seedream)").containsMatchIn("$id $name")
-        ) {
-            cats.add(OpenRouterCategory.IMAGE_GEN)
-        }
-        if (outputModalities.contains("video") || inputModalities.contains("video") || modality.contains("video") ||
-            Regex("\\b(veo|sora|kling|runway|luma|pika|wan|hunyuan-video|minimax-video|cogvideo|mochi|seedance|video|vidu|hailuo)\\b").containsMatchIn("$id $name")
-        ) {
-            cats.add(OpenRouterCategory.VIDEO_GEN)
-        }
-        if (inputModalities.contains("audio") || outputModalities.contains("audio") ||
-            Regex("(audio|voice|whisper|tts|speech|realtime|voxtral)").containsMatchIn("$id $name")
-        ) {
-            cats.add(OpenRouterCategory.AUDIO)
-        }
-        return cats.toList()
-    }
+    private fun classifyDirectOpenRouterModel(obj: JSONObject): List<OpenRouterCategory> =
+        com.google.antigravity.model.openRouterCategories(obj)
 
     suspend fun fetchLiveOpenRouterModels(
         pcBridgeUrl: String,
@@ -1297,6 +1243,13 @@ class AntigravityBackendClient(
                                         categories = cats.distinct(),
                                         modality = obj.optString("modality", "text->text"),
                                         isFree = obj.optBoolean("isFree", false),
+                                        isImageGen = obj.optBoolean("isImageGen", OpenRouterCategory.IMAGE_GEN in cats),
+                                        isVideoGen = obj.optBoolean("isVideoGen", OpenRouterCategory.VIDEO_GEN in cats),
+                                        isVision = obj.optBoolean("isVision", OpenRouterCategory.VISION in cats),
+                                        isReasoning = obj.optBoolean("isReasoning", OpenRouterCategory.REASONING in cats),
+                                        isAudio = obj.optBoolean("isAudio", OpenRouterCategory.AUDIO in cats),
+                                        priceLabel = obj.optString("priceLabel", "Тариф OpenRouter"),
+                                        generationCapabilitiesJson = obj.optJSONObject("generationCapabilities")?.toString() ?: "{}",
                                         pricingPrompt = obj.optString("pricingPrompt", "0"),
                                         pricingCompletion = obj.optString("pricingCompletion", "0")
                                     )
@@ -1310,7 +1263,8 @@ class AntigravityBackendClient(
                                 fromCache = json.optBoolean("fromCache", false),
                                 hasApiKey = json.optBoolean("hasApiKey", false),
                                 maskedApiKey = json.optString("maskedApiKey", ""),
-                                selectedModel = json.optString("selectedModel", "")
+                                selectedModel = json.optString("selectedModel", ""),
+                                partial = json.optBoolean("partial", false)
                             )
                         }
                     }
@@ -1320,18 +1274,28 @@ class AntigravityBackendClient(
             }
         }
 
-        // Direct fallback to https://openrouter.ai/api/v1/models from the Android device (zero hardcoded models!)
+        // Public discovery works on the phone without a PC or an API key.
         try {
-            val req = Request.Builder()
-                .url("https://openrouter.ai/api/v1/models")
-                .header("Accept", "application/json")
-                .get()
-                .build()
-            httpClient.newCall(req).useCancellable { resp ->
-                if (resp.isSuccessful) {
-                    val json = JSONObject(resp.body?.string() ?: "{}")
-                    val dataArr = json.optJSONArray("data")
-                    if (dataArr != null && dataArr.length() > 0) {
+            val routes = listOf("models", "images/models", "videos/models")
+            val responses = coroutineScope {
+                routes.map { route -> async {
+                    try {
+                        val req = Request.Builder().url("https://openrouter.ai/api/v1/$route")
+                            .header("Accept", "application/json").get().build()
+                        httpClient.newCall(req).useCancellable { response ->
+                            if (!response.isSuccessful) null else JSONObject(response.body?.string().orEmpty()).optJSONArray("data")
+                        }
+                    } catch (failure: Throwable) {
+                        if (failure is kotlinx.coroutines.CancellationException) throw failure
+                        null
+                    }
+                } }.map { it.await() }
+            }
+            val partial = responses.any { it == null || it.length() == 0 }
+            val merged = com.google.antigravity.model.mergeOpenRouterCatalogs(
+                responses[0] ?: JSONArray(), responses[1] ?: JSONArray(), responses[2] ?: JSONArray())
+            val dataArr = JSONArray(merged)
+            if (dataArr.length() > 0) {
                         val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
                             timeZone = TimeZone.getTimeZone("UTC")
                         }
@@ -1355,23 +1319,25 @@ class AntigravityBackendClient(
                                     categories = cats,
                                     modality = obj.optJSONObject("architecture")?.optString("modality", "text->text") ?: "text->text",
                                     isFree = cats.contains(OpenRouterCategory.FREE),
+                                    generationCapabilitiesJson = obj.optJSONObject("generationCapabilities")?.toString() ?: "{}",
+                                    isImageGen = cats.contains(OpenRouterCategory.IMAGE_GEN),
+                                    isVideoGen = cats.contains(OpenRouterCategory.VIDEO_GEN),
+                                    isVision = cats.contains(OpenRouterCategory.VISION),
+                                    isAudio = cats.contains(OpenRouterCategory.AUDIO),
+                                    isReasoning = cats.contains(OpenRouterCategory.REASONING),
+                                    priceLabel = if (cats.contains(OpenRouterCategory.FREE)) "Бесплатно (Free)" else "Тариф OpenRouter",
                                     pricingPrompt = pricing?.optString("prompt", "0") ?: "0",
                                     pricingCompletion = pricing?.optString("completion", "0") ?: "0"
                                 )
                             )
                         }
-                        val sorted = rawList.sortedByDescending { it.createdTimestamp }
-                        return@withContext OpenRouterSyncResult(
-                            models = sorted,
-                            totalCount = sorted.size,
-                            syncedAt = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date()),
-                            source = "openrouter.ai/api/v1/models (Direct HTTPS)"
-                        )
-                    }
-                }
+                val sorted = rawList.sortedByDescending { it.createdTimestamp }
+                return@withContext OpenRouterSyncResult(models = sorted, totalCount = sorted.size,
+                    syncedAt = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US).format(Date()),
+                    source = "OpenRouter: models + images/models + videos/models (телефон)", partial = partial)
             }
         } catch (failure: Throwable) {
-            if (failure is kotlinx.coroutines.CancellationException) throw failure;
+            if (failure is kotlinx.coroutines.CancellationException) throw failure
         }
 
         OpenRouterSyncResult(
@@ -1403,15 +1369,43 @@ class AntigravityBackendClient(
         }
     }
 
+    internal suspend fun resolveVideoBridge(pcBridgeUrl: String): String? = withContext(Dispatchers.IO) {
+        resolveWorkingBaseUrl(pcBridgeUrl)
+    }
+
+    internal suspend fun runBridgeVideo(base: String, requestId: String, model: String, prompt: String, key: String,
+        resume: Boolean = false, onProgress: suspend (String) -> Unit = {}): GeneratedMediaAttachment = withContext(Dispatchers.IO) {
+        if (forcePublicTunnelOnly && isLocalOrLoopbackUrl(base)) throw java.io.IOException("Текущая настройка разрешает только публичный адрес моста")
+        val media = OpenRouterVideoClient(clientForUrl(base)).execute(base, requestId, model, prompt,
+            key, resume = resume, onProgress = onProgress)
+        val rawUrl = media.getString("mediaUrl")
+        val url = if (rawUrl.startsWith("https://") || rawUrl.startsWith("http://")) rawUrl
+            else base.trimEnd('/') + "/" + rawUrl.trimStart('/')
+        GeneratedMediaAttachment(id = requestId, type = "video", fileName = media.getString("fileName"),
+            mimeType = media.getString("mimeType"), mediaUrl = url, prompt = prompt, modelId = media.optString("model", model),
+            sizeBytes = media.optLong("sizeBytes", 0), durationSec = media.optInt("durationSec", 0), width = media.optInt("width", 0),
+            height = media.optInt("height", 0), resolution = media.optString("resolution", ""))
+    }
+
     suspend fun generateOpenRouterMedia(
         pcBridgeUrl: String,
         prompt: String,
         modelId: String,
         isVideo: Boolean,
-        openRouterApiKey: String = ""
+        openRouterApiKey: String = "",
+        requestId: String = "",
+        onVideoProgress: suspend (String) -> Unit = {}
     ): Pair<GeneratedMediaAttachment?, String?> = withContext(Dispatchers.IO) {
         val base = resolveWorkingBaseUrl(pcBridgeUrl)
             ?: return@withContext null to "Мост ПК недоступен для генерации медиа"
+        if (isVideo) {
+            try { return@withContext runBridgeVideo(base, requestId, modelId, prompt, openRouterApiKey,
+                onProgress = onVideoProgress) to "" }
+            catch (error: Throwable) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                return@withContext null to (error.message ?: "Не удалось получить видео")
+            }
+        }
         try {
             val endpoint = if (isVideo) "$base/api/openrouter/generate-video" else "$base/api/openrouter/generate-image"
             val payload = JSONObject().apply {
@@ -1422,7 +1416,9 @@ class AntigravityBackendClient(
             val req = Request.Builder().url(endpoint).post(payload).build()
             clientForUrl(base).newCall(req).useCancellable { resp ->
                 if (!resp.isSuccessful) {
-                    return@withContext null to "Ошибка HTTP ${resp.code}"
+                    val detail = runCatching { JSONObject(resp.body?.string().orEmpty()).optString("error") }.getOrDefault("")
+                        .take(800).let { if (openRouterApiKey.isNotBlank()) it.replace(openRouterApiKey, "[скрыто]") else it }
+                    return@withContext null to if (detail.isBlank()) "Ошибка HTTP ${resp.code}" else detail
                 }
                 val json = JSONObject(resp.body?.string() ?: "{}")
                 if (!json.optBoolean("ok", false)) {
@@ -1435,21 +1431,21 @@ class AntigravityBackendClient(
                 } else {
                     "${base.trimEnd('/')}/${rawMediaUrl.trimStart('/')}"
                 }
-                val w = mediaObj.optInt("width", if (isVideo) 640 else 960)
-                val h = mediaObj.optInt("height", if (isVideo) 360 else 540)
+                val w = mediaObj.optInt("width", 0).coerceAtLeast(0)
+                val h = mediaObj.optInt("height", 0).coerceAtLeast(0)
                 val attachment = GeneratedMediaAttachment(
                     id = "media_${System.currentTimeMillis()}",
                     type = if (isVideo) "video" else "image",
                     fileName = mediaObj.optString("fileName", if (isVideo) "antigravity_video.mp4" else "antigravity_image.png"),
-                    mimeType = mediaObj.optString("mimeType", if (isVideo) "video/mp4" else "image/png"),
+                    mimeType = mediaObj.optString("mimeType", ""),
                     mediaUrl = fullMediaUrl,
                     prompt = prompt,
                     modelId = mediaObj.optString("model", json.optString("model", modelId)),
                     sizeBytes = mediaObj.optLong("sizeBytes", 0L),
-                    durationSec = mediaObj.optInt("durationSec", if (isVideo) 3 else 0),
+                    durationSec = mediaObj.optInt("durationSec", 0).coerceAtLeast(0),
                     width = w,
                     height = h,
-                    resolution = mediaObj.optString("resolution", "${w}x${h}")
+                    resolution = mediaObj.optString("resolution", if (w > 0 && h > 0) "${w}x${h}" else "")
                 )
                 return@withContext attachment to ""
             }
@@ -1645,10 +1641,13 @@ class AntigravityBackendClient(
         fetchMultiAgentSwarmSnapshot(pcBridgeUrl, requestId).agents
 
     suspend fun fetchMultiAgentSwarmSnapshot(pcBridgeUrl: String, requestId: String = ""): SwarmSnapshot = withContext(Dispatchers.IO) {
-        val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext SwarmSnapshot()
+        val scoped = requestId.isNotBlank()
+        val base = (if (scoped) pcBridgeUrl.trim().trimEnd('/') else resolveWorkingBaseUrl(pcBridgeUrl))
+            ?.takeIf { it.isNotBlank() && !(forcePublicTunnelOnly && isLocalOrLoopbackUrl(it)) }
+            ?: return@withContext SwarmSnapshot()
         try {
             val req = Request.Builder().url("$base/api/agents/swarm?requestId=${java.net.URLEncoder.encode(requestId, "UTF-8")}").get().build()
-            clientForUrl(base).newCall(req).useCancellable { resp ->
+            (if (scoped) scopedSwarmCall(clientForUrl(base), req) else clientForUrl(base).newCall(req)).useCancellable { resp ->
                 if (!resp.isSuccessful) return@withContext SwarmSnapshot()
                 val json = JSONObject(resp.body?.string() ?: "{}")
                 parseSwarmSnapshot(json)
@@ -1676,7 +1675,11 @@ class AntigravityBackendClient(
         model: String = "",
         requestId: String = ""
     ): SwarmSnapshot = withContext(Dispatchers.IO) {
-        val base = resolveWorkingBaseUrl(pcBridgeUrl) ?: return@withContext SwarmSnapshot()
+        val scoped = requestId.isNotBlank()
+        if (action == "cancel_task" && !scoped) return@withContext SwarmSnapshot()
+        val base = (if (scoped) pcBridgeUrl.trim().trimEnd('/') else resolveWorkingBaseUrl(pcBridgeUrl))
+            ?.takeIf { it.isNotBlank() && !(forcePublicTunnelOnly && isLocalOrLoopbackUrl(it)) }
+            ?: return@withContext SwarmSnapshot()
         try {
             val payload = JSONObject().apply {
                 put("action", action)
@@ -1686,7 +1689,7 @@ class AntigravityBackendClient(
                 put("model", model)
             }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
             val req = Request.Builder().url("$base/api/agents/swarm").post(payload).build()
-            clientForUrl(base).newCall(req).useCancellable { resp ->
+            (if (scoped) scopedSwarmCall(clientForUrl(base), req) else clientForUrl(base).newCall(req)).useCancellable { resp ->
                 if (!resp.isSuccessful) return@withContext SwarmSnapshot()
                 val json = JSONObject(resp.body?.string() ?: "{}")
                 parseSwarmSnapshot(json)
@@ -2037,11 +2040,11 @@ class AntigravityBackendClient(
             } else {
                 "${baseUrl.trimEnd('/')}/${rawMediaUrl.trimStart('/')}"
             }
-            val mime = mediaObj.optString("mimeType", "image/png")
+            val mime = mediaObj.optString("mimeType", "")
             val isVid = mediaObj.optString("type", "").equals("video", ignoreCase = true) ||
                 mime.startsWith("video/") || rawMediaUrl.endsWith(".mp4", ignoreCase = true)
-            val w = mediaObj.optInt("width", if (isVid) 160 else 640)
-            val h = mediaObj.optInt("height", if (isVid) 96 else 360)
+            val w = mediaObj.optInt("width", 0).coerceAtLeast(0)
+            val h = mediaObj.optInt("height", 0).coerceAtLeast(0)
             val fName = mediaObj.optString("fileName", if (isVid) "antigravity_video.mp4" else "antigravity_img.png")
             val (dlOk, dlPath) = try {
                 phoneController.downloadMediaToPhone(fullMediaUrl, fName)
@@ -2061,10 +2064,10 @@ class AntigravityBackendClient(
                     prompt = mediaObj.optString("prompt", fallbackPrompt),
                     modelId = mediaObj.optString("model", fallbackModel),
                     sizeBytes = mediaObj.optLong("sizeBytes", 0L),
-                    durationSec = mediaObj.optInt("durationSec", if (isVid) 3 else 0),
+                    durationSec = mediaObj.optInt("durationSec", 0).coerceAtLeast(0),
                     width = w,
                     height = h,
-                    resolution = mediaObj.optString("resolution", "${w}x${h}")
+                    resolution = mediaObj.optString("resolution", if (w > 0 && h > 0) "${w}x${h}" else "")
                 )
             )
         }
@@ -2549,76 +2552,28 @@ class AntigravityBackendClient(
         createdDiffs: MutableList<FileDiffItem>,
         onStreamingUpdate: suspend (StreamingTurnUpdate) -> Unit
     ): AgentTurnResult? {
-        return try {
-            val cleanModel = selectedModelId.removePrefix("openrouter/").trim().ifBlank { "google/gemini-2.0-flash-exp:free" }
-            val sysPrompt = loadAssetSystemPrompt() +
-                "\n\nТы работаешь как модель $cleanModel через OpenRouter API. Адаптируй ответы под возможности модели $cleanModel."
-            val messagesArr = JSONArray().apply {
-                put(JSONObject().put("role", "system").put("content", sysPrompt))
-                sessionHistory.forEach { message ->
-                    put(JSONObject().put("role", if (message.role == MessageRole.USER) "user" else "assistant").put("content", message.content))
-                }
-                put(JSONObject().put("role", "user").put("content", cleanPrompt))
+        val cleanModel = selectedModelId.trim()
+        val messages = JSONArray().apply {
+            put(JSONObject().put("role", "system").put("content", loadAssetSystemPrompt()))
+            sessionHistory.forEach { message ->
+                put(JSONObject().put("role", if (message.role == MessageRole.USER) "user" else "assistant")
+                    .put("content", message.content))
             }
-            val payload = JSONObject().apply {
-                put("model", cleanModel)
-                put("messages", messagesArr)
-                put("include_reasoning", true)
-            }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
-
-            val req = Request.Builder()
-                .url("https://openrouter.ai/api/v1/chat/completions")
-                .header("Authorization", "Bearer ${openRouterApiKey.trim()}")
-                .header("HTTP-Referer", "https://antigravity.google")
-                .header("X-Title", "Google Antigravity Android 2.0")
-                .post(payload)
-                .build()
-
-            httpClient.newCall(req).useCancellable { resp ->
-                if (!resp.isSuccessful) return null
-                val json = JSONObject(resp.body?.string() ?: return null)
-                val choice = json.optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("message") ?: return null
-                val rawContent = choice.optString("content", "").trim()
-                if (rawContent.isBlank()) return null
-                val reasoning = choice.optString("reasoning", "").trim()
-                val (withoutThink, inlineThink) = extractClientSideThinking(rawContent)
-                val finalThink = reasoning.ifBlank { inlineThink }
-                val finalMd = sanitizeStoragePathsInMarkdown(withoutThink, cleanPrompt)
-                val elapsedMs = (System.currentTimeMillis() - turnStartMs).coerceAtLeast(180L)
-                val elapsedSec = (elapsedMs / 1000L).toInt().coerceAtLeast(1)
-                val estTokens = (finalMd.length / 3.6f).toInt().coerceAtLeast(12)
-                val estTps = (((estTokens.toFloat() / (elapsedMs.toFloat() / 1000f)) * 10f).toInt().toFloat() / 10f).coerceAtLeast(14.0f)
-                onStreamingUpdate(
-                    StreamingTurnUpdate(
-                        thinking = finalThink,
-                        thinkingDurationSec = if (finalThink.isNotBlank()) elapsedSec else 0,
-                        toolCalls = allToolCalls.toList(),
-                        textDelta = finalMd,
-                        fullText = finalMd,
-                        createdDiffs = createdDiffs.toList(),
-                        isDone = true,
-                        tokensPerSecond = estTps,
-                        outputTokensCount = estTokens,
-                        firstTokenLatencyMs = 320L
-                    )
-                )
-                AgentTurnResult(
-                    thinkingTrace = finalThink,
-                    thinkingDurationSec = if (finalThink.isNotBlank()) elapsedSec else 0,
-                    responseMarkdown = finalMd,
-                    spokenSummaryRu = sanitizeSpokenSummary(finalMd),
-                    updatedConversationId = activeConversationId,
-                    toolCalls = allToolCalls,
-                    createdDiffs = createdDiffs,
-                    tokensPerSecond = estTps,
-                    outputTokensCount = estTokens,
-                    firstTokenLatencyMs = 320L
-                )
-            }
-        } catch (failure: Throwable) {
-            if (failure is kotlinx.coroutines.CancellationException) throw failure;
-            null
+            put(JSONObject().put("role", "user").put("content", cleanPrompt))
         }
+        val response = DirectOpenRouterChatClient(directChatTransport ?: httpClient).complete(cleanModel, openRouterApiKey, messages)
+        val (text, taggedThinking) = extractClientSideThinking(response.text)
+        val thinking = response.reasoning.ifBlank { taggedThinking }
+        val markdown = sanitizeStoragePathsInMarkdown(text, cleanPrompt)
+        val seconds = ((System.currentTimeMillis() - turnStartMs) / 1000L).toInt().coerceAtLeast(1)
+        onStreamingUpdate(StreamingTurnUpdate(thinking = thinking,
+            thinkingDurationSec = if (thinking.isBlank()) 0 else seconds, toolCalls = allToolCalls.toList(),
+            textDelta = markdown, fullText = markdown, createdDiffs = createdDiffs.toList(), isDone = true,
+            outputTokensCount = response.outputTokens))
+        return AgentTurnResult(thinkingTrace = thinking, thinkingDurationSec = if (thinking.isBlank()) 0 else seconds,
+            responseMarkdown = markdown, spokenSummaryRu = sanitizeSpokenSummary(markdown),
+            updatedConversationId = activeConversationId, toolCalls = allToolCalls, createdDiffs = createdDiffs,
+            outputTokensCount = response.outputTokens)
     }
 
     private suspend fun executeDirectGeminiLoop(
@@ -3738,7 +3693,7 @@ internal fun parseSwarmAgentNode(obj: JSONObject, index: Int): SwarmAgentNode {
         roleBadge = obj.optString("roleBadge", obj.optString("role", "Субагент анализа")),
         isLeader = obj.optBoolean("isLeader", false),
         model = obj.optString("model", "gemini-4-argon-high"),
-        status = obj.optString("status", "ready").lowercase(),
+        status = obj.optString("status", "ready").lowercase(Locale.ROOT),
         currentTask = obj.optString("currentTask", obj.optString("currentStep", "")),
         stepLogs = logs,
         isSettling = obj.optBoolean("settling", false),

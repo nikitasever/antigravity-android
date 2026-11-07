@@ -289,6 +289,9 @@ fun AppSettingsScreen(
                     SettingsNote("Изменения сохраняются автоматически. Ключи и модели OpenRouter настраиваются в каталоге OpenRouter в меню выбора модели.")
                 }
                 if (page == "Подключение к ПК") {
+                    var pairingCode by remember { mutableStateOf("") }
+                    val pairingBusy by viewModel.bridgePairingBusy.collectAsState()
+                    val pairingStatus by viewModel.bridgePairingStatus.collectAsState()
                     SettingsGroup("Antigravity на компьютере") {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                             Text(connection, color = Color.White, fontSize = 16.sp)
@@ -298,6 +301,19 @@ fun AppSettingsScreen(
                         SettingsRule()
                         SettingsToggle("Подключаться через интернет", "Использовать только публичный HTTPS-адрес, без локальной сети", settings.forcePublicTunnelOnly) {
                             viewModel.setForcePublicTunnelOnly(it)
+                        }
+                    }
+                    SettingsGroup("Сопряжение с телефоном") {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text("Введите шестизначный код из окна PC-Bridge на компьютере.", color = SettingsMuted)
+                            OutlinedTextField(value = pairingCode, onValueChange = { pairingCode = it.filter(Char::isDigit).take(6) },
+                                label = { Text("Код с компьютера") }, singleLine = true, enabled = !pairingBusy,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                                visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+                            Button(enabled = pairingCode.length == 6 && !pairingBusy, onClick = {
+                                viewModel.pairBridge(pairingCode); pairingCode = ""
+                            }) { Text(if (pairingBusy) "Подключение…" else "Сопрячь телефон") }
+                            if (pairingStatus.isNotBlank()) Text(pairingStatus, color = SettingsMuted)
                         }
                     }
                     SettingsNote("Для CLI-моделей компьютер и PC-Bridge должны быть включены. Поиск и запись файлов телефона выполняются Android-приложением.")

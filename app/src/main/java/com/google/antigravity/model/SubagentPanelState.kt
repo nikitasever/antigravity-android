@@ -79,7 +79,7 @@ data class SubagentPanelState(
     val effectiveCounts: SwarmCounts
         get() = counts ?: SwarmCounts(
             queued = agents.count { it.status == "queued" },
-            running = agents.count { it.status == "running" },
+            running = agents.count { it.isRunning },
             completed = agents.count { it.status == "completed" },
             failed = agents.count { it.status == "failed" },
             cancelled = agents.count { it.status == "cancelled" }

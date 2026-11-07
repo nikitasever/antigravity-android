@@ -5,6 +5,36 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ConversationTasksTest {
+    @Test fun supportedRunningAliasesKeepTaskControlsActiveAndCountsConsistent() {
+        val agents = listOf("running", "active", "working").map { SwarmAgentNode(id = it, name = it, status = it) }
+        assertTrue(agents.all { it.isInProgress })
+        val state = conversationTaskPanel(agents)
+        assertEquals(3, state.effectiveRunningTasks)
+        assertEquals(3, state.effectiveCounts.running)
+        assertTrue(SwarmAgentNode(id = "default", name = "Default").isInProgress)
+    }
+
+    @Test fun terminalAndUnknownStatusesDoNotKeepTaskControlsActive() {
+        listOf("completed", "failed", "cancelled", "ready", "unknown").forEach { status ->
+            val agent = SwarmAgentNode(id = status, name = status, status = status)
+            assertFalse(agent.isInProgress)
+            assertEquals(0, conversationTaskPanel(listOf(agent)).effectiveRunningTasks)
+            assertTrue(agent.copy(isSettling = true).isInProgress)
+        }
+    }
+
+    @Test fun swarmStatusParsingDoesNotDependOnTurkishDeviceLocale() {
+        val original = java.util.Locale.getDefault()
+        try {
+            java.util.Locale.setDefault(java.util.Locale.forLanguageTag("tr-TR"))
+            listOf("RUNNING", "ACTIVE", "WORKING", "FAILED").forEach { status ->
+                val agent = com.google.antigravity.network.parseSwarmAgentNode(
+                    org.json.JSONObject().put("id", status).put("status", status), 0)
+                assertEquals(status.lowercase(java.util.Locale.ROOT), agent.status)
+            }
+        } finally { java.util.Locale.setDefault(original) }
+    }
+
     @Test fun onlyActualDelegationsBecomeTaskRows() {
         val parent = ToolCallEvent(id = "task", toolName = "delegate_task", summary = "Inspect · Телефон",
             details = "", status = ToolCallStatus.RUNNING)

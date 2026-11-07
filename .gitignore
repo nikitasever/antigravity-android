@@ -18,6 +18,8 @@ pc-bridge/public_bridge_url.txt
 pc-bridge/tunnel.url
 pc-bridge/tunnels.json
 pc-bridge/openrouter-models-cache.json
+pc-bridge/openrouter-catalog-v2.json*
+pc-bridge/openrouter-video-jobs.json*
 
 # Private local configuration and generated session state
 pc-bridge/openrouter-config.json
@@ -32,6 +34,7 @@ replay_pid*.log
 *.jks
 keystore.properties
 .private/
+__pycache__/
 app/src/main/assets/pc_sessions_snapshot.json
 
 # Built APK binaries (published via GitHub Actions & Releases)

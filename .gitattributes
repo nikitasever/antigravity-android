@@ -1,2 +1,8 @@
 gradlew text eol=lf
 *.sh text eol=lf
+
+# APK payload must match byte-for-byte across Windows and Linux CI.
+app/src/main/assets/agent_system_prompt.md text eol=lf
+app/src/main/assets/ds-mastercard.crt text eol=lf
+app/src/main/assets/ds-visa.crt text eol=lf
+app/src/main/assets/mapbox.js text eol=lf

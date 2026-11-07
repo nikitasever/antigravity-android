@@ -1,4 +1,20 @@
 {
-  "tag": "v2.2.0",
-  "name": "Antigravity Android 2.2.0"
+  "tag": "v2.3.0",
+  "name": "Antigravity Android 2.3.0",
+  "assets": [
+    {
+      "variant": "release",
+      "name": "Antigravity-Android.apk",
+      "sha256": "62c189e64102584ed2b07a9d3b9107aed669209c3d57880bc1f0f20dbec20bb0",
+      "certificateSha256": "90709e1911c5bb00b55efa1af84832376050893eaeb7c8124402abd9889e011f",
+      "url": "https://7792048ade4de4.lhr.life/artifact/62c189e64102584ed2b07a9d3b9107aed669209c3d57880bc1f0f20dbec20bb0/Antigravity-Android.apk"
+    },
+    {
+      "variant": "debug",
+      "name": "Antigravity-Android-debug-local.apk",
+      "sha256": "c02c610f2bbb31114cfda879ae8b20de19934fec8df17c0bc2a4d8c3d4d8d891",
+      "certificateSha256": "8860fb8826b18b18128e90ae754e7571175e6cb4f4471fda639c0789eea04e06",
+      "url": "https://7792048ade4de4.lhr.life/artifact/c02c610f2bbb31114cfda879ae8b20de19934fec8df17c0bc2a4d8c3d4d8d891/Antigravity-Android-debug-local.apk"
+    }
+  ]
 }

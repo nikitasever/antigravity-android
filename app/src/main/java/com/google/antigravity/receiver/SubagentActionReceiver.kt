@@ -3,7 +3,6 @@ package com.google.antigravity.receiver
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.app.NotificationManager
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -29,10 +28,7 @@ class SubagentActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         if (intent?.action != ACTION_CANCEL_SUBAGENT) return
         val requestId = intent.getStringExtra(EXTRA_REQUEST_ID) ?: ""
-        _events.tryEmit(requestId)
-        // Уведомление о запущенной пачке закрывается сразу — статус дальше
-        // показывает панель субагентов (без выдуманных фактов).
-        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
-        nm?.cancel(com.google.antigravity.notifications.SubagentNotifier.NOTIFICATION_ID)
+        if (requestId.isNotBlank()) _events.tryEmit(requestId)
+        // Only the owner may dismiss a matching notification; a stale action must not hide a newer batch.
     }
 }

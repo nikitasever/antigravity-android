@@ -1041,6 +1041,7 @@ private fun ChatGptMainChatScreen(
     }
 
     val openRouterModels by viewModel.openRouterModels.collectAsState()
+    val pendingVideoTaskIds by viewModel.pendingVideoTaskIds.collectAsState()
     val isAnyMessageStreaming = remember(messages) {
         messages.any { it.isStreaming }
     }
@@ -1050,19 +1051,9 @@ private fun ChatGptMainChatScreen(
     val activeOrModel = remember(selectedModelId, openRouterModels) {
         openRouterModels.find { it.id == selectedModelId }
     }
-    val isVideoModel = remember(selectedModelId, activeOrModel) {
-        val lower = selectedModelId.lowercase()
-        activeOrModel?.categories?.contains(OpenRouterCategory.VIDEO_GEN) == true ||
-            Regex("\\b(veo|sora|kling|runway|luma|ray-2|pika|wan|hunyuan-video|minimax/video|minimax-video|cogvideo|mochi|seedance|vidu|hailuo|video-01)\\b").containsMatchIn(lower) ||
-            lower.contains("video")
-    }
-    val isImageModel = remember(selectedModelId, activeOrModel, isVideoModel) {
-        val lower = selectedModelId.lowercase()
-        !isVideoModel && (
-            activeOrModel?.categories?.contains(OpenRouterCategory.IMAGE_GEN) == true ||
-                Regex("(flux|stable-diffusion|sdxl|dall-e|ideogram|recraft|imagen|seedream|midjourney|playground|gpt-image|riverflow)").containsMatchIn(lower)
-            )
-    }
+    val mediaRoute = remember(activeOrModel) { com.google.antigravity.model.openRouterComposerRoute(activeOrModel) }
+    val isVideoModel = mediaRoute == com.google.antigravity.model.OpenRouterComposerRoute.VIDEO
+    val isImageModel = mediaRoute == com.google.antigravity.model.OpenRouterComposerRoute.IMAGE
     val isReasoningModel = remember(selectedModelId, activeOrModel) {
         val lower = selectedModelId.lowercase()
         activeOrModel?.categories?.contains(OpenRouterCategory.REASONING) == true ||
@@ -1222,6 +1213,8 @@ private fun ChatGptMainChatScreen(
                             onBranch = { viewModel.branchFromMessage(msg.id) },
                             onSelectVersion = { viewModel.selectUserMessageVersion(msg.id, it) },
                             onRegenerate = { viewModel.regenerateResponseForMessage(msg.id) },
+                            canRegenerate = !msg.id.startsWith("media_gen_") || msg.id in pendingVideoTaskIds,
+                            regenerateLabel = if (msg.id in pendingVideoTaskIds) "Продолжить ожидание" else "Повторить",
                             onSaveToLibrary = { viewModel.saveMessageToLibrary(msg) },
                             onSaveToPhone = { fileName, code ->
                                 viewModel.saveSnippetToPhoneFile(fileName, code)
@@ -1280,7 +1273,7 @@ private fun ChatGptMainChatScreen(
             onModel = onOpenModelPicker,
             isDictatingInline = isDictatingInline,
             isStreaming = isAnyMessageStreaming,
-            onStopStreaming = { viewModel.stopActiveGeneration() },
+            onStopStreaming = { viewModel.stopVisibleGeneration() },
             onRemoveAttachment = onRemoveAttachment,
             onSendPrompt = { text -> viewModel.sendUserPrompt(text, viaVoice = false) },
             onPlusClick = onOpenAttachmentSheet,
@@ -1624,7 +1617,7 @@ private fun ChatGptRemoteSessionsCodexScreen(
             pendingAttachments = pendingAttachments,
             isDictatingInline = isDictatingInline,
             isStreaming = isAnyMessageStreaming,
-            onStopStreaming = { viewModel.stopActiveGeneration() },
+            onStopStreaming = { viewModel.stopVisibleGeneration() },
             onRemoveAttachment = onRemoveAttachment,
             onSendPrompt = { text -> viewModel.sendUserPrompt(text, viaVoice = false) },
             onPlusClick = onOpenAttachmentSheet,
@@ -1735,6 +1728,7 @@ private fun ChatGptBottomInputPill(
     val queuedFollowUps by viewModel.queuedFollowUps.collectAsState()
     val queueSettings by viewModel.settings.collectAsState()
     val queueMessages by viewModel.messages.collectAsState()
+    val pendingVideoIds by viewModel.pendingVideoTaskIds.collectAsState()
     val queueContext = com.google.antigravity.model.conversationExecutionId(queueSettings.activeConversationId, queueMessages)
     val currentQueue = queuedFollowUps.filter { it.conversationId == queueSettings.activeConversationId && it.target == queueSettings.executionTarget &&
         (it.executionContextId.isBlank() || it.executionContextId == queueContext) }
@@ -2030,6 +2024,7 @@ private fun ChatGptBottomInputPill(
                 if (isStreaming) onSendPrompt(input) else handleSendAction(input)
             },
             onStop = onStopStreaming,
+            stopDescription = if (queueMessages.any { it.isStreaming && it.id in pendingVideoIds }) "Остановить ожидание видео" else "Остановить генерацию",
             modelLabel = modelLabel,
             onModel = onModel,
             voiceAction = { BlueVoiceWaveformCircleButton(onClick = onBlueVoiceWaveClick) }
@@ -2364,6 +2359,8 @@ private fun ChatGptMessageBubble(
     onSpeak: () -> Unit,
     onBranch: () -> Unit = {},
     onRegenerate: () -> Unit = {},
+    canRegenerate: Boolean = true,
+    regenerateLabel: String = "Повторить",
     onSaveToPhone: (String, String) -> Unit = { _, _ -> },
     onSaveToLibrary: () -> Unit = {},
     onSaveToGoogleDrive: (String, String) -> Unit = { _, _ -> },
@@ -2689,10 +2686,10 @@ private fun ChatGptMessageBubble(
                             isEditingPrompt = true
                         }
                     )
-                } else {
+                } else if (!isUser && !message.isStreaming && canRegenerate) {
                     MessageContextMenuRow(
                         icon = Icons.Default.Refresh,
-                        label = "Повторить",
+                        label = regenerateLabel,
                         onClick = {
                             showContextMenuSheet = false
                             onRegenerate()

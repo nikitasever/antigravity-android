@@ -1,6 +1,9 @@
 package com.google.antigravity.ui.components
 
 import android.Manifest
+import kotlinx.coroutines.launch
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.rememberCoroutineScope
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import android.annotation.SuppressLint
@@ -292,11 +295,6 @@ fun AntigravityGoogleWebConsole(
     onGoogleLoginDetected: (String) -> Unit,
     onSwitchToNativeChat: () -> Unit
 ) {
-    val isEmulator = remember {
-        val fp = android.os.Build.FINGERPRINT.lowercase()
-        val model = android.os.Build.MODEL.lowercase()
-        fp.contains("generic") || fp.contains("emulator") || fp.contains("sdk_gphone") || model.contains("sdk_gphone")
-    }
     val localEmulatorMirrorUrl = remember(activeConversationId) {
         "http://10.0.2.2:8787/web?session=$activeConversationId"
     }
@@ -304,19 +302,37 @@ fun AntigravityGoogleWebConsole(
         val base = pcBridgeUrl.trim().trimEnd('/')
         if (base.isNotEmpty()) "$base/web?session=$activeConversationId" else localEmulatorMirrorUrl
     }
-    val primaryMirrorUrl = if (isEmulator) localEmulatorMirrorUrl else liveMirrorUrl
-    val fallbackMirrorUrl = if (isEmulator) liveMirrorUrl else localEmulatorMirrorUrl
+    val primaryMirrorUrl = liveMirrorUrl
 
     var isLiveMirrorMode by remember { mutableStateOf(true) }
     var isLoading by remember { mutableStateOf(true) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
+    val mirrorContext = LocalContext.current
+    val mirrorScope = rememberCoroutineScope()
+    val pairingClient = remember(mirrorContext) { com.google.antigravity.network.BridgePairingClient(
+        com.google.antigravity.network.BridgeCredentials(mirrorContext)) }
+    var mirrorRequestGeneration by remember { mutableStateOf(0) }
+    fun loadOwnerMirror(view: WebView?) {
+        if (view == null) return
+        val requestGeneration = ++mirrorRequestGeneration
+        mirrorScope.launch {
+            isLoading = true
+            val address = try { pairingClient.browserUrl(primaryMirrorUrl, activeConversationId) }
+                catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                catch (_: Exception) { null }
+            if (requestGeneration != mirrorRequestGeneration || !isLiveMirrorMode) return@launch
+            if (address != null) view.loadUrl(address)
+            else view.loadDataWithBaseURL(null, "<html lang='ru'><body style='background:#151515;color:#eee;font-family:sans-serif;padding:24px'><h2>Подключение к ПК</h2><p>Выполните сопряжение в настройках приложения и проверьте соединение с PC-Bridge.</p></body></html>", "text/html", "UTF-8", null)
+        }
+    }
+
     var triedMirrorFallback by remember { mutableStateOf(false) }
     DisposableEffect(webViewRef) {
         val view = webViewRef
         onDispose { view?.stopLoading(); view?.destroy() }
     }
-    LaunchedEffect(primaryMirrorUrl) {
-        if (isLiveMirrorMode) webViewRef?.loadUrl(primaryMirrorUrl)
+    LaunchedEffect(primaryMirrorUrl, webViewRef) {
+        if (isLiveMirrorMode) loadOwnerMirror(webViewRef)
     }
 
     Column(
@@ -378,7 +394,7 @@ fun AntigravityGoogleWebConsole(
                             .clickable {
                                 isLiveMirrorMode = true
                                 triedMirrorFallback = false
-                                webViewRef?.loadUrl(primaryMirrorUrl)
+                                loadOwnerMirror(webViewRef)
                             }
                             .padding(horizontal = 10.dp, vertical = 5.dp)
                     ) {
@@ -411,7 +427,7 @@ fun AntigravityGoogleWebConsole(
                 }
 
                 IconButton(
-                    onClick = { webViewRef?.reload() },
+                    onClick = { if (isLiveMirrorMode) loadOwnerMirror(webViewRef) else webViewRef?.reload() },
                     modifier = Modifier.size(38.dp)
                 ) {
                     Icon(
@@ -496,7 +512,7 @@ fun AntigravityGoogleWebConsole(
                             ) {
                                 if (request?.isForMainFrame == true && isLiveMirrorMode && !triedMirrorFallback) {
                                     triedMirrorFallback = true
-                                    view?.loadUrl(fallbackMirrorUrl)
+                                    isLoading = false
                                 }
                             }
 
@@ -509,7 +525,7 @@ fun AntigravityGoogleWebConsole(
                         }
 
                         // На реальном смартфоне сразу открывает публичный туннель, на эмуляторе — 10.0.2.2:8787
-                        loadUrl(primaryMirrorUrl)
+                        // The effect requests an owner-scoped, one-use browser ticket.
                     }
                 },
                 update = { view ->

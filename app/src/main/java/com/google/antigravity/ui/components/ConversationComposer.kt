@@ -39,6 +39,7 @@ internal fun ConversationComposer(
     onDictate: () -> Unit,
     onSend: () -> Unit,
     onStop: () -> Unit,
+    stopDescription: String = "Остановить генерацию",
     modelLabel: String = "",
     onModel: () -> Unit = {},
     voiceAction: @Composable () -> Unit
@@ -82,7 +83,7 @@ internal fun ConversationComposer(
         if (streaming) FilledIconButton(onClick = onStop,
             colors = IconButtonDefaults.filledIconButtonColors(
                 containerColor = DesignColors.TextPrimary, contentColor = DesignColors.Bg)) {
-            Icon(Icons.Default.Stop, "Остановить генерацию")
+            Icon(Icons.Default.Stop, stopDescription)
         } else if (!canSend) voiceAction()
     }
     Surface(shape = RoundedCornerShape(if (stacked) 24.dp else 32.dp),

@@ -61,6 +61,7 @@ object SubagentNotifier {
         ensureChannel(context)
         val cancelIntent = Intent(context, SubagentActionReceiver::class.java).apply {
             action = SubagentActionReceiver.ACTION_CANCEL_SUBAGENT
+            data = android.net.Uri.Builder().scheme("antigravity").authority("subagent-cancel").appendPath(requestId).build()
             putExtra(SubagentActionReceiver.EXTRA_REQUEST_ID, requestId)
         }
         val cancelPending = PendingIntent.getBroadcast(

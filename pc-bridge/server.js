@@ -1,5 +1,12 @@
 const http = require('http');
+const { BridgeAccess } = require('./lib/bridge-access');
+const { createBridgeHttpAccess } = require('./lib/bridge-http-access');
+const crypto = require('node:crypto');
 const { readJsonBody } = require('./lib/read-json-body');
+const { OpenRouterCatalog } = require('./lib/openrouter-catalog');
+const { OpenRouterVideoJobs } = require('./lib/openrouter-video-jobs');
+const { downloadOpenRouterVideo } = require('./lib/openrouter-video-download');
+const { createOpenRouterVideoApi } = require('./lib/openrouter-video-api');
 const extensionRegistry = require('./lib/extension-registry');
 const mcpClientLib = require('./lib/mcp-client');
 const { McpOAuth, CredentialVault } = require('./lib/mcp-oauth');
@@ -19,6 +26,9 @@ const { DatabaseSync } = require('node:sqlite');
 const { MsEdgeTTS, OUTPUT_FORMAT } = require('msedge-tts');
 
 const PORT = 8787;
+const bridgeAccess = new BridgeAccess({ file: path.join(os.homedir(), '.antigravity-private', 'bridge-owner.json') });
+const guardBridgeAccess = createBridgeHttpAccess(bridgeAccess);
+const driveOAuthStates = new Map();
 const AGY_BIN = 'C:\\Users\\st811210\\AppData\\Local\\agy\\bin\\agy.exe';
 const NODE_BIN = 'C:\\Users\\st811210\\AppData\\Local\\Programs\\nodejs\\node.exe';
 const IDE_BASE_DIR = 'C:\\Users\\st811210\\.gemini\\antigravity';
@@ -192,7 +202,7 @@ function sendJson(res, status, data) {
         'Content-Type': 'application/json; charset=utf-8',
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Antigravity-Bridge-Token'
     });
     res.end(body);
 }
@@ -3300,7 +3310,7 @@ function renderLiveWebConsoleHtml(initialSessionId) {
   </footer>
 </div>
 <script>
-let currentSessionId = ${JSON.stringify(initialSessionId || '')};
+let currentSessionId = ${JSON.stringify(initialSessionId || '').replace(/</g, '\\u003c')};
 let lastMsgHash = '';
 
 function renderFormattedContent(container, text) {
@@ -3500,7 +3510,8 @@ function classifyOpenRouterModel(raw) {
     const id = String(raw.id || '').trim();
     const name = String(raw.name || id).trim();
     const created = Number(raw.created) || 0;
-    const contextLength = Number(raw.context_length) || (raw.top_provider && Number(raw.top_provider.context_length)) || 128000;
+    const contextLength = raw.context_length != null ? Number(raw.context_length) :
+        (raw.top_provider && Number(raw.top_provider.context_length)) || 128000;
     const arch = raw.architecture || {};
     const modality = String(arch.modality || 'text->text').toLowerCase();
     const inputModalities = Array.isArray(arch.input_modalities)
@@ -3513,36 +3524,25 @@ function classifyOpenRouterModel(raw) {
         ? raw.supported_parameters.map(x => String(x).toLowerCase())
         : [];
     const pricing = raw.pricing || {};
-    const promptPrice = String(pricing.prompt ?? '0');
-    const completionPrice = String(pricing.completion ?? '0');
+    const promptPrice = String(pricing.prompt ?? '');
+    const completionPrice = String(pricing.completion ?? '');
 
-    const isFree = id.endsWith(':free') || (
-        (promptPrice === '0' || promptPrice === '0.0' || Number(promptPrice) === 0) &&
-        (completionPrice === '0' || completionPrice === '0.0' || Number(completionPrice) === 0)
-    );
+    const prices = Object.values(pricing);
+    const hasGenerationApi = (raw.catalogEndpoints || []).some(endpoint => endpoint === 'images' || endpoint === 'videos');
+    const isFree = id.endsWith(':free') || (!hasGenerationApi && prices.length > 0 &&
+        prices.every(value => value !== null && String(value).trim() !== '' && Number(value) === 0));
     const lowerId = id.toLowerCase();
     const lowerName = name.toLowerCase();
 
-    const isImageGen = outputModalities.includes('image') ||
-        modality.includes('->image') ||
-        /(flux|stable-diffusion|sdxl|dall-e|ideogram|recraft|imagen|seedream|midjourney|playground|gpt-image|riverflow)/i.test(lowerId);
+    const isImageGen = outputModalities.includes('image');
 
-    const isVideoGen = outputModalities.includes('video') ||
-        modality.includes('->video') ||
-        /\b(veo|sora|kling|runway|luma|ray-2|pika|wan|hunyuan-video|minimax\/video|minimax-video|cogvideo|mochi|seedance|vidu|hailuo|video-01)\b/i.test(lowerId) ||
-        lowerId.includes('video');
+    const isVideoGen = outputModalities.includes('video');
 
-    const isAudio = inputModalities.includes('audio') || outputModalities.includes('audio') ||
-        lowerId.includes('audio') || lowerId.includes('whisper') || lowerId.includes('sonar');
+    const isAudio = inputModalities.includes('audio') || outputModalities.includes('audio');
 
-    const isVision = inputModalities.includes('image') || inputModalities.includes('video') ||
-        modality.includes('image') || lowerId.includes('-vl') || lowerId.includes('vision') || lowerId.includes('pixtral');
+    const isVision = inputModalities.includes('image') || inputModalities.includes('video');
 
-    const isReasoning = supportedParams.includes('reasoning') ||
-        supportedParams.includes('include_reasoning') ||
-        lowerId.includes('thinking') || lowerId.includes('reasoner') ||
-        lowerId.includes('deepseek-r1') || lowerId.includes('qwq') ||
-        lowerName.includes('thinking') || lowerName.includes('reasoning');
+    const isReasoning = supportedParams.includes('reasoning') || supportedParams.includes('include_reasoning');
 
     const categories = ['ALL'];
     if (isReasoning) categories.push('REASONING');
@@ -3551,7 +3551,7 @@ function classifyOpenRouterModel(raw) {
     if (isVideoGen) categories.push('VIDEO_GEN');
     if (isAudio) categories.push('AUDIO');
     if (isFree) categories.push('FREE');
-    categories.push('TEXT');
+    if (outputModalities.includes('text')) categories.push('TEXT');
 
     let primaryCategory = 'TEXT';
     if (isVideoGen) primaryCategory = 'VIDEO_GEN';
@@ -3566,7 +3566,7 @@ function classifyOpenRouterModel(raw) {
 
     const pricePerM = (!isFree && Number(promptPrice) > 0)
         ? `$${(Number(promptPrice) * 1000000).toFixed(2)}/1M`
-        : 'Бесплатно (Free)';
+        : isFree ? 'Бесплатно (Free)' : 'Тариф OpenRouter';
 
     return {
         id,
@@ -3578,6 +3578,8 @@ function classifyOpenRouterModel(raw) {
         modality,
         inputModalities,
         outputModalities,
+        catalogEndpoints: raw.catalogEndpoints || [],
+        generationCapabilities: raw.generationCapabilities || {},
         supportedParameters: supportedParams,
         isFree,
         isReasoning,
@@ -3591,102 +3593,22 @@ function classifyOpenRouterModel(raw) {
     };
 }
 
-function fetchLiveOpenRouterModels(forceRefresh = false) {
-    const OPENROUTER_MODELS_CACHE_JSON = path.join(DEFAULT_WORKSPACE, 'pc-bridge', 'openrouter_models_cache.json');
-    if (liveOpenRouterModelsMemoryCache.length === 0) {
-        for (const cFile of [OPENROUTER_MODELS_CACHE_JSON, OPENROUTER_CACHE_FILE]) {
-            try {
-                if (fs.existsSync(cFile)) {
-                    const diskObj = JSON.parse(fs.readFileSync(cFile, 'utf8'));
-                    if (Array.isArray(diskObj.models) && diskObj.models.length > 0) {
-                        liveOpenRouterModelsMemoryCache = diskObj.models;
-                        lastOpenRouterSyncMs = diskObj.cachedAtMs || Date.parse(diskObj.syncedAt || diskObj.cachedAt || '') || Date.now();
-                        if (!fs.existsSync(OPENROUTER_MODELS_CACHE_JSON)) {
-                            fs.writeFileSync(OPENROUTER_MODELS_CACHE_JSON, JSON.stringify({
-                                cachedAt: new Date(lastOpenRouterSyncMs).toISOString(),
-                                cachedAtMs: lastOpenRouterSyncMs,
-                                count: liveOpenRouterModelsMemoryCache.length,
-                                models: liveOpenRouterModelsMemoryCache
-                            }), 'utf8');
-                        }
-                        break;
-                    }
-                }
-            } catch (_) {}
-        }
+const openRouterCatalog = new OpenRouterCatalog({
+    request: httpsJsonRequest,
+    file: path.join(__dirname, 'openrouter-catalog-v2.json'),
+    classify: classifyOpenRouterModel
+});
+
+async function fetchLiveOpenRouterModels(forceRefresh = false) {
+    const result = await openRouterCatalog.get(forceRefresh);
+    if (result.ok) {
+        liveOpenRouterModelsMemoryCache = result.models;
+        lastOpenRouterSyncMs = Date.parse(result.syncedAt) || 0;
+        return result;
     }
-
-    return new Promise((resolve) => {
-        const now = Date.now();
-        if (!forceRefresh && liveOpenRouterModelsMemoryCache.length > 0) {
-            if ((now - lastOpenRouterSyncMs) >= 10 * 60 * 1000) {
-                setImmediate(() => { fetchLiveOpenRouterModels(true).catch(() => {}); });
-            }
-            return resolve({
-                ok: true,
-                fromCache: true,
-                source: 'disk+memory-cache',
-                syncedAt: new Date(lastOpenRouterSyncMs || now).toISOString(),
-                cachedAt: new Date(lastOpenRouterSyncMs || now).toISOString(),
-                totalCount: liveOpenRouterModelsMemoryCache.length,
-                totalCached: liveOpenRouterModelsMemoryCache.length,
-                models: liveOpenRouterModelsMemoryCache
-            });
-        }
-
-        const req = https.get('https://openrouter.ai/api/v1/models', {
-            headers: {
-                'Accept': 'application/json',
-                'User-Agent': 'Antigravity-Android-2.0'
-            },
-            timeout: 12000
-        }, (res) => {
-            let body = '';
-            res.on('data', chunk => { body += chunk.toString('utf8'); });
-            res.on('end', () => {
-                try {
-                    const parsed = JSON.parse(body);
-                    const rawList = Array.isArray(parsed.data) ? parsed.data : [];
-                    if (rawList.length > 0) {
-                        const classified = rawList
-                            .map(classifyOpenRouterModel)
-                            .filter(m => m.id && m.name)
-                            .sort((a, b) => (b.created || 0) - (a.created || 0));
-                        liveOpenRouterModelsMemoryCache = classified;
-                        lastOpenRouterSyncMs = Date.now();
-                        const cachePayload = JSON.stringify({
-                            cachedAt: new Date(lastOpenRouterSyncMs).toISOString(),
-                            syncedAt: new Date(lastOpenRouterSyncMs).toISOString(),
-                            cachedAtMs: lastOpenRouterSyncMs,
-                            count: classified.length,
-                            models: classified
-                        });
-                        try {
-                            fs.writeFileSync(OPENROUTER_CACHE_FILE, cachePayload, 'utf8');
-                            fs.writeFileSync(OPENROUTER_MODELS_CACHE_JSON, cachePayload, 'utf8');
-                        } catch (_) {}
-                        return resolve({
-                            ok: true,
-                            fromCache: false,
-                            source: 'openrouter.ai/api/v1/models',
-                            syncedAt: new Date(lastOpenRouterSyncMs).toISOString(),
-                            cachedAt: new Date(lastOpenRouterSyncMs).toISOString(),
-                            totalCount: classified.length,
-                            totalCached: classified.length,
-                            models: classified
-                        });
-                    }
-                } catch (_) {}
-                resolve(loadCachedOpenRouterModelsFallback());
-            });
-        });
-
-        req.on('error', () => resolve(loadCachedOpenRouterModelsFallback()));
-        req.on('timeout', () => {
-            try { req.destroy(); } catch (_) {}
-            resolve(loadCachedOpenRouterModelsFallback());
-        });
-    });
+    const fallback = loadCachedOpenRouterModelsFallback();
+    return { ...fallback, partial: true, catalogVersion: 1,
+        failedSources: result.failedSources, source: 'legacy-cache (requires refresh)' };
 }
 
 function loadCachedOpenRouterModelsFallback() {
@@ -4367,6 +4289,10 @@ function httpsJsonRequest(urlStr, { method = 'GET', headers = {}, body = null, t
 
 // --- Генерация изображений через реальный OpenRouter API ---------------------
 function extractOpenRouterImageBase64(json) {
+    const data = json && Array.isArray(json.data) ? json.data : [];
+    for (const image of data) {
+        if (image && typeof image.b64_json === 'string' && image.b64_json) return image.b64_json;
+    }
     const choices = json && Array.isArray(json.choices) ? json.choices : [];
     for (const choice of choices) {
         const message = choice && choice.message;
@@ -4398,6 +4324,19 @@ function parsePngDimensions(buf) {
     return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
 }
 
+function identifyOpenRouterImage(bytes) {
+    if (!Buffer.isBuffer(bytes) || bytes.length < 12) return null;
+    if (bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])))
+        return { mimeType: 'image/png', extension: 'png' };
+    if (bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255)
+        return { mimeType: 'image/jpeg', extension: 'jpg' };
+    if (bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP')
+        return { mimeType: 'image/webp', extension: 'webp' };
+    if (['GIF87a', 'GIF89a'].includes(bytes.toString('ascii', 0, 6)))
+        return { mimeType: 'image/gif', extension: 'gif' };
+    return null;
+}
+
 function loadOpenRouterApiKey(payloadApiKey) {
     const fromPayload = String(payloadApiKey || '').trim();
     if (fromPayload) return fromPayload;
@@ -4406,6 +4345,22 @@ function loadOpenRouterApiKey(payloadApiKey) {
     } catch (_) { return ''; }
 }
 
+let videoJobsRuntime;
+const handleOpenRouterVideo = createOpenRouterVideoApi({
+    keyFor: payload => loadOpenRouterApiKey(payload.apiKey),
+    jobs: () => {
+        if (!videoJobsRuntime) videoJobsRuntime = new OpenRouterVideoJobs({
+            file: path.join(__dirname, 'openrouter-video-jobs.json'), mediaDirectory: GENERATED_MEDIA_DIR,
+            request: httpsJsonRequest, download: downloadOpenRouterVideo,
+            capabilities: async model => {
+                const catalog = await openRouterCatalog.get(false);
+                return catalog.models.find(item => item.id === model)?.generationCapabilities?.videos || null;
+            }
+        });
+        return videoJobsRuntime;
+    }
+});
+
 async function handleOpenRouterImageGeneration(payload) {
     const apiKey = loadOpenRouterApiKey(payload.apiKey);
     if (!apiKey) {
@@ -4413,21 +4368,24 @@ async function handleOpenRouterImageGeneration(payload) {
     }
     const prompt = String(payload.prompt || '').trim();
     if (!prompt) return { status: 400, body: { ok: false, error: 'Не задан промпт для генерации изображения' } };
-    const model = String(payload.model || '').includes('image') ? String(payload.model) : 'google/gemini-2.5-flash-image-preview';
+    const model = String(payload.model || '').trim();
+    if (!model) return { status: 400, body: { ok: false, error: 'Выберите модель генерации изображения' } };
     try {
-        const response = await httpsJsonRequest('https://openrouter.ai/api/v1/chat/completions', {
+        const response = await httpsJsonRequest('https://openrouter.ai/api/v1/images', {
             method: 'POST',
             headers: { Authorization: `Bearer ${apiKey}` },
             body: {
                 model,
-                modalities: ['image', 'text'],
-                messages: [{ role: 'user', content: prompt }]
+                prompt,
+                n: 1
             },
             timeoutMs: 120000
         });
         if (response.status !== 200 || !response.json) {
             const apiError = response.json && response.json.error && response.json.error.message;
-            return { status: 502, body: { ok: false, error: `OpenRouter вернул ошибку${response.status ? ` (${response.status})` : ''}: ${apiError || 'изображение не сгенерировано'}` } };
+            const status = response.status >= 400 && response.status <= 599 ? response.status : 502;
+            const detail = String(apiError || 'изображение не сгенерировано').split(apiKey).join('[скрыто]').slice(0,1000);
+            return { status, body: { ok: false, error: `OpenRouter вернул ошибку${response.status ? ` (${response.status})` : ''}: ${detail}` } };
         }
         const b64 = extractOpenRouterImageBase64(response.json);
         if (!b64) {
@@ -4435,7 +4393,9 @@ async function handleOpenRouterImageGeneration(payload) {
         }
         const bytes = Buffer.from(b64, 'base64');
         const dims = parsePngDimensions(bytes);
-        const fileName = `openrouter_image_${Date.now().toString(36)}.png`;
+        const format = identifyOpenRouterImage(bytes);
+        if (!format) return { status: 502, body: { ok: false, error: 'OpenRouter вернул пустое изображение или неподдерживаемый формат' } };
+        const fileName = `openrouter_image_${Date.now().toString(36)}.${format.extension}`;
         const fullPath = path.join(GENERATED_MEDIA_DIR, fileName);
         fs.writeFileSync(fullPath, bytes);
         const width = dims ? dims.width : 0;
@@ -4447,7 +4407,8 @@ async function handleOpenRouterImageGeneration(payload) {
                 model,
                 media: {
                     fileName,
-                    mimeType: 'image/png',
+                    mimeType: format.mimeType,
+                    model,
                     mediaUrl: `/download/media/${encodeURIComponent(fileName)}`,
                     sizeBytes: bytes.length,
                     width,
@@ -4856,11 +4817,8 @@ function resetSessionContextWindow(conversationId = '', clearTranscript = false)
 }
 
 const server = http.createServer(async (req, res) => {
-    if (req.method === 'OPTIONS') {
-        return sendJson(res, 200, { ok: true });
-    }
-
     const urlObj = new URL(req.url, `http://localhost:${PORT}`);
+    if (await guardBridgeAccess(req, res, urlObj)) return;
     if (await mcpOAuthApi.callback(req, res, urlObj)) return;
 
     if (req.method === 'GET' && (urlObj.pathname === '/web' || urlObj.pathname === '/')) {
@@ -4950,8 +4908,11 @@ const server = http.createServer(async (req, res) => {
             );
         }
         return sendJson(res, 200, {
-            ok: true,
+            ok: Boolean(result.ok),
             fromCache: Boolean(result.fromCache),
+            partial: Boolean(result.partial),
+            failedSources: result.failedSources || [],
+            catalogVersion: result.catalogVersion || 1,
             cachedAt: result.cachedAt || result.syncedAt,
             source: result.source,
             syncedAt: result.syncedAt,
@@ -4959,7 +4920,7 @@ const server = http.createServer(async (req, res) => {
             totalCached: result.totalCached || result.totalCount || filtered.length,
             totalSyncedCount: result.totalCount || filtered.length,
             filteredCount: filtered.length,
-            models: filtered.slice(0, 1000)
+            models: filtered
         });
     }
 
@@ -5064,11 +5025,18 @@ const server = http.createServer(async (req, res) => {
         if (!config.clientId) {
             return sendJson(res, 400, { ok: false, error: 'Сначала сохраните Client ID/Secret через POST /api/gdrive/config (Google Cloud Console → OAuth client).' });
         }
-        const redirectUri = `http://${req.headers.host || '127.0.0.1:8787'}/api/gdrive/oauth/callback`;
+        for (const [key, item] of driveOAuthStates) if (item.expiresAt <= Date.now()) driveOAuthStates.delete(key);
+        if (driveOAuthStates.size >= 32) return sendJson(res, 429, { ok: false, error: 'Too many OAuth sessions' });
+        const state = crypto.randomBytes(32).toString('hex');
+        const scheme = req.socket.encrypted || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+        const redirectUri = new URL('/api/gdrive/oauth/callback', `${scheme}://${req.headers.host}`).toString();
+        driveOAuthStates.set(state, { redirectUri, expiresAt: Date.now() + 300000 });
+
         const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' + new URLSearchParams({
             client_id: config.clientId,
             redirect_uri: redirectUri,
             response_type: 'code',
+            state,
             scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.email',
             access_type: 'offline',
             prompt: 'consent'
@@ -5077,6 +5045,10 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && urlObj.pathname === '/api/gdrive/oauth/callback') {
+        const state = urlObj.searchParams.get('state') || '';
+        const pending = driveOAuthStates.get(state);
+        driveOAuthStates.delete(state);
+        if (!pending || pending.expiresAt <= Date.now()) return sendJson(res, 400, { ok: false, error: 'OAuth state invalid or expired' });
         const code = urlObj.searchParams.get('code') || '';
         const config = loadGDriveOAuthConfig();
         if (!code || !config.clientId || !config.clientSecret) {
@@ -5084,7 +5056,7 @@ const server = http.createServer(async (req, res) => {
             res.end('OAuth: нет кода авторизации или не настроен Client ID/Secret.');
             return;
         }
-        const redirectUri = `http://${req.headers.host || '127.0.0.1:8787'}/api/gdrive/oauth/callback`;
+        const redirectUri = pending.redirectUri;
         const tokenResponse = await httpsJsonRequest('https://oauth2.googleapis.com/token', {
             method: 'POST',
             body: {
@@ -5670,10 +5642,16 @@ const server = http.createServer(async (req, res) => {
             }
 
             if (urlObj.pathname === '/api/openrouter/generate-video') {
-                return sendJson(res, 501, {
-                    ok: false,
-                    error: 'Генерация видео не подключена: через OpenRouter нет доступных видео-моделей. Заглушки отключены — используйте генерацию изображений.'
-                });
+                const result = await handleOpenRouterVideo('start', payload);
+                return sendJson(res, result.status, result.body);
+            }
+            if (urlObj.pathname === '/api/openrouter/video-status') {
+                const result = await handleOpenRouterVideo('status', payload);
+                return sendJson(res, result.status, result.body);
+            }
+            if (urlObj.pathname === '/api/openrouter/video-download') {
+                const result = await handleOpenRouterVideo('download', payload);
+                return sendJson(res, result.status, result.body);
             }
 
             if (urlObj.pathname === '/api/permissions') {
@@ -6074,7 +6052,7 @@ function verifyAllTunnelsHealth() {
         const st = tunnelState[provider.key];
         if (!st || !st.url) continue;
         try {
-            const req = https.get(`${st.url}/api/status`, { timeout: 7000 }, (res) => {
+            const req = https.get(`${st.url}/api/health`, { timeout: 7000 }, (res) => {
                 res.resume();
                 if (res.statusCode === 200) {
                     st.failures = 0;
@@ -6110,6 +6088,8 @@ process.on('unhandledRejection', (reason) => {
 
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`Antigravity PC Bridge listening on http://0.0.0.0:${PORT} (Instance: ${INSTANCE_NAME})`);
+    const pairing = bridgeAccess.openPairing();
+    console.log(`[PC-Bridge] Код сопряжения: ${pairing.code} (5 минут, не более 5 попыток). Новый код: node pc-bridge/owner-access.cjs pair`);
     startAllManagedTunnels();
     setInterval(verifyAllTunnelsHealth, 40000);
     setInterval(() => {
