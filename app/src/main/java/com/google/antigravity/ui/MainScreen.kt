@@ -1108,7 +1108,16 @@ private fun ChatGptMainChatScreen(
     LaunchedEffect(listState) {
         snapshotFlow { listState.canScrollForward }.collect { if (!it) followLatest = true }
     }
-    BackHandler(enabled = showSearch) { showSearch = false; searchQuery = "" }
+    val searchFocusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    val searchKeyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val closeSearch = {
+        showSearch = false
+        searchQuery = ""
+        searchFocusManager.clearFocus()
+        searchKeyboard?.hide()
+        Unit
+    }
+    BackHandler(enabled = showSearch, onBack = closeSearch)
     LaunchedEffect(searchQuery, searchPosition, searchMatches) {
         searchMatches.getOrNull(searchPosition.coerceIn(0, (searchMatches.size - 1).coerceAtLeast(0)))?.let {
             followLatest = false
@@ -1151,24 +1160,19 @@ private fun ChatGptMainChatScreen(
             onOutline = { showOutline = true }
         )
         if (showSearch) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(value = searchQuery, onValueChange = { searchQuery = it; searchPosition = 0 },
-                    placeholder = { Text("Поиск в чате") }, singleLine = true,
-                    modifier = Modifier.weight(1f),
-                    colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White, unfocusedTextColor = Color.White),
-                    trailingIcon = { Text(if (searchMatches.isEmpty()) "0" else "${searchPosition.coerceAtMost(searchMatches.lastIndex) + 1}/${searchMatches.size}",
-                        color = Color(0xFF9E9E9E), fontSize = 12.sp) })
-                IconButton(enabled = searchMatches.isNotEmpty(), onClick = {
+            com.google.antigravity.ui.components.ConversationSearchBar(
+                query = searchQuery,
+                onQueryChange = { searchQuery = it; searchPosition = 0 },
+                matchCount = searchMatches.size,
+                matchPosition = searchPosition,
+                onPrevious = {
                     searchPosition = (searchPosition - 1 + searchMatches.size) % searchMatches.size
-                }) { Icon(Icons.Default.ExpandLess, "Предыдущее совпадение", tint = Color(0xFFB4B4B4)) }
-                IconButton(enabled = searchMatches.isNotEmpty(), onClick = {
+                },
+                onNext = {
                     searchPosition = (searchPosition + 1) % searchMatches.size
-                }) { Icon(Icons.Default.ExpandMore, "Следующее совпадение", tint = Color(0xFFB4B4B4)) }
-                IconButton(onClick = { showSearch = false; searchQuery = "" }) {
-                    Icon(Icons.Default.Close, "Закрыть поиск", tint = Color(0xFFB4B4B4))
-                }
-            }
+                },
+                onClose = closeSearch
+            )
         }
         if (showOutline) {
             ModalBottomSheet(onDismissRequest = { showOutline = false }, containerColor = Color(0xFF1C1C1E), contentColor = Color.White) {

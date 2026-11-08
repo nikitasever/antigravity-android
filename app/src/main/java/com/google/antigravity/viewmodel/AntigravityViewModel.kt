@@ -1097,6 +1097,7 @@ class AntigravityViewModel internal constructor(application: Application,
                 activeSessionTitle = session.title
             )
         }
+        persistActiveConversationSelection()
         restoreComposerDraft(session.id)
         _topModeTab.value = TopModeTab.CHAT
         _drawerSection.value = DrawerSection.CHAT
@@ -1457,6 +1458,15 @@ class AntigravityViewModel internal constructor(application: Application,
         }
     }
 
+    private fun persistActiveConversationSelection() {
+        if (_temporaryChatActive.value) return
+        val settings = _settings.value
+        if (settings.activeConversationId.isBlank()) return
+        prefs.edit().putString("active_conversation_id", settings.activeConversationId)
+            .putString("active_session_title", settings.activeSessionTitle)
+            .putString("active_execution_target", settings.executionTarget.name).apply()
+    }
+
     private fun cacheCurrentSession() {
         val id = _settings.value.activeConversationId
         attachmentDrafts[id] = _pendingAttachments.value
@@ -1472,9 +1482,7 @@ class AntigravityViewModel internal constructor(application: Application,
                     host = if (settings.executionTarget == AgentExecutionTarget.PHONE_LOCAL_RESOURCES) "Телефон" else "Компьютер")
                 _remoteSessions.update { list -> listOf(localItem) + list.filterNot { it.id == id } }
             }
-            prefs.edit().putString("active_conversation_id", id)
-                .putString("active_session_title", settings.activeSessionTitle)
-                .putString("active_execution_target", settings.executionTarget.name).apply()
+            persistActiveConversationSelection()
             if (!historyWriter.isShutdown) historyWriter.execute {
                 runCatching { historyStore.save(SavedChat(id, settings.activeSessionTitle, settings.executionTarget, snapshot)) }
                     .onFailure { android.util.Log.e("ChatHistory", "Cannot save conversation", it) }
