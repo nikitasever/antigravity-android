@@ -121,9 +121,11 @@ def compare_payload(built, signed):
 
 def verify_identity(apksigner, aapt, apk, certificate, version, code):
     signed = subprocess.run([str(apksigner), "verify", "--print-certs", str(apk)], check=True, capture_output=True, text=True).stdout
-    fingerprints = re.findall(r"Signer #\d+ certificate SHA-256 digest: ([0-9a-f]+)", signed)
-    if fingerprints != [certificate]:
-        raise ValueError("APK signer mismatch")
+    fingerprints = [value.lower() for value in re.findall(
+        r"Signer #\d+ certificate SHA-256 digest:\s*([0-9a-fA-F]{64})(?=\s|$)", signed)]
+    if not fingerprints or set(fingerprints) != {certificate}:
+        diagnostics = [line for line in signed.splitlines() if "SHA-256" in line]
+        raise ValueError("APK signer mismatch: expected " + certificate + "; observed " + repr(diagnostics))
     manifest = subprocess.run([str(aapt), "dump", "badging", str(apk)], check=True, capture_output=True, text=True).stdout
     match = re.search(r"package: name='([^']+)' versionCode='([^']+)' versionName='([^']+)'", manifest)
     if not match or match.groups() != ("com.google.antigravity", str(code), version):
@@ -138,8 +140,9 @@ def main():
     request = json.loads(pathlib.Path(args.request).read_text(encoding="utf-8"))
     version, code = validate_request(request, pathlib.Path("app/build.gradle.kts").read_text(encoding="utf-8"))
     sdk = pathlib.Path(args.sdk)
-    tools = max((p for p in (sdk / "build-tools").iterdir() if re.fullmatch(r"\d+\.\d+\.\d+", p.name)),
-                key=lambda p: tuple(map(int, p.name.split("."))))
+    tools = sdk / "build-tools" / "36.0.0"
+    if not tools.is_dir():
+        raise ValueError("Android build-tools 36.0.0 is required for release verification")
     for asset in request["assets"]:
         destination = pathlib.Path(asset["name"])
         download(asset, destination)

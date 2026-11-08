@@ -26,7 +26,7 @@
 ## Подписанные файлы
 
 - Release SHA256: `4e82340373f1fe75ce2666410fb51463a97f12cfaaa5c6e89c33da5a2c60e7bf`
-- Debug SHA256: `c02c610f2bbb31114cfda879ae8b20de19934fec8df17c0bc2a4d8c3d4d8d891`
+- Debug SHA256: `93281c6578c14243e3f97831524c8e38320d87013607a526e1e1f72695ec908e`
 
 ## Ограничения и сохранность данных
 
@@ -82,3 +82,27 @@ release_artifacts.py читает части строго в указанном 
 обрыв и неподходящие URL проверены unit-тестами; прежний готовый файл
 при ошибке не заменяется, временная сборка удаляется. Python 4/4 PASS.
 После финального Release пользователи скачивают обычные целые APK из Releases.
+
+## Окончательный Debug из независимой CI-сборки
+
+Release payload полностью совпал с независимым Linux CI (2501 запись).
+Локальный incremental Debug отличался DEX от чистого CI. Финальный Debug
+взят из artifact 13597242271 / run 42429166488 / source e626d52. ZIP SHA256
+d2c67479d0b168445e5c1129d9ddbc1edbfd377efd1174affc2073c153d7b789 совпал с
+GitHub API digest. Android build inputs source e626d52 и текущего HEAD идентичны.
+
+CI Debug переподписан локальным preview-ключом, который не передавался в CI.
+Его полный payload (2516 записей) совпал с исходным CI APK. Сертификат
+8860fb88…4e06 проверен apksigner 36.0.0. Установлен именно финальный файл:
+release-230-ci-signed-native.log: OK (8 tests), 10.003s. Включены pairing,
+Keystore, backend, voice HTTP, download, WebView и direct OpenRouter text/image.
+Новый Debug SHA указан в таблице выше; предыдущие native записи исторические.
+
+Debug части опубликованы в immutable transport commit
+66798bd4b8102beeb17fe34d8d1bd647d4919533, Release части остались в 8f374867.
+Release validator использует фиксированный build-tools 36.0.0 и строгое
+сравнение полного 64-символьного SHA256 сертификата независимо от регистра.
+Чужой сертификат/пакет и дополнительный неизвестный signer отвергаются.
+Python 5/5 PASS; локальная проверка обоих конечных APK (payload + certificate
++ package/version) PASS. Точный вывод сертификата при ошибке теперь сохраняется
+в диагностике без секретов; private keys ни в вывод, ни в GitHub не попадают.

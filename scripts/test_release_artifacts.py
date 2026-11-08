@@ -6,10 +6,29 @@ import tempfile
 import unittest
 import zipfile
 from unittest.mock import patch
-from release_artifacts import compare_payload, validate_request, download
+from types import SimpleNamespace
+from release_artifacts import compare_payload, validate_request, download, verify_identity
 
 
 class ReleaseArtifactsTest(unittest.TestCase):
+    def test_identity_requires_the_pinned_certificate_and_correct_package(self):
+        digest = "a" * 64
+        package = "package: name='com.google.antigravity' versionCode='20261109' versionName='2.3.0'"
+        for certificate in [digest, digest.upper()]:
+            with patch("release_artifacts.subprocess.run", side_effect=[
+                SimpleNamespace(stdout="Signer #1 certificate SHA-256 digest: " + certificate + "\n"),
+                SimpleNamespace(stdout=package)]):
+                verify_identity("apksigner", "aapt", "app.apk", digest, "2.3.0", 20261109)
+        for output in ["", "Signer #1 certificate SHA-256 digest: " + "b" * 64,
+                       "Signer #1 public key SHA-256 digest: " + digest,
+                       "Signer #1 certificate SHA-256 digest: " + digest + "f",
+                       "Signer #1 certificate SHA-256 digest: " + digest + "\nSigner #2 certificate SHA-256 digest: " + "b" * 64]:
+            with patch("release_artifacts.subprocess.run", return_value=SimpleNamespace(stdout=output)):
+                with self.assertRaises(ValueError): verify_identity("apksigner", "aapt", "app.apk", digest, "2.3.0", 20261109)
+        with patch("release_artifacts.subprocess.run", side_effect=[
+            SimpleNamespace(stdout="Signer #1 certificate SHA-256 digest: " + digest),
+            SimpleNamespace(stdout=package.replace("com.google.antigravity", "untrusted.app"))]):
+            with self.assertRaises(ValueError): verify_identity("apksigner", "aapt", "app.apk", digest, "2.3.0", 20261109)
     def request(self):
         return {"tag": "v2.3.0", "assets": [{"variant": variant, "name": name, "url": "https://example.test/asset.apk",
             "sha256": "a" * 64, "certificateSha256": "b" * 64} for variant, name in

@@ -72,7 +72,9 @@ jobs:
 
       - name: Verify signed release artifacts against CI builds
         if: steps.release.outputs.publish == 'true'
-        run: python3 scripts/release_artifacts.py --sdk "$ANDROID_HOME"
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "build-tools;36.0.0" >/dev/null
+          python3 scripts/release_artifacts.py --sdk "$ANDROID_HOME"
 
       - name: Upload CI build and test evidence
         if: always()
