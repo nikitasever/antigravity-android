@@ -96,4 +96,9 @@ QA-переписка с двумя совпадениями и длинным �
 
 ## Публикация
 
-Версия 2.3.1 подготовлена после успешной проверки. Результаты подписания, независимой CI-сборки и опубликованный URL будут добавлены после завершения GitHub Actions.
+Версия 2.3.1 опубликована: [GitHub Release v2.3.1](https://github.com/nikitasever/antigravity-android/releases/tag/v2.3.1). Workflow [42476572067](https://github.com/nikitasever/antigravity-android/actions/runs/42476572067) завершился успешно: Node PC-Bridge, release-артефакт validator, тесты и lint Debug/Release, обе независимые сборки, сравнение всех записей APK и проверка подписей.
+
+- `Antigravity-Android.apk`: SHA-256 `53c0b41e775927a7a8207a283d8d20f47e77158c745db4988b94b4d70b2d3bbb`, production-сертификат `90709e1911c5bb00b55efa1af84832376050893eaeb7c8124402abd9889e011f`.
+- `Antigravity-Android-preview-key.apk`: SHA-256 `abc2cb11359c909f7cb5a024047d380ac474ff53843652d6ccdbd0ff70fd4160`, preview-сертификат `8860fb8826b18b18128e90ae754e7571175e6cb4f4471fda639c0789eea04e06`.
+
+Оба варианта содержат одинаковые 2501 записи payload и отличаются только подписью. Временная ветка доставки APK-частей удалена после проверки публикации.
