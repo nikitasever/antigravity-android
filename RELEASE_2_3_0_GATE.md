@@ -26,7 +26,7 @@
 ## Подписанные файлы
 
 - Release SHA256: `4e82340373f1fe75ce2666410fb51463a97f12cfaaa5c6e89c33da5a2c60e7bf`
-- Debug SHA256: `93281c6578c14243e3f97831524c8e38320d87013607a526e1e1f72695ec908e`
+- Preview-key SHA256: `9e36ab0ffeb75dc11b596b2dded5191d497ba5d94c2608a9597b1d492988a6d7`
 
 ## Ограничения и сохранность данных
 
@@ -106,3 +106,25 @@ Release validator использует фиксированный build-tools 36
 Python 5/5 PASS; локальная проверка обоих конечных APK (payload + certificate
 + package/version) PASS. Точный вывод сертификата при ошибке теперь сохраняется
 в диагностике без секретов; private keys ни в вывод, ни в GitHub не попадают.
+
+## Итоговое решение: два Release APK
+
+Run 42431208127: свежая Release проверена целиком (SHA, certificate, version
+и 2501 payload entries совпали); Debug DEX отличается и между чистыми CI.
+Проверку не ослабляли. Debug APK исключён из поставки: оба файла теперь
+содержат одну Release-сборку, второй подписан ключом прежних локальных preview
+для совместимого обновления. Новый файл Antigravity-Android-preview-key.apk
+не является Debug и не обещает debug-only возможностей. Основной Release без изменений.
+
+Оба файла локально проверены против независимого CI Release: полный payload
+совпал; apksigner 36.0.0 проверил нужные сертификаты, aapt — пакет/версию и
+отсутствие application-debuggable. Preview-key SHA указан выше. Новый transport
+commit be618695bd0b14f14aefb8538422dc0eac7a7b8a, четыре части по <=40 MiB.
+Обновление поверх установленной локальной preview через adb install -r SUCCESS
+без удаления данных. release-230-preview-release-native.log: OK (8 tests),
+3.797s на собственном Codex_Reference_UI. Полный ключ подписи не покидал ПК.
+
+NAMES/manifest/workflow/release notes используют release + preview. CI по-прежнему
+строит и тестирует Debug/Release, но оба поставляемых APK строго сравниваются
+со свежим app-release-unsigned.apk из текущего публикуемого коммита. Старые
+записи о поставке Debug выше — история устранённых блокеров, не финальный состав.

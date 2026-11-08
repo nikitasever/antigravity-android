@@ -94,7 +94,7 @@ jobs:
           name: Antigravity-verified-release
           path: |
             Antigravity-Android.apk
-            Antigravity-Android-debug-local.apk
+            Antigravity-Android-preview-key.apk
             SHA256SUMS.txt
 
       - name: Publish GitHub Release
@@ -103,7 +103,7 @@ jobs:
         with:
           files: |
             Antigravity-Android.apk
-            Antigravity-Android-debug-local.apk
+            Antigravity-Android-preview-key.apk
             SHA256SUMS.txt
           tag_name: ${{ steps.release.outputs.tag || github.ref_name }}
           target_commitish: ${{ github.sha }}

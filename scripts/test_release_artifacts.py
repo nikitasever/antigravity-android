@@ -32,7 +32,7 @@ class ReleaseArtifactsTest(unittest.TestCase):
     def request(self):
         return {"tag": "v2.3.0", "assets": [{"variant": variant, "name": name, "url": "https://example.test/asset.apk",
             "sha256": "a" * 64, "certificateSha256": "b" * 64} for variant, name in
-            [("release", "Antigravity-Android.apk"), ("debug", "Antigravity-Android-debug-local.apk")]]}
+            [("release", "Antigravity-Android.apk"), ("preview", "Antigravity-Android-preview-key.apk")]]}
 
     def test_request_checks_version_variants_digests_and_url(self):
         gradle = 'versionName = "2.3.0"\nversionCode = 20261109'

@@ -10,7 +10,7 @@ import urllib.request
 import zipfile
 
 MAX_APK = 300 * 1024 * 1024
-NAMES = {"release": "Antigravity-Android.apk", "debug": "Antigravity-Android-debug-local.apk"}
+NAMES = {"release": "Antigravity-Android.apk", "preview": "Antigravity-Android-preview-key.apk"}
 
 
 def asset_urls(asset):
@@ -146,7 +146,9 @@ def main():
     for asset in request["assets"]:
         destination = pathlib.Path(asset["name"])
         download(asset, destination)
-        built = pathlib.Path("app/build/outputs/apk") / asset["variant"] / ("app-release-unsigned.apk" if asset["variant"] == "release" else "app-debug.apk")
+        # Both shipped APKs are the same deterministic Release build, signed with
+        # the production key or the existing local preview key for upgrade compatibility.
+        built = pathlib.Path("app/build/outputs/apk/release/app-release-unsigned.apk")
         compare_payload(built, destination)
         verify_identity(tools / "apksigner", tools / "aapt", destination, asset["certificateSha256"], version, code)
         print(f"Verified {asset['variant']}: SHA, signer, package/version and complete APK payload match")
