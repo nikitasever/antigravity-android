@@ -25,7 +25,7 @@
 
 ## Подписанные файлы
 
-- Release SHA256: `62c189e64102584ed2b07a9d3b9107aed669209c3d57880bc1f0f20dbec20bb0`
+- Release SHA256: `4e82340373f1fe75ce2666410fb51463a97f12cfaaa5c6e89c33da5a2c60e7bf`
 - Debug SHA256: `c02c610f2bbb31114cfda879ae8b20de19934fec8df17c0bc2a4d8c3d4d8d891`
 
 ## Ограничения и сохранность данных
@@ -44,3 +44,24 @@ Voice-тест проверяет авторизацию HTTP и получен�
 конфиги/ключи и пользовательские reference-вложения исключены из коммита.
 Подробности: PC_BRIDGE_PAIRING.md, BRIDGE_ACCESS_RELEASE_RECHECK_2026-11-08.md и
 остальные RECHECK-документы. Полная сверка проекта с референсами не завершена.
+
+## Повтор публикации после первого CI
+
+Первый CI c3f785e / run 42427486727: Node, JVM, lint и независимая сборка
+SUCCESS (Gradle 9m26s); проверка APK остановилась на HTTP 502. Сервис временного
+туннеля сменил домен внутри живой SSH-сессии. Новый адрес сформирован
+непосредственно перед повторной отправкой.
+
+Выключено штатное release.vcsInfo.include: AGP включал в APK прежний HEAD.
+При отдельном коммите хешей подписанных APK это создаёт несовпадение метки.
+Полное сравнение payload НЕ ослаблено: unit test по-прежнему отклоняет разные
+version-control-info.textproto. Источник API:
+https://developer.android.com/reference/tools/gradle-api/8.5/com/android/build/api/dsl/VcsInfo
+
+release-230-reproducible-build.log SUCCESS 4m54s, JVM/lint без ошибок.
+Release payload изменился только удалением META-INF/version-control-info.textproto.
+Debug SHA не изменился; native OK (8) относится к этому же побайтно идентичному APK.
+Выше указан новый Release SHA. CI evidence теперь загружается с if: always(),
+в том числе при ошибке транспорта. Новый transport: отдельная папка
+uploads/releases/v2.3.0-reproducible и loopback-порт 8821, управляемая сессия
+с автоотключением через 20 минут. Старый стенд не затронут.

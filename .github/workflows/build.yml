@@ -75,6 +75,7 @@ jobs:
         run: python3 scripts/release_artifacts.py --sdk "$ANDROID_HOME"
 
       - name: Upload CI build and test evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Antigravity-CI-builds

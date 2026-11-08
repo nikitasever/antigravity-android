@@ -39,6 +39,9 @@ android {
     }
     buildTypes {
         release {
+            // Release metadata is committed separately from pre-signed APK hashes.
+            // Keep payload reproducible without embedding the pre-publication HEAD.
+            vcsInfo.include = false
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

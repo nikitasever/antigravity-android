@@ -26,14 +26,18 @@ class ReleaseArtifactsTest(unittest.TestCase):
     def test_payload_ignores_only_signatures_and_detects_changed_code_or_resources(self):
         with tempfile.TemporaryDirectory(prefix="release-verification-") as directory:
             original, signed = pathlib.Path(directory) / "built.apk", pathlib.Path(directory) / "signed.apk"
-            def write(path, dex=b"code", resources=b"resources", extra=False):
+            def write(path, dex=b"code", resources=b"resources", extra=False, revision=None):
                 with zipfile.ZipFile(path, "w") as archive:
                     archive.writestr("classes.dex", dex); archive.writestr("resources.arsc", resources)
                     if extra: archive.writestr("META-INF/CERT.RSA", b"signature")
+                    if revision: archive.writestr("META-INF/version-control-info.textproto", revision)
             write(original); write(signed, extra=True); compare_payload(original, signed)
             for args in [(b"changed", b"resources"), (b"code", b"changed")]:
                 write(signed, *args)
                 with self.assertRaises(ValueError): compare_payload(original, signed)
+            # Do not conceal machine/checkout metadata differences in the verifier.
+            write(original, revision=b"commit-a"); write(signed, revision=b"commit-b")
+            with self.assertRaises(ValueError): compare_payload(original, signed)
 
 
 if __name__ == "__main__": unittest.main()

@@ -4,6 +4,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
 const crypto = require('node:crypto');
+const port = Number(process.argv[3] || 8818);
+if (![8818, 8821].includes(port)) throw Error('Invalid dedicated artifact transport port');
 const directory = fs.realpathSync(process.argv[2]);
 const manifest = JSON.parse(fs.readFileSync(path.join(directory, 'transport.json'), 'utf8'));
 const files = new Map();
@@ -15,9 +17,11 @@ for (const asset of manifest.assets) {
     if (digest !== asset.sha256) throw Error('Artifact digest mismatch');
     files.set(`/artifact/${digest}/${asset.file}`, file);
 }
-http.createServer((request, response) => {
+const server = http.createServer((request, response) => {
     const file = files.get(new URL(request.url, 'http://127.0.0.1').pathname);
     if (!file || !['GET', 'HEAD'].includes(request.method) || request.headers.range) { response.writeHead(404); return response.end(); }
     response.writeHead(200, { 'Content-Type': 'application/vnd.android.package-archive', 'Content-Length': fs.statSync(file).size });
     if (request.method === 'HEAD') response.end(); else fs.createReadStream(file).pipe(response);
-}).listen(8818, '127.0.0.1', () => process.stdout.write(`Serving ${files.size} validated APKs only on 127.0.0.1:8818\n`));
+}).listen(port, '127.0.0.1', () => process.stdout.write(`Serving ${files.size} validated APKs only on 127.0.0.1:${port}\n`));
+// This transport is temporary even if the publishing client disconnects.
+setTimeout(() => { server.closeAllConnections(); server.close(); }, 20 * 60 * 1000).unref();
