@@ -13,6 +13,19 @@ MAX_APK = 300 * 1024 * 1024
 NAMES = {"release": "Antigravity-Android.apk", "debug": "Antigravity-Android-debug-local.apk"}
 
 
+def asset_urls(asset):
+    urls = asset.get("parts", [asset.get("url")])
+    if not isinstance(urls, list) or not 1 <= len(urls) <= 8 or urls[0] != asset.get("url"):
+        raise ValueError("Invalid artifact parts")
+    for value in urls:
+        if not isinstance(value, str):
+            raise ValueError("Invalid artifact URL")
+        url = urllib.parse.urlsplit(value)
+        if url.scheme != "https" or not url.hostname or url.username or url.password or url.fragment or url.port not in (None, 443):
+            raise ValueError("Artifact URL must be credential-free HTTPS")
+    return urls
+
+
 def validate_request(request, gradle):
     version = re.search(r'versionName\s*=\s*"([^"]+)"', gradle).group(1)
     code = int(re.search(r'versionCode\s*=\s*(\d+)', gradle).group(1))
@@ -30,9 +43,7 @@ def validate_request(request, gradle):
         for key in ("sha256", "certificateSha256"):
             if not re.fullmatch(r"[0-9a-f]{64}", asset.get(key, "")):
                 raise ValueError("Invalid artifact digest")
-        url = urllib.parse.urlsplit(asset.get("url", ""))
-        if url.scheme != "https" or not url.hostname or url.username or url.password or url.fragment or url.port not in (None, 443):
-            raise ValueError("Artifact URL must be credential-free HTTPS")
+        asset_urls(asset)
     return version, code
 
 
@@ -55,22 +66,26 @@ class HttpsOnlyRedirect(urllib.request.HTTPRedirectHandler):
 def download(asset, destination):
     temporary = destination.with_suffix(".part")
     try:
-        request = urllib.request.Request(asset["url"], headers={"User-Agent": "Antigravity-Release-Verification"})
-        with urllib.request.build_opener(HttpsOnlyRedirect).open(request, timeout=120) as response:
-            if response.status != 200:
-                raise ValueError("Artifact must be a complete HTTP 200 response")
-            expected = int(response.headers.get("Content-Length", "-1"))
-            if expected > MAX_APK:
-                raise ValueError("Artifact exceeds size limit")
-            count = 0
-            with temporary.open("wb") as output:
-                while block := response.read(1024 * 1024):
-                    count += len(block)
-                    if count > MAX_APK:
+        urls = asset_urls(asset)
+        count = 0
+        with temporary.open("wb") as output:
+            for url in urls:
+                request = urllib.request.Request(url, headers={"User-Agent": "Antigravity-Release-Verification"})
+                with urllib.request.build_opener(HttpsOnlyRedirect).open(request, timeout=120) as response:
+                    if response.status != 200:
+                        raise ValueError("Artifact must be a complete HTTP 200 response")
+                    expected = int(response.headers.get("Content-Length", "-1"))
+                    if expected > MAX_APK - count:
                         raise ValueError("Artifact exceeds size limit")
-                    output.write(block)
-            if count == 0 or expected >= 0 and expected != count:
-                raise ValueError("Incomplete artifact")
+                    part_count = 0
+                    while block := response.read(1024 * 1024):
+                        count += len(block)
+                        part_count += len(block)
+                        if count > MAX_APK:
+                            raise ValueError("Artifact exceeds size limit")
+                        output.write(block)
+                    if part_count == 0 or expected >= 0 and expected != part_count:
+                        raise ValueError("Incomplete artifact")
         if file_digest(temporary) != asset["sha256"]:
             raise ValueError("Artifact SHA-256 mismatch")
         temporary.replace(destination)

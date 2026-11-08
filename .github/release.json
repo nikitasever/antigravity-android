@@ -7,14 +7,26 @@
       "name": "Antigravity-Android.apk",
       "sha256": "4e82340373f1fe75ce2666410fb51463a97f12cfaaa5c6e89c33da5a2c60e7bf",
       "certificateSha256": "90709e1911c5bb00b55efa1af84832376050893eaeb7c8124402abd9889e011f",
-      "url": "https://cb2fe08353fde5.lhr.life/artifact/4e82340373f1fe75ce2666410fb51463a97f12cfaaa5c6e89c33da5a2c60e7bf/Antigravity-Android.apk"
+      "url": "https://raw.githubusercontent.com/nikitasever/antigravity-android/8f374867092800f04721401a4e2c6d4f82cdbfbe/Antigravity-Android.apk.part-000",
+      "parts": [
+        "https://raw.githubusercontent.com/nikitasever/antigravity-android/8f374867092800f04721401a4e2c6d4f82cdbfbe/Antigravity-Android.apk.part-000",
+        "https://raw.githubusercontent.com/nikitasever/antigravity-android/8f374867092800f04721401a4e2c6d4f82cdbfbe/Antigravity-Android.apk.part-001",
+        "https://raw.githubusercontent.com/nikitasever/antigravity-android/8f374867092800f04721401a4e2c6d4f82cdbfbe/Antigravity-Android.apk.part-002",
+        "https://raw.githubusercontent.com/nikitasever/antigravity-android/8f374867092800f04721401a4e2c6d4f82cdbfbe/Antigravity-Android.apk.part-003"
+      ]
     },
     {
       "variant": "debug",
       "name": "Antigravity-Android-debug-local.apk",
       "sha256": "c02c610f2bbb31114cfda879ae8b20de19934fec8df17c0bc2a4d8c3d4d8d891",
       "certificateSha256": "8860fb8826b18b18128e90ae754e7571175e6cb4f4471fda639c0789eea04e06",
-      "url": "https://cb2fe08353fde5.lhr.life/artifact/c02c610f2bbb31114cfda879ae8b20de19934fec8df17c0bc2a4d8c3d4d8d891/Antigravity-Android-debug-local.apk"
+      "url": "https://raw.githubusercontent.com/nikitasever/antigravity-android/8f374867092800f04721401a4e2c6d4f82cdbfbe/Antigravity-Android-debug-local.apk.part-000",
+      "parts": [
+        "https://raw.githubusercontent.com/nikitasever/antigravity-android/8f374867092800f04721401a4e2c6d4f82cdbfbe/Antigravity-Android-debug-local.apk.part-000",
+        "https://raw.githubusercontent.com/nikitasever/antigravity-android/8f374867092800f04721401a4e2c6d4f82cdbfbe/Antigravity-Android-debug-local.apk.part-001",
+        "https://raw.githubusercontent.com/nikitasever/antigravity-android/8f374867092800f04721401a4e2c6d4f82cdbfbe/Antigravity-Android-debug-local.apk.part-002",
+        "https://raw.githubusercontent.com/nikitasever/antigravity-android/8f374867092800f04721401a4e2c6d4f82cdbfbe/Antigravity-Android-debug-local.apk.part-003"
+      ]
     }
   ]
 }
