@@ -75,6 +75,9 @@ class AntigravityBackendClient(
     private val directChatTransport: OkHttpClient? = null
 ) {
 
+    /** Подписочный маршрут Google AI Pro; ставит ViewModel, пока null — маршрут выключен. */
+    var googlePro: com.google.antigravity.googlepro.GoogleProProvider? = null
+
     data class StreamingTurnUpdate(
         val thinking: String,
         val thinkingDurationSec: Int,
@@ -2212,7 +2215,8 @@ class AntigravityBackendClient(
 
             if (stepBridgeResp == null) {
                 val noRemoteWork = !anyStepSucceeded && uploadedAttachments.none { it.pcUploadedPath.isNotBlank() }
-                if (phoneFallbackTarget(executionTarget, noRemoteWork, selectedModelId, geminiApiKey, openRouterApiKey) ==
+                if (phoneFallbackTarget(executionTarget, noRemoteWork, selectedModelId, geminiApiKey, openRouterApiKey,
+                        googleProReady = googlePro?.signedIn == true) ==
                     AgentExecutionTarget.PHONE_LOCAL_RESOURCES) {
                     onPhoneFallback()
                     return@withContext executePhoneTurn(userPrompt, selectedModelId, activeConversationId,
@@ -2418,6 +2422,8 @@ class AntigravityBackendClient(
         val honestError = when {
             directRoute == PhoneModelRoute.PC_CLI ->
                 "Модель $selectedModelId доступна через сессию ПК, но мост не отвечает. Проверьте адрес моста и запустите PC-Bridge. Ключ Gemini API не подключает эту модель ПК. Переписка сохранена на телефоне; после восстановления связи нажмите «Повторить»."
+            directRoute == PhoneModelRoute.GOOGLE_PRO ->
+                "Не удалось получить ответ $selectedModelId по подписке Google AI Pro. Проверьте вход в аккаунт и DNS-обход в настройках Google AI Pro. Переписка сохранена на телефоне."
             directRoute == PhoneModelRoute.OPENROUTER_API -> "Не удалось получить ответ $selectedModelId. Проверьте подключение к мосту и ключ OpenRouter. Переписка сохранена на телефоне."
             else -> "Не удалось получить ответ $selectedModelId. Проверьте подключение и ключ Gemini API. Переписка сохранена на телефоне."
         }
@@ -2447,6 +2453,9 @@ class AntigravityBackendClient(
         val unavailable = when {
             modelId.isBlank() -> "Выберите API-модель для работы на телефоне."
             route == com.google.antigravity.model.PhoneModelRoute.OPENROUTER_API && routerKey.isBlank() -> "Для выбранной модели укажите ключ OpenRouter. Режим телефона не требует PC-Bridge."
+            route == com.google.antigravity.model.PhoneModelRoute.GOOGLE_PRO && googlePro?.signedIn != true ->
+                "Модели Google AI Pro работают по подписке аккаунта, без ключа API.\n\n" +
+                    "Войдите в Google в «Настройки → Google AI Pro»."
             route == com.google.antigravity.model.PhoneModelRoute.GEMINI_API && geminiKey.isBlank() ->
                 "Для чата в режиме «Телефон · API» нужен ключ Gemini API.\n\n" +
                     "[Открыть Antigravity с Google AI Pro](https://antigravity.google.com/)"
@@ -2499,6 +2508,14 @@ class AntigravityBackendClient(
                     publishReasoning(response.reasoning.ifBlank { taggedThinking }, child)
                     if (!child) outputTokens = response.outputTokens
                     answer
+                } else if (route == com.google.antigravity.model.PhoneModelRoute.GOOGLE_PRO) {
+                    val provider = googlePro ?: throw java.io.IOException("Маршрут Google AI Pro не подключён.")
+                    val proReply = provider.reply(modelId, request, loadAssetSystemPrompt(), modelHistory) {
+                        publishReasoning(it, child)
+                    }
+                    val (cleanAnswer, taggedThinking) = extractClientSideThinking(proReply.text)
+                    publishReasoning(proReply.thinking.ifBlank { taggedThinking }, child)
+                    cleanAnswer
                 } else {
                     val raw = callGeminiRestApi(request, loadAssetSystemPrompt(), geminiKey, modelId, modelHistory)
                     val (answer, taggedThinking) = extractClientSideThinking(raw.text)

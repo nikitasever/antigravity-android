@@ -1380,6 +1380,10 @@ data class AntigravitySettings(
     val toolPolicy: ToolExecutionPolicy = ToolExecutionPolicy.ALWAYS_PROCEED,
     val geminiApiKey: String = "",
     val openRouterApiKey: String = "",
+    /** Почта аккаунта подписки (для окна и подписи модели). Токены живут отдельно. */
+    val googleProEmail: String = "",
+    /** DNS-обход регионального гейта подписки: подмена адресов хостов CloudCode. */
+    val googleProRegionBypass: Boolean = true,
     val pcBridgeUrl: String = "https://2d0102ca0a9fe83d-79-137-206-221.serveousercontent.com",
     val antigravityGatewayUrl: String = "https://antigravity.google.com",
     val forcePublicTunnelOnly: Boolean = false,

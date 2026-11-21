@@ -5,7 +5,7 @@ import org.json.JSONObject
 internal class GeminiChatFailure(val status: Int, message: String) : Exception(message)
 
 /** Only provider-supplied summaries; never synthesized from elapsed time or tools. */
-internal data class ProviderReply(val text: String, val thinking: String = "")
+data class ProviderReply(val text: String, val thinking: String = "")
 
 internal fun parseGeminiReply(response: JSONObject): ProviderReply {
     val parts = response.optJSONArray("candidates")?.optJSONObject(0)

@@ -6,6 +6,7 @@ app/build/
 local.properties
 
 # Local runtime logs, caches & temporary dumps
+.codegraph/
 uploads/
 ui_dump.xml
 verify_step4_*.png

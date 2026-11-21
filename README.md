@@ -13,6 +13,7 @@
   - `voice/RealtimeVoiceEngine.kt` и `ui/components/OrbitVoiceOverlay.kt` — голосовой режим реального времени с потоковой озвучкой по предложениям (`/api/tts` `MsEdgeTTS`), непрерывным циклом диалога (Hands-Free) и мгновенным перебиванием голосом (Barge-In).
   - `ui/MainScreen.kt` и `ui/components/MarkdownRenderer.kt` — интерфейс чата, карточек вызовов инструментов, живого блока рассуждений («Думаю… N с» / «Думал N с») и рендеринга Markdown/Diff.
 - `app/src/main/assets/agent_system_prompt.md` — единая русскоязычная системная инструкция агента для мобильного режима.
+- `app/src/main/java/com/google/antigravity/googlepro/` — подписка **Google AI Pro** без ключа API: OAuth-вход в аккаунт (PKCE, токен только на телефоне), клиент CloudCode, допуск `ineligible` и DNS-обход регионального гейта по образцу [confeden/Antigravity](https://github.com/confeden/Antigravity). Разбор переноса — `GOOGLE_PRO_INTEGRATION.md`.
 - `pc-bridge/`
   - `server.js` — локальный мост синхронизации с `agy.exe` (`--input-format stream-json --output-format stream-json`), пулом прогретых воркеров, потоковым Neural TTS (`MsEdgeTTS`), управлением плагинами/скиллами/MCP и менеджером публичных HTTPS-туннелей.
   - `agent_system_prompt.md` — единая русскоязычная системная инструкция для ПК-моста.

@@ -250,6 +250,10 @@ class AntigravityViewModel internal constructor(application: Application,
     val phoneController = PhoneResourceController(application.applicationContext)
     val backendClient = AntigravityBackendClient(phoneController)
 
+    /** Подписочный маршрут Google AI Pro (OAuth аккаунта + DNS-обход региона). */
+    val googlePro = com.google.antigravity.googlepro.GoogleProProvider(application.applicationContext)
+        .also { backendClient.googlePro = it }
+
     // Независимый Application-scope для непрерывной фоновой работы агента при сворачивании окна (Section 5)
     private val agentExecutionScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -338,6 +342,8 @@ class AntigravityViewModel internal constructor(application: Application,
             voiceName = prefs.getString("voice_name", "Aoede") ?: "Aoede",
             bargeInEnabled = prefs.getBoolean("barge_in_enabled", true),
             geminiApiKey = prefs.getString("gemini_api_key", "") ?: "",
+            googleProEmail = prefs.getString("google_pro_email", "") ?: "",
+            googleProRegionBypass = prefs.getBoolean("google_pro_region_bypass", true),
             pcBridgeUrl = resolveInitialBridgeUrl(),
             forcePublicTunnelOnly = prefs.getBoolean("force_public_tunnel_only", false)
         )
@@ -752,6 +758,137 @@ class AntigravityViewModel internal constructor(application: Application,
     private val _contextWindowStatus = MutableStateFlow(ContextWindowStatus())
     val contextWindowStatus: StateFlow<ContextWindowStatus> = _contextWindowStatus.asStateFlow()
 
+    // --- Google AI Pro: вход по подписке и обход регионального гейта --------
+    //
+    // Пароль и токены не покидают телефон: запросы идут от имени аккаунта в
+    // CloudCode, а региональный отказ снимается подменой адресов хостов и
+    // допуском `ineligible` (перенос confeden/Antigravity).
+    private val _googleProState = MutableStateFlow(
+        com.google.antigravity.googlepro.GoogleProUiState(
+            signedIn = googlePro.signedIn,
+            email = googlePro.email,
+            models = com.google.antigravity.googlepro.googleProModelOptions()
+        )
+    )
+    val googleProState: StateFlow<com.google.antigravity.googlepro.GoogleProUiState> = _googleProState.asStateFlow()
+
+    private val _requestedSettingsPage = MutableStateFlow<String?>(null)
+    val requestedSettingsPage: StateFlow<String?> = _requestedSettingsPage.asStateFlow()
+    private var googleProSignIn: com.google.antigravity.googlepro.GoogleProSignIn? = null
+
+    fun openSettingsPage(page: String) { _requestedSettingsPage.value = page }
+    fun consumeRequestedSettingsPage() { _requestedSettingsPage.value = null }
+
+    /** Вход через системный браузер: PKCE, loopback-возврат, без пароля внутри приложения. */
+    fun startGoogleProSignIn() {
+        if (_googleProState.value.busy) return
+        viewModelScope.launch {
+            _googleProState.update { it.copy(busy = true, error = "") }
+            val flow = com.google.antigravity.googlepro.GoogleProSignIn(
+                com.google.antigravity.googlepro.defaultTokenHttp()
+            )
+            googleProSignIn = flow
+            try {
+                getApplication<Application>().startActivity(
+                    Intent(Intent.ACTION_VIEW, Uri.parse(flow.authUrl)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+                val code = flow.awaitCode()
+                val json = flow.exchange(code)
+                val access = json.optString("access_token")
+                val email = runCatching { googlePro.tokens.resolveEmail(access) }.getOrDefault("")
+                googlePro.tokens.save(access, json.optString("refresh_token"), json.optLong("expires_in", 3600), email)
+                updateSettings { it.copy(googleProEmail = email) }
+                _googleProState.update { it.copy(signedIn = true, email = email, busy = false) }
+                refreshGooglePro()
+            } catch (failure: kotlinx.coroutines.CancellationException) {
+                throw failure
+            } catch (failure: Exception) {
+                android.util.Log.e("GooglePro", "вход не удался: ${failure.message}", failure)
+                _googleProState.update {
+                    it.copy(busy = false, error = failure.message ?: "Вход не удался. Повторите попытку.")
+                }
+            } finally {
+                flow.close()
+                googleProSignIn = null
+            }
+        }
+    }
+
+    fun completeGoogleProOAuth(uri: Uri) { googleProSignIn?.deliver(uri.toString()) }
+
+    fun signOutGooglePro() {
+        googlePro.tokens.clear()
+        updateSettings { it.copy(googleProEmail = "") }
+        _googleProState.update {
+            it.copy(signedIn = false, email = "", tier = "", ineligible = "", route = "", diagnostics = "",
+                error = "", models = com.google.antigravity.googlepro.googleProModelOptions())
+        }
+    }
+
+    /** Проверка подписки: тариф, состав моделей, доступ по текущей сети. */
+    fun refreshGooglePro() {
+        if (!googlePro.signedIn) {
+            _googleProState.update { it.copy(signedIn = false, email = "", models = com.google.antigravity.googlepro.googleProModelOptions()) }
+            return
+        }
+        viewModelScope.launch {
+            _googleProState.update { it.copy(busy = true, error = "") }
+            try {
+                val state = googlePro.check()
+                _googleProState.update {
+                    it.copy(
+                        busy = false,
+                        signedIn = true,
+                        email = googlePro.email.ifBlank { it.email },
+                        tier = state.tierName,
+                        models = com.google.antigravity.googlepro.googleProModelOptions(state.models),
+                        ineligible = state.ineligibleReasons.joinToString("; "),
+                        route = googlePro.routeSummary(),
+                        diagnostics = googlePro.diagnostics()
+                    )
+                }
+            } catch (failure: kotlinx.coroutines.CancellationException) {
+                throw failure
+            } catch (failure: Exception) {
+                android.util.Log.e("GooglePro", "проверка подписки не удалась", failure)
+                _googleProState.update {
+                    it.copy(busy = false, error = failure.message ?: "Проверка подписки не удалась.", signedIn = googlePro.signedIn)
+                }
+            }
+        }
+    }
+
+    /**
+     * Запасной вход: вставить refresh- или access-токен, полученный другим
+     * инструментом (например, `gemini` CLI на ПК).
+     */
+    fun pasteGoogleProToken(raw: String) {
+        val token = raw.trim()
+        if (token.isBlank()) {
+            _googleProState.update { it.copy(error = "Пустой токен.") }
+            return
+        }
+        viewModelScope.launch {
+            _googleProState.update { it.copy(busy = true, error = "") }
+            try {
+                if (token.startsWith("ya29.")) {
+                    googlePro.tokens.save(token, "", 3500, googlePro.email)
+                } else {
+                    googlePro.tokens.save("", token, 0, googlePro.email)
+                    googlePro.tokens.accessToken()
+                }
+                _googleProState.update { it.copy(busy = false, signedIn = true) }
+                refreshGooglePro()
+            } catch (failure: Exception) {
+                _googleProState.update { it.copy(busy = false, error = failure.message ?: "Токен не принят.") }
+            }
+        }
+    }
+
+    fun toggleGoogleProRegionBypass(enabled: Boolean) {
+        updateSettings { it.copy(googleProRegionBypass = enabled) }
+    }
+
     init {
         voiceEngine.onBargeInInterruptCallback = {
             generationRevision++
@@ -775,6 +912,8 @@ class AntigravityViewModel internal constructor(application: Application,
         syncVoiceConfig()
         observeNotificationApprovalEvents()
         observeSubagentNotificationActions()
+        if (googlePro.signedIn) refreshGooglePro()
+        googlePro.regionBypass = _settings.value.googleProRegionBypass
         viewModelScope.launch(Dispatchers.IO) {
             // Section 11.3: Загрузка последнего известного каталога; актуальность проверяется через API
             val cachedModels = loadOpenRouterDiskCache()
@@ -3875,7 +4014,7 @@ class AntigravityViewModel internal constructor(application: Application,
         val source = _settings.value
         val bridge = _pcBridgeStatus.value
         if (phoneFallbackTarget(source.executionTarget, bridge.checked && !bridge.connected, source.selectedModelId,
-                source.geminiApiKey, _openRouterApiKey.value) != source.executionTarget) {
+                source.geminiApiKey, _openRouterApiKey.value, googleProReady = googlePro.signedIn) != source.executionTarget) {
             usePhoneToolsForChat(source.activeConversationId)
         }
         val currentSettings = _settings.value
@@ -4429,6 +4568,7 @@ class AntigravityViewModel internal constructor(application: Application,
             updated.copy(voiceTransportMode = resolvedTransport)
         }
         val s = _settings.value
+        googlePro.regionBypass = s.googleProRegionBypass
         if (s.pcBridgeUrl != previousBridgeUrl) {
             remoteSyncJob?.cancel()
             backendClient.clearWorkingBridgeCache()
@@ -4443,6 +4583,8 @@ class AntigravityViewModel internal constructor(application: Application,
             .putString("voice_name", s.voiceName)
             .putBoolean("barge_in_enabled", s.bargeInEnabled)
             .putString("gemini_api_key", s.geminiApiKey)
+            .putString("google_pro_email", s.googleProEmail)
+            .putBoolean("google_pro_region_bypass", s.googleProRegionBypass)
             .putBoolean("force_public_tunnel_only", s.forcePublicTunnelOnly)
             .apply()
         syncVoiceConfig()

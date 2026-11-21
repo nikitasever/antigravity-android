@@ -29,9 +29,13 @@ fun ConversationModelSheet(
     onSelectTarget: (AgentExecutionTarget) -> Unit,
     onSelectModel: (String) -> Unit,
     onOpenOpenRouterCatalog: () -> Unit,
-    onDismiss: () -> Unit
+    onOpenGooglePro: () -> Unit,
+    onDismiss: () -> Unit,
+    proModels: List<AntigravityModelOption> = emptyList(),
+    proSignedIn: Boolean = false,
+    proEmail: String = ""
 ) {
-    val models = modelPickerOptions(availableModels, settings.selectedModelId, settings.selectedModelDisplay)
+    val models = modelPickerOptions(availableModels, settings.selectedModelId, settings.selectedModelDisplay, proModels)
     ModalBottomSheet(onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = DesignColors.Bg, contentColor = DesignColors.TextPrimary,
@@ -54,6 +58,19 @@ fun ConversationModelSheet(
                     Text("Облако Pro · без ПК")
                 }
                 HorizontalDivider(Modifier.padding(vertical = 12.dp), color = DesignColors.Border)
+                if (proModels.isNotEmpty()) {
+                    ModelSectionLabel(if (proSignedIn) "Google AI Pro · ${proEmail.ifBlank { "аккаунт" }}" else "Google AI Pro")
+                    Column(Modifier.selectableGroup()) {
+                        proModels.forEach { model ->
+                            ModelChoice(model.displayName, model.badge, settings.selectedModelId == model.id) {
+                                onSelectModel(model.id)
+                            }
+                        }
+                    }
+                    HorizontalDivider(Modifier.padding(vertical = 12.dp), color = DesignColors.Border)
+                } else {
+                    TextButton(onClick = onOpenGooglePro) { Text("Подключить Google AI Pro (подписка)") }
+                }
                 ModelSectionLabel("Модель")
                 Column(Modifier.selectableGroup()) {
                     models.forEach { model ->

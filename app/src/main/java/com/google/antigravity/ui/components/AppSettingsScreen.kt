@@ -95,6 +95,7 @@ fun AppSettingsScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     val bridge by viewModel.pcBridgeStatus.collectAsState()
+    val pro by viewModel.googleProState.collectAsState()
     val verifying by viewModel.isVerifyingApiKey.collectAsState()
     val verification by viewModel.apiKeyVerificationMessage.collectAsState()
     val verified by viewModel.apiKeyVerificationOk.collectAsState()
@@ -186,6 +187,8 @@ fun AppSettingsScreen(
                     }
                     SettingsGroup("") {
                         SettingsLink("Модели и ключи", "", icon = Icons.Default.Tune) { page = "Модели и ключи" }
+                        SettingsRule()
+                        SettingsLink("Google AI Pro", if (pro.signedIn) pro.email else "подписка", icon = Icons.Default.Badge) { page = "Google AI Pro" }
                         SettingsRule()
                         SettingsLink("Подключение к ПК", if (bridge.connected) "Подключено" else "", icon = Icons.Default.Computer) { page = "Подключение к ПК" }
                     }
@@ -288,6 +291,60 @@ fun AppSettingsScreen(
                         }
                     }
                     SettingsNote("Изменения сохраняются автоматически. Ключи и модели OpenRouter настраиваются в каталоге OpenRouter в меню выбора модели.")
+                }
+                if (page == "Google AI Pro") {
+                    var tokenDraft by remember { mutableStateOf("") }
+                    SettingsNote("Модели Google AI Pro работают по подписке аккаунта Google, без ключа API и без ПК. " +
+                        "Вход — в системном браузере; токен хранится только на телефоне. " +
+                        "Если Google отвечает «User location is not supported», включённый DNS-обход отправляет запросы " +
+                        "через резолвер с адресом в разрешённом регионе: TLS не расшифровывается, сертификат проверяется по имени.")
+                    SettingsGroup("Аккаунт") {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            if (pro.signedIn) {
+                                Text(pro.email.ifBlank { "Аккаунт подключён" }, color = Color.White, fontSize = 16.sp)
+                                if (pro.tier.isNotBlank()) Text("Тариф: ${pro.tier}", color = SettingsMuted, fontSize = 13.sp)
+                                if (pro.ineligible.isNotBlank()) Text("Проверка региона: ${pro.ineligible}", color = SettingsMuted, fontSize = 13.sp)
+                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    OutlinedButton(onClick = { viewModel.refreshGooglePro() }, enabled = !pro.busy) {
+                                        Text(if (pro.busy) "Проверка…" else "Проверить")
+                                    }
+                                    OutlinedButton(onClick = { viewModel.signOutGooglePro() }, enabled = !pro.busy) { Text("Выйти") }
+                                }
+                            } else {
+                                Button(onClick = { viewModel.startGoogleProSignIn() }, enabled = !pro.busy,
+                                    modifier = Modifier.fillMaxWidth()) {
+                                    Text(if (pro.busy) "Ожидание браузера…" else "Войти через Google")
+                                }
+                                TextButton(onClick = { open("https://one.google.com/about/plans") }) { Text("Что входит в Google AI Pro") }
+                            }
+                            if (pro.error.isNotBlank()) Text(pro.error, color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
+                        }
+                    }
+                    SettingsGroup("Регион") {
+                        SettingsToggle("DNS-обход регионального гейта",
+                            "Подменять адреса cloudcode-pa только для запросов подписки; системный DNS не трогается",
+                            settings.googleProRegionBypass) { enabled ->
+                            viewModel.toggleGoogleProRegionBypass(enabled)
+                        }
+                        if (pro.route.isNotBlank()) {
+                            Text("Порядок маршрутов: ${pro.route}", color = SettingsMuted, fontSize = 13.sp,
+                                modifier = Modifier.padding(16.dp))
+                        }
+                    }
+                    SettingsGroup("Запасной вход токеном") {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            OutlinedTextField(value = tokenDraft, onValueChange = { tokenDraft = it },
+                                label = { Text("refresh- или access-токен") }, modifier = Modifier.fillMaxWidth())
+                            Button(onClick = { viewModel.pasteGoogleProToken(tokenDraft); tokenDraft = "" },
+                                enabled = tokenDraft.isNotBlank() && !pro.busy, modifier = Modifier.fillMaxWidth()) {
+                                Text("Применить токен")
+                            }
+                        }
+                    }
+                    if (pro.diagnostics.isNotBlank()) SettingsNote(pro.diagnostics)
+                    if (pro.models.isNotEmpty()) {
+                        SettingsNote("Модели подписки: " + pro.models.joinToString(", ") { it.displayName })
+                    }
                 }
                 if (page == "Подключение к ПК") {
                     var pairingCode by remember { mutableStateOf("") }

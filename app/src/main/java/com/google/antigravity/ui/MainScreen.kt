@@ -253,6 +253,13 @@ fun MainScreen(
     val pcBridgeStatus by viewModel.pcBridgeStatus.collectAsState()
     val drawerSection by viewModel.drawerSection.collectAsState()
     var settingsEntryPage by rememberSaveable { mutableStateOf("Настройки") }
+    val proState by viewModel.googleProState.collectAsState()
+    val requestedSettingsPage by viewModel.requestedSettingsPage.collectAsState()
+    LaunchedEffect(requestedSettingsPage) {
+        val page = requestedSettingsPage ?: return@LaunchedEffect
+        settingsEntryPage = page
+        viewModel.consumeRequestedSettingsPage()
+    }
     val messages by viewModel.messages.collectAsState()
     val voiceOverlayActive by viewModel.voiceEngine.isCallActive.collectAsState()
     val voiceOverlayExpanded by viewModel.voiceEngine.isOverlayExpanded.collectAsState()
@@ -856,6 +863,13 @@ fun MainScreen(
                     viewModel.syncOpenRouterCatalog(forceRefresh = false)
                     showOpenRouterSheet = true
                 },
+                onOpenGooglePro = {
+                    showModelPickerDialog = false
+                    viewModel.openSettingsPage("Google AI Pro")
+                },
+                proModels = proState.models,
+                proSignedIn = proState.signedIn,
+                proEmail = proState.email,
                 onDismiss = { showModelPickerDialog = false }
             )
         }
